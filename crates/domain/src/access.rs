@@ -44,6 +44,10 @@ pub enum Permission {
     CustomerWrite,
     DeviceReport,
     DeviceManage,
+    /// Abteilungen & Produktkatalog lesen (intern, inkl. nicht öffentlicher Produkte)
+    CatalogRead,
+    /// Produkte, Preise, Abteilungen pflegen
+    CatalogWrite,
 }
 
 /// Zentrale Rechtematrix. `own_org` = Datensatz gehört zur Organisation des Kunden.
@@ -56,11 +60,13 @@ pub fn allowed(role: Role, perm: Permission, own_org: bool) -> bool {
         (Device, _) => false,
         (Customer, InvoiceRead | CustomerRead) => own_org,
         (Customer, _) => false,
-        (Lead | Manager, InvoiceRead | InvoiceWrite | InvoiceIssue | CustomerRead | CustomerWrite | DeviceManage) => {
-            true
-        }
-        (Staff, InvoiceRead | CustomerRead | InvoiceWrite) => true,
-        (Trainee, CustomerRead) => true,
+        (Lead, CatalogWrite) => true,
+        (
+            Lead | Manager,
+            InvoiceRead | InvoiceWrite | InvoiceIssue | CustomerRead | CustomerWrite | DeviceManage | CatalogRead,
+        ) => true,
+        (Staff, InvoiceRead | CustomerRead | InvoiceWrite | CatalogRead) => true,
+        (Trainee, CustomerRead | CatalogRead) => true,
         _ => false,
     }
 }
@@ -81,5 +87,9 @@ mod tests {
         assert!(allowed(Role::Device, DeviceReport, false));
         assert!(!allowed(Role::Device, InvoiceRead, false));
         assert!(!allowed(Role::Admin, DeviceReport, false));
+        assert!(allowed(Role::Lead, CatalogWrite, false));
+        assert!(!allowed(Role::Manager, CatalogWrite, false));
+        assert!(allowed(Role::Staff, CatalogRead, false));
+        assert!(!allowed(Role::Customer, CatalogRead, true));
     }
 }

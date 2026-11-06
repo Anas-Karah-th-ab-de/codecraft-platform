@@ -2,6 +2,9 @@
 //!
 //! Ablauf: Entwurf anlegen → Positionen setzen → ausstellen (Nummer + Festschreibung)
 //! → bezahlt markieren oder per Gutschrift stornieren.
+//!
+//! Positionen können aus dem Katalog kommen (`price_id`): Bezeichnung, Einheit und Preis werden
+//! dann aus dem Katalog übernommen – ein abweichender Preis wird abgelehnt.
 
 use crate::auth::User;
 use crate::error::{ApiError, ApiResult};
@@ -11,14 +14,16 @@ use axum::http::StatusCode;
 use axum::Json;
 use chrono::{Datelike, NaiveDate, Utc};
 use codecraft_domain::access::Permission;
+use codecraft_domain::catalog::{Billing, I18n};
 use codecraft_domain::invoice::{
-    compute_totals, credit_note_items, validate_for_issue, BillingParty, InvoiceError, InvoiceStatus, LineItem,
+    compute_totals, credit_note_items, validate_for_issue, BillingParty, InvoiceError, InvoiceStatus, LineItem, RateBp,
     TaxMode, Totals, Unit,
 };
 use codecraft_domain::money::{Cents, Currency};
 use codecraft_domain::numbering::{format_number, Series};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use sqlx::types::Json as SqlJson;
 use sqlx::PgConnection;
 use uuid::Uuid;
 
@@ -61,6 +66,28 @@ struct ItemRow {
     unit: String,
     unit_price_cents: i64,
     vat_rate_bp: i32,
+    product_id: Option<Uuid>,
+    price_id: Option<Uuid>,
+}
+
+/// Position inkl. Katalogbezug
+#[derive(Debug, Clone, Serialize)]
+pub struct Item {
+    #[serde(flatten)]
+    pub line: LineItem,
+    pub product_id: Option<Uuid>,
+    pub price_id: Option<Uuid>,
+}
+
+/// Eingabe: entweder frei (Beschreibung + Preis) oder aus dem Katalog (`price_id`)
+#[derive(Debug, Deserialize)]
+pub struct ItemInput {
+    pub price_id: Option<Uuid>,
+    pub description: Option<String>,
+    pub quantity_milli: i64,
+    pub unit: Option<Unit>,
+    pub unit_price: Option<Cents>,
+    pub vat_rate_bp: RateBp,
 }
 
 fn unit_to_str(u: Unit) -> &'static str {
@@ -83,6 +110,16 @@ fn unit_from_str(s: &str) -> Unit {
     }
 }
 
+fn billing_from_str(s: &str) -> Billing {
+    match s {
+        "hourly" => Billing::Hourly,
+        "monthly" => Billing::Monthly,
+        "yearly" => Billing::Yearly,
+        "on_request" => Billing::OnRequest,
+        _ => Billing::OneTime,
+    }
+}
+
 fn tax_mode_to_str(m: TaxMode) -> &'static str {
     match m {
         TaxMode::Standard => "standard",
@@ -99,16 +136,24 @@ fn tax_mode_from_str(s: &str) -> TaxMode {
     }
 }
 
-impl From<ItemRow> for LineItem {
+impl From<ItemRow> for Item {
     fn from(r: ItemRow) -> Self {
-        LineItem {
-            description: r.description,
-            quantity_milli: r.quantity_milli,
-            unit: unit_from_str(&r.unit),
-            unit_price: Cents(r.unit_price_cents),
-            vat_rate_bp: r.vat_rate_bp.max(0) as u32,
+        Item {
+            line: LineItem {
+                description: r.description,
+                quantity_milli: r.quantity_milli,
+                unit: unit_from_str(&r.unit),
+                unit_price: Cents(r.unit_price_cents),
+                vat_rate_bp: r.vat_rate_bp.max(0) as u32,
+            },
+            product_id: r.product_id,
+            price_id: r.price_id,
         }
     }
+}
+
+fn lines(items: &[Item]) -> Vec<LineItem> {
+    items.iter().map(|i| i.line.clone()).collect()
 }
 
 fn status(row: &InvoiceRow) -> InvoiceStatus {
@@ -120,9 +165,9 @@ async fn load(conn: &mut PgConnection, id: Uuid, lock: bool) -> ApiResult<Invoic
     sqlx::query_as(&sql).bind(id).fetch_optional(conn).await?.ok_or(ApiError::NotFound)
 }
 
-async fn load_items(conn: &mut PgConnection, id: Uuid) -> ApiResult<Vec<LineItem>> {
+async fn load_items(conn: &mut PgConnection, id: Uuid) -> ApiResult<Vec<Item>> {
     let rows: Vec<ItemRow> = sqlx::query_as(
-        "SELECT description, quantity_milli, unit, unit_price_cents, vat_rate_bp
+        "SELECT description, quantity_milli, unit, unit_price_cents, vat_rate_bp, product_id, price_id
            FROM invoice_items WHERE invoice_id = $1 ORDER BY position",
     )
     .bind(id)
@@ -131,21 +176,106 @@ async fn load_items(conn: &mut PgConnection, id: Uuid) -> ApiResult<Vec<LineItem
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-async fn insert_items(conn: &mut PgConnection, invoice_id: Uuid, items: &[LineItem]) -> ApiResult<()> {
+type CatalogPrice = (Uuid, SqlJson<I18n>, SqlJson<I18n>, String, Option<i64>, String);
+
+/// Eingaben auflösen: Katalogpositionen übernehmen Bezeichnung/Einheit/Preis aus dem Katalog.
+async fn resolve(
+    conn: &mut PgConnection,
+    locale: &str,
+    currency: &str,
+    inputs: Vec<ItemInput>,
+) -> ApiResult<Vec<Item>> {
+    let mut out = Vec::with_capacity(inputs.len());
+    for (i, inp) in inputs.into_iter().enumerate() {
+        let n = i + 1;
+        let Some(price_id) = inp.price_id else {
+            let (Some(description), Some(unit_price)) = (inp.description, inp.unit_price) else {
+                return Err(ApiError::BadRequest(format!(
+                    "Position {n}: ohne price_id sind description und unit_price Pflicht"
+                )));
+            };
+            out.push(Item {
+                line: LineItem {
+                    description,
+                    quantity_milli: inp.quantity_milli,
+                    unit: inp.unit.unwrap_or(Unit::Hour),
+                    unit_price,
+                    vat_rate_bp: inp.vat_rate_bp,
+                },
+                product_id: None,
+                price_id: None,
+            });
+            continue;
+        };
+        let row: Option<CatalogPrice> = sqlx::query_as(
+            "SELECT p.id, p.name, pp.name, pp.billing, pp.amount_cents, pp.currency::text
+               FROM product_prices pp JOIN products p ON p.id = pp.product_id
+               JOIN departments d ON d.id = p.department_id
+              WHERE pp.id = $1 AND pp.is_active AND p.is_active AND d.is_active",
+        )
+        .bind(price_id)
+        .fetch_optional(&mut *conn)
+        .await?;
+        let (product_id, product_name, price_name, billing, amount, price_currency) =
+            row.ok_or_else(|| ApiError::BadRequest(format!("Position {n}: Katalogpreis unbekannt oder inaktiv")))?;
+        let billing = billing_from_str(&billing);
+        let unit_price = match (amount, inp.unit_price) {
+            (Some(a), None) => Cents(a),
+            (Some(a), Some(p)) if p.0 == a => p,
+            (Some(a), Some(p)) => {
+                return Err(ApiError::BadRequest(format!(
+                    "Position {n}: Preis {p} weicht vom Katalog ({}) ab",
+                    Cents(a)
+                )))
+            }
+            // Preis auf Anfrage → Betrag muss angegeben werden
+            (None, Some(p)) => p,
+            (None, None) => {
+                return Err(ApiError::BadRequest(format!("Position {n}: Preis auf Anfrage – unit_price fehlt")))
+            }
+        };
+        if amount.is_some() && price_currency != currency {
+            return Err(ApiError::BadRequest(format!(
+                "Position {n}: Katalogwährung {price_currency} passt nicht zur Rechnung ({currency})"
+            )));
+        }
+        let description = inp
+            .description
+            .filter(|d| !d.trim().is_empty())
+            .unwrap_or_else(|| format!("{} – {}", product_name.get(locale), price_name.get(locale)));
+        out.push(Item {
+            line: LineItem {
+                description,
+                quantity_milli: inp.quantity_milli,
+                // Bei 'Preis auf Anfrage' legt die Position den Zeitraum fest (z. B. Monat)
+                unit: if billing == Billing::OnRequest { inp.unit.unwrap_or(Unit::Flat) } else { billing.unit() },
+                unit_price,
+                vat_rate_bp: inp.vat_rate_bp,
+            },
+            product_id: Some(product_id),
+            price_id: Some(price_id),
+        });
+    }
+    Ok(out)
+}
+
+async fn insert_items(conn: &mut PgConnection, invoice_id: Uuid, items: &[Item]) -> ApiResult<()> {
     for (i, it) in items.iter().enumerate() {
         sqlx::query(
-            "INSERT INTO invoice_items
-                (id, invoice_id, position, description, quantity_milli, unit, unit_price_cents, vat_rate_bp)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            "INSERT INTO invoice_items (id, invoice_id, position, description, quantity_milli, unit,
+                                        unit_price_cents, vat_rate_bp, product_id, price_id)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
         )
         .bind(Uuid::now_v7())
         .bind(invoice_id)
         .bind(i as i32 + 1)
-        .bind(it.description.trim())
-        .bind(it.quantity_milli)
-        .bind(unit_to_str(it.unit))
-        .bind(it.unit_price.0)
-        .bind(it.vat_rate_bp as i32)
+        .bind(it.line.description.trim())
+        .bind(it.line.quantity_milli)
+        .bind(unit_to_str(it.line.unit))
+        .bind(it.line.unit_price.0)
+        .bind(it.line.vat_rate_bp as i32)
+        .bind(it.product_id)
+        .bind(it.price_id)
         .execute(&mut *conn)
         .await?;
     }
@@ -173,7 +303,7 @@ async fn next_number(conn: &mut PgConnection, series: Series, year: i32) -> ApiR
 pub struct InvoiceDetail {
     #[serde(flatten)]
     pub invoice: InvoiceRow,
-    pub items: Vec<LineItem>,
+    pub items: Vec<Item>,
     pub totals: Totals,
     pub tax_notice: Option<&'static str>,
 }
@@ -182,7 +312,7 @@ async fn detail(conn: &mut PgConnection, id: Uuid) -> ApiResult<InvoiceDetail> {
     let invoice = load(conn, id, false).await?;
     let items = load_items(conn, id).await?;
     let mode = tax_mode_from_str(&invoice.tax_mode);
-    let totals = compute_totals(&items, mode);
+    let totals = compute_totals(&lines(&items), mode);
     let tax_notice = codecraft_domain::invoice::tax_notice(mode, &invoice.locale);
     Ok(InvoiceDetail { invoice, items, totals, tax_notice })
 }
@@ -200,7 +330,7 @@ pub struct NewInvoice {
     #[serde(default)]
     pub notes: String,
     #[serde(default)]
-    pub items: Vec<LineItem>,
+    pub items: Vec<ItemInput>,
 }
 
 fn eur() -> Currency {
@@ -217,11 +347,13 @@ pub async fn create_draft(
 ) -> ApiResult<(StatusCode, Json<InvoiceDetail>)> {
     user.require(Permission::InvoiceWrite, None)?;
     let mut tx = s.db.begin().await?;
-    let org_locale: (String,) = sqlx::query_as("SELECT locale FROM organizations WHERE id = $1")
+    let (org_locale,): (String,) = sqlx::query_as("SELECT locale FROM organizations WHERE id = $1")
         .bind(b.organization_id)
         .fetch_optional(&mut *tx)
         .await?
         .ok_or_else(|| ApiError::BadRequest("Organisation existiert nicht".into()))?;
+    let locale = b.locale.unwrap_or(org_locale);
+    let items = resolve(&mut tx, &locale, b.currency.as_str(), b.items).await?;
     let id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes) VALUES ($1, $2, $3, $4, $5, $6)",
@@ -230,11 +362,11 @@ pub async fn create_draft(
     .bind(b.organization_id)
     .bind(b.currency.as_str())
     .bind(tax_mode_to_str(b.tax_mode))
-    .bind(b.locale.unwrap_or(org_locale.0))
+    .bind(&locale)
     .bind(&b.notes)
     .execute(&mut *tx)
     .await?;
-    insert_items(&mut tx, id, &b.items).await?;
+    insert_items(&mut tx, id, &items).await?;
     super::audit(&mut tx, &user.actor(), "create_draft", "invoice", id, json!({})).await?;
     let d = detail(&mut tx, id).await?;
     tx.commit().await?;
@@ -284,7 +416,7 @@ pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) ->
 
 #[derive(Debug, Deserialize)]
 pub struct ItemsBody {
-    pub items: Vec<LineItem>,
+    pub items: Vec<ItemInput>,
 }
 
 pub async fn replace_items(
@@ -299,8 +431,9 @@ pub async fn replace_items(
     if !status(&inv).is_editable() {
         return Err(InvoiceError::Locked.into());
     }
+    let items = resolve(&mut tx, &inv.locale, &inv.currency, b.items).await?;
     sqlx::query("DELETE FROM invoice_items WHERE invoice_id = $1").bind(id).execute(&mut *tx).await?;
-    insert_items(&mut tx, id, &b.items).await?;
+    insert_items(&mut tx, id, &items).await?;
     let d = detail(&mut tx, id).await?;
     tx.commit().await?;
     Ok(Json(d))
@@ -332,7 +465,7 @@ async fn issue_in_tx(tx: &mut PgConnection, actor: &str, id: Uuid, payment_terms
     if !st.can_transition(InvoiceStatus::Issued) {
         return Err(InvoiceError::InvalidTransition { from: st, to: InvoiceStatus::Issued }.into());
     }
-    let items = load_items(tx, id).await?;
+    let items = lines(&load_items(tx, id).await?);
     let (name, address, vat_id): (String, String, Option<String>) =
         sqlx::query_as("SELECT name, address, vat_id FROM organizations WHERE id = $1")
             .bind(inv.organization_id)
@@ -403,8 +536,8 @@ pub async fn mark_paid(State(s): State<AppState>, user: User, Path(id): Path<Uui
     Ok(Json(d))
 }
 
-/// Storno: erzeugt eine ausgestellte Gutschrift mit negierten Positionen
-/// und setzt die Originalrechnung auf `cancelled`.
+/// Storno: erzeugt eine ausgestellte Gutschrift mit negierten Positionen (inkl. Katalogbezug,
+/// damit der Umsatz je Abteilung korrekt gemindert wird) und setzt das Original auf `cancelled`.
 pub async fn cancel(
     State(s): State<AppState>,
     user: User,
@@ -418,6 +551,11 @@ pub async fn cancel(
         return Err(InvoiceError::InvalidTransition { from: st, to: InvoiceStatus::Cancelled }.into());
     }
     let items = load_items(&mut tx, id).await?;
+    let negated: Vec<Item> = credit_note_items(&lines(&items))
+        .into_iter()
+        .zip(&items)
+        .map(|(line, orig)| Item { line, product_id: orig.product_id, price_id: orig.price_id })
+        .collect();
     let cn_id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO invoices (id, organization_id, kind, corrects_invoice_id, currency, tax_mode, locale, notes)
@@ -432,7 +570,7 @@ pub async fn cancel(
     .bind(format!("Storno zu {}", inv.number.as_deref().unwrap_or("")))
     .execute(&mut *tx)
     .await?;
-    insert_items(&mut tx, cn_id, &credit_note_items(&items)).await?;
+    insert_items(&mut tx, cn_id, &negated).await?;
     issue_in_tx(&mut tx, &user.actor(), cn_id, 0).await?;
     sqlx::query("UPDATE invoices SET status = 'cancelled', cancelled_at = now() WHERE id = $1")
         .bind(id)

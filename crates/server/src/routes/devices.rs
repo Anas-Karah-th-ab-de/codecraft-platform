@@ -39,6 +39,8 @@ pub struct NewDevice {
     pub name: String,
     pub organization_id: Option<Uuid>,
     pub license_expires_at: Option<DateTime<Utc>>,
+    /// Katalogprodukt (z. B. KI-Server, POS) – Gerätetyp muss zum Produkt passen
+    pub product_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize)]
@@ -60,9 +62,24 @@ pub async fn register(
     let id = Uuid::now_v7();
     let token = new_token("cc_d_");
     let mut tx = s.db.begin().await?;
+    if let Some(pid) = b.product_id {
+        let (sku, dk): (String, Option<String>) =
+            sqlx::query_as("SELECT sku, device_kind FROM products WHERE id = $1 AND is_active")
+                .bind(pid)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| ApiError::BadRequest("Produkt unbekannt oder inaktiv".into()))?;
+        if dk.as_deref() != Some(kind_str(b.kind)) {
+            return Err(ApiError::BadRequest(format!(
+                "Gerätetyp {} passt nicht zu Produkt {sku} (erwartet {})",
+                kind_str(b.kind),
+                dk.as_deref().unwrap_or("kein Gerät")
+            )));
+        }
+    }
     sqlx::query(
-        "INSERT INTO devices (id, organization_id, kind, name, token_hash, license_expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO devices (id, organization_id, kind, name, token_hash, license_expires_at, product_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(id)
     .bind(b.organization_id)
@@ -70,6 +87,7 @@ pub async fn register(
     .bind(b.name.trim())
     .bind(hash_token(&token))
     .bind(b.license_expires_at)
+    .bind(b.product_id)
     .execute(&mut *tx)
     .await?;
     super::audit(&mut tx, &user.actor(), "register", "device", id, json!({ "kind": kind_str(b.kind) })).await?;

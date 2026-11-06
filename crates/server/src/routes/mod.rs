@@ -1,3 +1,4 @@
+mod catalog;
 mod devices;
 mod invoices;
 mod organizations;
@@ -11,6 +12,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/health", get(health))
         .route("/api/v1/me", get(me))
+        .route("/api/v1/public/catalog", get(catalog::public_catalog))
+        .route("/api/v1/departments", get(catalog::departments))
+        .route("/api/v1/products", get(catalog::products).post(catalog::create_product))
+        .route("/api/v1/reports/revenue-by-department", get(catalog::revenue_by_department))
         .route("/api/v1/organizations", get(organizations::list).post(organizations::create))
         .route("/api/v1/organizations/{id}", get(organizations::get))
         .route("/api/v1/invoices", get(invoices::list).post(invoices::create_draft))

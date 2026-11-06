@@ -36,7 +36,7 @@
 |---|---|---|
 | **Organisationen & Benutzer** ✅ | Kunden = Organisationen, Benutzer mit Rolle (`customer` … `admin`) | `Customer`, `User`, getrennte Kunden-/Mitarbeiter-Auth |
 | **Abrechnung** ✅ | Rechnungen, Zahlungen, Gutschriften; Angebote und E-Rechnung folgen in M2 | `Invoice` aus 3 Action-Dateien, 2 Nummerngeneratoren, `CostProposal*` |
-| **Katalog** | *ein* Produktmodell (Software, Hardware, Dienstleistung) mit Übersetzungen, Preisen, Specs | `SoftwareProduct*` **und** `Product*` |
+| **Katalog** ✅ | *ein* Produktmodell (Software, Hardware, Dienstleistung) mit Übersetzungen, Preisen, Specs | `SoftwareProduct*` **und** `Product*` |
 | **Lizenzen** | Lizenz = Produkt + Organisation + Laufzeit + Features; Aktivierung pro Gerät | `SoftwareLicense*` **und** `License*`/`LicenseValidation` |
 | **Projekte** | Projekte, Anfragen, Aufgaben, Git/GitHub, Builds, Doku | `Project*`, `DevTask*`, `ProjectRequest*` |
 | **Zeit** | *eine* Zeiterfassung mit Bezug auf Projekt, Ticket oder Vertrag; abrechenbar → Rechnungsposition | `TimeEntry` **und** `SupportTimeEntry` |
@@ -44,6 +44,31 @@
 | **Geräte** ✅ | Registrierung, Reports, Lizenzstatus; OTA und Befehle in M3 | `ManagedDevice`, Agent-API `v1/agent/*` |
 | **Organisation intern** | Abteilungen, Mitarbeiter, Kalender, E-Learning, Stellen | gleichnamige Module |
 | **Kommunikation** | Matrix (Chat), LiveKit (Video), Mailcow bleiben externe Dienste – die API vermittelt nur Tokens | bestehende Integrationen |
+
+## Abteilungen & Katalog (eine Quelle)
+Im Altsystem standen Preise an drei Stellen, die nicht übereinstimmten: im Webseiten-Text (KI-Server, Pakete,
+Stundensätze), in `SoftwareProduct` (POS) und in `Product` (Hardware). Jetzt gilt:
+
+- **Abteilungen** (`DEV`, `SUP`, `MGT`, `SAL`, `ACC`) mit Portal-Modulen; Namen/Beschreibung in DE/EN/AR sind Pflicht (DB-Check `i18n_ok`).
+- **Jedes Produkt gehört genau einer verantwortlichen Abteilung**; Preise (netto, Cent) mit Abrechnungsart
+  `one_time | hourly | monthly | yearly | on_request`, Leistungsmerkmale je Sprache mit gleicher Anzahl.
+- **Webseite** liest nur `GET /api/v1/public/catalog?locale=…` – keine Preise mehr im Webseiten-Text.
+- **Rechnungsposition mit `price_id`** übernimmt Bezeichnung (in Rechnungssprache), Einheit und Preis aus dem Katalog;
+  ein abweichender Preis wird abgelehnt. Per FK muss der Preis zum Produkt gehören.
+- **Geräte** verweisen auf ihr Produkt; Gerätetyp muss zum Produkt passen (API + Trigger), und der Gerätetyp eines
+  verwendeten Produkts ist nicht mehr änderbar.
+- **Umsatz je Abteilung** (`/api/v1/reports/revenue-by-department`) ergibt sich aus der Produktzuordnung; Gutschriften
+  übernehmen den Katalogbezug und mindern den Umsatz automatisch.
+
+| Produkt (SKU) | Abteilung | Gerät | Preise |
+|---|---|---|---|
+| DEV-HOURLY | DEV | – | Junior 85 €/h · Senior 120 €/h · KI/DevOps 150 €/h |
+| CONSULTING | MGT | – | 180 €/h |
+| PROJECT-PACKAGE | DEV | – | Light 2.500 € · Core 7.500 € · Plus 15.000 € |
+| AI-SERVER-RENT | DEV | ai_appliance | Pilot 499 €/Monat · Starter 999 € · Professional 1.999 € · Enterprise auf Anfrage |
+| KM-AI (nicht öffentlich) | DEV | ai_appliance | auf Anfrage |
+| CC-POS-V3 | DEV | pos | Kostenlos · Basic 99 € · Professional 299 € · Enterprise 599 € |
+| SUPPORT-AGENT | SUP | agent | kostenlos |
 
 ## Abrechnung im Detail
 - Beträge `i64` Cent, Mengen in Tausendstel; Position kaufmännisch gerundet, USt je Steuersatz auf die Nettosumme.
@@ -60,7 +85,7 @@
 - Geplant (M2): Login mit Passwort (Argon2id) + TOTP, kurzlebige Sessions, Rate-Limit.
 
 ## Meilensteine
-1. **Fundament** ✅ – Workspace, Abrechnung, Geräte-Reports, 22 Tests, CI
+1. **Fundament** ✅ – Workspace, Abrechnung, Geräte-Reports, Abteilungen & Katalog, 29 Tests, CI
 2. **Portal & Webseite** – Login/2FA, Organisationen/Benutzer-UI, Rechnungen-UI + PDF + XRechnung/ZUGFeRD, Angebote, Astro-Webseite mit Katalog/Jobs/Kontakt/Termin
 3. **Katalog, Lizenzen, Geräte-OTA** – Firmware-Releases, signierte Updates, Lizenzaktivierung für KI-Appliance & POS, ESP32-Provisionierung
 4. **Projekte, Zeit, Support** – Migration der Dev- und Support-Daten
