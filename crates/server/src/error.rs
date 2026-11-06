@@ -16,6 +16,8 @@ pub enum ApiError {
     BadRequest(String),
     #[error("{0}")]
     Conflict(String),
+    #[error("zu viele Versuche – bitte später erneut")]
+    TooManyRequests,
     #[error(transparent)]
     Invoice(#[from] InvoiceError),
     #[error(transparent)]
@@ -32,6 +34,7 @@ impl IntoResponse for ApiError {
             ApiError::NotFound => (StatusCode::NOT_FOUND, "not_found"),
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             ApiError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
+            ApiError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
             ApiError::Invoice(InvoiceError::Locked | InvoiceError::InvalidTransition { .. }) => {
                 (StatusCode::CONFLICT, "invoice_state")
             }

@@ -4,3 +4,6 @@ firmware/esp32/target
 *.local
 node_modules
 dist
+.admin.local
+apps/web/node_modules
+apps/web/dist

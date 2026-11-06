@@ -297,3 +297,145 @@ pub async fn revenue_by_department(
     .await?;
     Ok(Json(rows))
 }
+
+// ── Produkte & Preise pflegen ───────────────────────────────────────────────
+
+#[derive(Debug, Deserialize)]
+pub struct ProductPatch {
+    pub name: Option<I18n>,
+    pub description: Option<I18n>,
+    pub department_code: Option<String>,
+    pub is_public: Option<bool>,
+    pub is_active: Option<bool>,
+}
+
+pub async fn update_product(
+    State(s): State<AppState>,
+    user: User,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+    Json(b): Json<ProductPatch>,
+) -> ApiResult<Json<ProductOut>> {
+    user.require(Permission::CatalogWrite, None)?;
+    let bad = |e: codecraft_domain::catalog::CatalogError| ApiError::BadRequest(e.to_string());
+    if let Some(n) = &b.name {
+        n.validate("name").map_err(bad)?;
+    }
+    if let Some(d) = &b.description {
+        d.validate("description").map_err(bad)?;
+    }
+    let mut tx = s.db.begin().await?;
+    let dept: Option<Uuid> = match &b.department_code {
+        Some(code) => Some(
+            sqlx::query_as::<_, (Uuid,)>("SELECT id FROM departments WHERE code = $1 AND is_active")
+                .bind(code)
+                .fetch_optional(&mut *tx)
+                .await?
+                .ok_or_else(|| ApiError::BadRequest(format!("Abteilung {code} existiert nicht")))?
+                .0,
+        ),
+        None => None,
+    };
+    let r = sqlx::query(
+        "UPDATE products SET name = COALESCE($2, name), description = COALESCE($3, description),
+                department_id = COALESCE($4, department_id), is_public = COALESCE($5, is_public),
+                is_active = COALESCE($6, is_active)
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(b.name.as_ref().map(SqlJson))
+    .bind(b.description.as_ref().map(SqlJson))
+    .bind(dept)
+    .bind(b.is_public)
+    .bind(b.is_active)
+    .execute(&mut *tx)
+    .await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    super::audit(&mut tx, &user.actor(), "update", "product", id, json!({})).await?;
+    tx.commit().await?;
+    let out =
+        products_with_prices(&s.db, false).await?.into_iter().find(|p| p.product.id == id).ok_or(ApiError::NotFound)?;
+    Ok(Json(out))
+}
+
+pub async fn add_price(
+    State(s): State<AppState>,
+    user: User,
+    axum::extract::Path(product_id): axum::extract::Path<Uuid>,
+    Json(p): Json<NewPrice>,
+) -> ApiResult<StatusCode> {
+    user.require(Permission::CatalogWrite, None)?;
+    let bad = |e: codecraft_domain::catalog::CatalogError| ApiError::BadRequest(e.to_string());
+    validate_code(&p.code).map_err(bad)?;
+    p.name.validate("price.name").map_err(bad)?;
+    validate_price(&p.code, p.billing, p.amount_cents).map_err(bad)?;
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "INSERT INTO product_prices (id, product_id, code, name, billing, amount_cents, features, sort)
+         VALUES ($1, $2, $3, $4, $5, $6, $7,
+                 (SELECT COALESCE(max(sort), 0) + 1 FROM product_prices WHERE product_id = $2))",
+    )
+    .bind(Uuid::now_v7())
+    .bind(product_id)
+    .bind(&p.code)
+    .bind(SqlJson(&p.name))
+    .bind(enum_str(&p.billing))
+    .bind(p.amount_cents)
+    .bind(p.features.clone().unwrap_or(json!({ "de": [], "en": [], "ar": [] })))
+    .execute(&mut *tx)
+    .await?;
+    super::audit(&mut tx, &user.actor(), "add_price", "product", product_id, json!({ "code": p.code })).await?;
+    tx.commit().await?;
+    Ok(StatusCode::CREATED)
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PricePatch {
+    pub amount_cents: Option<i64>,
+    pub is_active: Option<bool>,
+    pub name: Option<I18n>,
+}
+
+/// Preisänderungen gelten nur für neue Rechnungspositionen – bestehende Positionen speichern ihren Preis.
+pub async fn update_price(
+    State(s): State<AppState>,
+    user: User,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+    Json(b): Json<PricePatch>,
+) -> ApiResult<StatusCode> {
+    user.require(Permission::CatalogWrite, None)?;
+    if let Some(n) = &b.name {
+        n.validate("price.name").map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    }
+    if b.amount_cents.is_some_and(|a| a < 0) {
+        return Err(ApiError::BadRequest("Betrag darf nicht negativ sein".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    let r = sqlx::query(
+        "UPDATE product_prices SET
+                amount_cents = CASE WHEN billing = 'on_request' THEN NULL ELSE COALESCE($2, amount_cents) END,
+                is_active = COALESCE($3, is_active), name = COALESCE($4, name)
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(b.amount_cents)
+    .bind(b.is_active)
+    .bind(b.name.as_ref().map(SqlJson))
+    .execute(&mut *tx)
+    .await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "update_price",
+        "product_price",
+        id,
+        json!({ "amount_cents": b.amount_cents }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
+}

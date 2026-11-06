@@ -82,11 +82,15 @@ Stundensätze), in `SoftwareProduct` (POS) und in `Product` (Hardware). Jetzt gi
 - Tokens: 256 Bit Zufall, nur SHA-256 in der DB, Präfix `cc_u_` (Benutzer) / `cc_d_` (Gerät).
 - Rechtematrix zentral in `domain::access`; Kunden sehen nur Daten der eigenen Organisation und keine Entwürfe.
 - Body-Limit 1 MB, Fehlermeldungen ohne interne Details.
-- Geplant (M2): Login mit Passwort (Argon2id) + TOTP, kurzlebige Sessions, Rate-Limit.
+- Login: Argon2id-Passworthashes, TOTP-2FA (QR-Code), Sitzungen 12 h (Token nur in sessionStorage), 5 Fehlversuche / 10 min je E-Mail.
+- Öffentliche Formulare: Honeypot + 5 Einsendungen je IP und Stunde.
+- Antwort-Header: `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`; gzip-Kompression.
 
 ## Meilensteine
 1. **Fundament** ✅ – Workspace, Abrechnung, Geräte-Reports, Abteilungen & Katalog, 29 Tests, CI
-2. **Portal & Webseite** – Login/2FA, Organisationen/Benutzer-UI, Rechnungen-UI + PDF + XRechnung/ZUGFeRD, Angebote, Astro-Webseite mit Katalog/Jobs/Kontakt/Termin
+2. **Portal & Webseite** ✅ – Login (Argon2id) + TOTP-2FA, Sitzungen mit Ablauf, Rate-Limit; Webseite (Start, Produkte aus Katalog,
+   Karriere + Bewerbung, Kontakt) und Portal (Rechnungen inkl. PDF, Kunden, Produktpflege, Stellen, Anfragen, Geräte, Benutzer, Konto)
+   als eine React-App, vom Rust-Server ausgeliefert. Offen: XRechnung/ZUGFeRD, Angebote, Terminbuchung, SEO-Vorrendern
 3. **Katalog, Lizenzen, Geräte-OTA** – Firmware-Releases, signierte Updates, Lizenzaktivierung für KI-Appliance & POS, ESP32-Provisionierung
 4. **Projekte, Zeit, Support** – Migration der Dev- und Support-Daten
 5. **Interne Module & Abschaltung Altsystem**

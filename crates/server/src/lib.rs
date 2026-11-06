@@ -1,13 +1,18 @@
-//! API-Server: Router, Zustand, Migrationen.
+//! API-Server: Router, Zustand, Migrationen, Auslieferung des Frontends.
 
 pub mod auth;
 pub mod error;
+pub mod pdf;
 pub mod routes;
 
+use axum::http::{header, HeaderValue};
 use axum::Router;
 use sqlx::PgPool;
+use std::path::PathBuf;
 use std::time::Duration;
-use tower_http::{limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::services::{ServeDir, ServeFile};
+use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::{compression::CompressionLayer, limit::RequestBodyLimitLayer, trace::TraceLayer};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -24,10 +29,29 @@ pub async fn connect(database_url: &str) -> Result<PgPool, sqlx::Error> {
         .await
 }
 
+/// Nur API (für Tests)
 pub fn app(state: AppState) -> Router {
     Router::new()
         .merge(routes::router())
         .with_state(state)
         .layer(RequestBodyLimitLayer::new(1024 * 1024))
         .layer(TraceLayer::new_for_http())
+}
+
+/// API + Frontend (Webseite & Portal als Single-Page-App aus `static_dir`)
+pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
+    let index = static_dir.join("index.html");
+    let spa = ServeDir::new(&static_dir).append_index_html_on_directories(true).fallback(ServeFile::new(index));
+    app(state)
+        .fallback_service(spa)
+        .layer(CompressionLayer::new())
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(header::X_FRAME_OPTIONS, HeaderValue::from_static("DENY")))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("strict-origin-when-cross-origin"),
+        ))
 }

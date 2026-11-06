@@ -581,3 +581,72 @@ pub async fn cancel(
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(d)))
 }
+
+#[derive(Debug, Deserialize)]
+pub struct PdfQuery {
+    /// `html` liefert die Druckansicht statt PDF
+    pub format: Option<String>,
+}
+
+/// Rechnung als PDF (oder HTML-Druckansicht). Entwürfe erhalten ein Wasserzeichen.
+pub async fn pdf(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Query(q): Query<PdfQuery>,
+) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let mut conn = s.db.acquire().await?;
+    let d = detail(&mut conn, id).await?;
+    user.require(Permission::InvoiceRead, Some(d.invoice.organization_id))?;
+    if !user.role.is_employee() && status(&d.invoice) == InvoiceStatus::Draft {
+        return Err(ApiError::NotFound);
+    }
+    // Entwurf: aktuelle Kundendaten; ausgestellt: eingefrorene Empfängerdaten
+    let (org_name, org_addr, org_vat): (String, String, Option<String>) =
+        sqlx::query_as("SELECT name, address, vat_id FROM organizations WHERE id = $1")
+            .bind(d.invoice.organization_id)
+            .fetch_one(&mut *conn)
+            .await?;
+    let inv = &d.invoice;
+    let items = lines(&d.items);
+    let doc = crate::pdf::PdfInvoice {
+        kind: &inv.kind,
+        number: inv.number.as_deref(),
+        status: &inv.status,
+        locale: &inv.locale,
+        currency: &inv.currency,
+        issue_date: inv.issue_date,
+        due_date: inv.due_date,
+        recipient_name: inv.recipient_name.as_deref().unwrap_or(&org_name),
+        recipient_address: inv.recipient_address.as_deref().unwrap_or(&org_addr),
+        recipient_vat_id: if inv.recipient_name.is_some() {
+            inv.recipient_vat_id.as_deref()
+        } else {
+            org_vat.as_deref()
+        },
+        notes: &inv.notes,
+        items: &items,
+        groups: &d.totals.groups,
+        net: d.totals.net.0,
+        tax: d.totals.tax.0,
+        gross: d.totals.gross.0,
+        tax_notice: d.tax_notice,
+    };
+    let html = crate::pdf::render_html(&doc, &crate::pdf::Company::from_env());
+    let name = inv.number.clone().unwrap_or_else(|| format!("Entwurf-{}", &id.to_string()[..8]));
+    if q.format.as_deref() != Some("html") {
+        if let Some(bytes) = crate::pdf::html_to_pdf(&html).await {
+            return Ok((
+                [
+                    (axum::http::header::CONTENT_TYPE, "application/pdf".to_string()),
+                    (axum::http::header::CONTENT_DISPOSITION, format!("inline; filename=\"{name}.pdf\"")),
+                ],
+                bytes,
+            )
+                .into_response());
+        }
+        tracing::warn!("Chromium nicht verfügbar – liefere HTML-Druckansicht");
+    }
+    Ok(([(axum::http::header::CONTENT_TYPE, "text/html; charset=utf-8".to_string())], html).into_response())
+}

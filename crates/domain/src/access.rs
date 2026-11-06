@@ -48,6 +48,10 @@ pub enum Permission {
     CatalogRead,
     /// Produkte, Preise, Abteilungen pflegen
     CatalogWrite,
+    /// Stellenanzeigen & Bewerbungen, Kontaktanfragen
+    JobsManage,
+    /// Benutzer anlegen/verwalten
+    UserManage,
 }
 
 /// Zentrale Rechtematrix. `own_org` = Datensatz gehört zur Organisation des Kunden.
@@ -61,6 +65,7 @@ pub fn allowed(role: Role, perm: Permission, own_org: bool) -> bool {
         (Customer, InvoiceRead | CustomerRead) => own_org,
         (Customer, _) => false,
         (Lead, CatalogWrite) => true,
+        (Lead | Manager, JobsManage) => true,
         (
             Lead | Manager,
             InvoiceRead | InvoiceWrite | InvoiceIssue | CustomerRead | CustomerWrite | DeviceManage | CatalogRead,

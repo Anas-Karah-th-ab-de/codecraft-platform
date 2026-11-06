@@ -205,9 +205,9 @@ pub fn tax_notice(mode: TaxMode, locale: &str) -> Option<&'static str> {
         (TaxMode::ReverseCharge, _) => {
             Some("Steuerschuldnerschaft des Leistungsempfängers (Reverse Charge, Art. 196 MwStSystRL).")
         }
-        (TaxMode::NotTaxable, "en") => Some("Not taxable in Germany."),
-        (TaxMode::NotTaxable, "ar") => Some("غير خاضع للضريبة في ألمانيا."),
-        (TaxMode::NotTaxable, _) => Some("Nicht im Inland steuerbare Leistung."),
+        (TaxMode::NotTaxable, "en") => Some("No VAT charged."),
+        (TaxMode::NotTaxable, "ar") => Some("لا تُحتسب ضريبة القيمة المضافة."),
+        (TaxMode::NotTaxable, _) => Some("Es wird keine Umsatzsteuer berechnet."),
     }
 }
 
