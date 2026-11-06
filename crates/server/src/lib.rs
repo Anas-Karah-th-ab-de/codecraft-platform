@@ -5,6 +5,7 @@ pub mod error;
 pub mod pdf;
 pub mod routes;
 
+use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue};
 use axum::Router;
 use sqlx::PgPool;
@@ -12,7 +13,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
-use tower_http::{compression::CompressionLayer, limit::RequestBodyLimitLayer, trace::TraceLayer};
+use tower_http::{compression::CompressionLayer, trace::TraceLayer};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -34,7 +35,7 @@ pub fn app(state: AppState) -> Router {
     Router::new()
         .merge(routes::router())
         .with_state(state)
-        .layer(RequestBodyLimitLayer::new(1024 * 1024))
+        .layer(DefaultBodyLimit::max(1024 * 1024))
         .layer(TraceLayer::new_for_http())
 }
 
@@ -42,7 +43,23 @@ pub fn app(state: AppState) -> Router {
 pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
     let index = static_dir.join("index.html");
     let spa = ServeDir::new(&static_dir).append_index_html_on_directories(true).fallback(ServeFile::new(index));
+    // Produktbilder: Dateinamen enthalten eine UUID → unveränderlich, ein Jahr cachebar
+    let media = Router::new().fallback_service(ServeDir::new(routes::media::media_dir())).layer(
+        SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        ),
+    );
+    // Gebaute JS/CSS-Dateien tragen einen Hash im Namen → ebenfalls unveränderlich
+    let assets = Router::new().fallback_service(ServeDir::new(static_dir.join("assets"))).layer(
+        SetResponseHeaderLayer::overriding(
+            header::CACHE_CONTROL,
+            HeaderValue::from_static("public, max-age=31536000, immutable"),
+        ),
+    );
     app(state)
+        .nest_service("/media", media)
+        .nest_service("/assets", assets)
         .fallback_service(spa)
         .layer(CompressionLayer::new())
         .layer(SetResponseHeaderLayer::if_not_present(

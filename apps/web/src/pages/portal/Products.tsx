@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api, can, useApi, useAuth } from "../../api";
+import { useRef, useState } from "react";
+import { api, can, invalidate, upload, useApi, useAuth } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
 import { Field, Loading, Modal, toCents, useSubmit } from "../../ui";
 import type { Price, Product } from "./Invoices";
@@ -39,7 +39,7 @@ export default function ProductsAdmin() {
   const edit = can(me, "catalog_write");
   const s = useSubmit();
 
-  const patch = (id: string, body: object) => s.run(async () => { await api(`/api/v1/products/${id}`, { method: "PATCH", body }); reload(); });
+  const patch = (id: string, body: object) => s.run(async () => { await api(`/api/v1/products/${id}`, { method: "PATCH", body }); invalidate("/api/v1/public"); reload(); });
 
   return (
     <>
@@ -81,6 +81,7 @@ export default function ProductsAdmin() {
                 )}
               </div>
               <p className="muted" style={{ margin: "6px 0 10px" }}>{p.description[locale as Locale]}</p>
+              <ImageManager p={p} edit={edit} onChange={() => { invalidate("/api/v1/public"); reload(); }} />
               <table>
                 <thead><tr><th>{t("p.price_code")}</th><th>{t("p.prices")}</th><th>{t("p.billing")}</th><th className="n">{t("p.amount")}</th><th className="n">{t("p.active")}</th></tr></thead>
                 <tbody>{p.prices.map((pr) => <PriceRow key={pr.id} pr={pr} edit={edit} onChange={reload} />)}</tbody>
@@ -218,5 +219,68 @@ function NewProduct({ depts, onClose }: { depts: Dept[]; onClose: () => void }) 
         </div>
       </form>
     </Modal>
+  );
+}
+
+/** Bilder: Drag & Drop oder Klick, mehrere auf einmal; erstes Bild = Hauptbild */
+function ImageManager({ p, edit, onChange }: { p: Product; edit: boolean; onChange: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [over, setOver] = useState(false);
+  const [busy, setBusy] = useState(0);
+  const [err, setErr] = useState<string | null>(null);
+  const send = async (files: FileList | File[]) => {
+    setErr(null);
+    const list = [...files].filter((f) => /^image\/(jpeg|png|webp)$/.test(f.type));
+    if (list.length === 0) return setErr("JPEG, PNG, WebP");
+    setBusy(list.length);
+    for (const f of list) {
+      try {
+        if (f.size > 10 * 1024 * 1024) throw new Error(`${f.name}: > 10 MB`);
+        await upload(`/api/v1/products/${p.id}/images`, f);
+      } catch (e: any) {
+        setErr(e.message);
+      }
+      setBusy((n) => n - 1);
+    }
+    onChange();
+  };
+  const act = async (fn: () => Promise<unknown>) => {
+    try { await fn(); onChange(); } catch (e: any) { setErr(e.message); }
+  };
+  if (!edit && p.images.length === 0) return null;
+  return (
+    <>
+      <div className="imgs">
+        {p.images.map((im, i) => (
+          <div key={im.id} className={`im ${i === 0 ? "main" : ""}`}>
+            <img src={im.card} alt="" loading="lazy" />
+            {edit && (
+              <div className="bar2">
+                <button type="button" title="Hauptbild" disabled={i === 0} onClick={() => act(() => api(`/api/v1/product-images/${im.id}/primary`, { method: "POST" }))}>
+                  {i === 0 ? "★" : "☆"}
+                </button>
+                <button type="button" title="Löschen" onClick={() => confirm("Bild löschen?") && act(() => api(`/api/v1/product-images/${im.id}`, { method: "DELETE" }))}>🗑</button>
+              </div>
+            )}
+          </div>
+        ))}
+        {edit && (
+          <div
+            className={`drop ${over ? "over" : ""}`}
+            role="button"
+            tabIndex={0}
+            onClick={() => input.current?.click()}
+            onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && input.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setOver(true); }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => { e.preventDefault(); setOver(false); send(e.dataTransfer.files); }}
+          >
+            {busy > 0 ? <span>⏳ {busy}</span> : <><span style={{ fontSize: "1.6em" }}>＋</span><span>Bild hierher ziehen</span></>}
+            <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={(e) => e.target.files && send(e.target.files)} />
+          </div>
+        )}
+      </div>
+      {err && <div className="alert">{err}</div>}
+    </>
   );
 }

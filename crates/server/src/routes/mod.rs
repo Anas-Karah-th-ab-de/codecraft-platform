@@ -3,10 +3,12 @@ mod catalog;
 mod devices;
 mod invoices;
 mod jobs;
+pub mod media;
 mod organizations;
 
 use crate::AppState;
-use axum::routing::{get, patch, post, put};
+use axum::extract::DefaultBodyLimit;
+use axum::routing::{delete, get, patch, post, put};
 use axum::{Json, Router};
 use serde_json::{json, Value};
 
@@ -15,6 +17,7 @@ pub fn router() -> Router<AppState> {
         .route("/health", get(health))
         // Öffentlich (Webseite)
         .route("/api/v1/public/catalog", get(catalog::public_catalog))
+        .route("/api/v1/public/products/{slug}", get(catalog::public_product_detail))
         .route("/api/v1/public/jobs", get(jobs::public_jobs))
         .route("/api/v1/public/jobs/{slug}", get(jobs::public_job_detail))
         .route("/api/v1/public/jobs/{slug}/apply", post(jobs::apply))
@@ -34,6 +37,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/products/{id}", patch(catalog::update_product))
         .route("/api/v1/products/{id}/prices", post(catalog::add_price))
         .route("/api/v1/prices/{id}", patch(catalog::update_price))
+        .route(
+            "/api/v1/products/{id}/images",
+            post(media::upload).layer(DefaultBodyLimit::max(media::MAX_UPLOAD + 64 * 1024)),
+        )
+        .route("/api/v1/product-images/{id}", delete(media::delete))
+        .route("/api/v1/product-images/{id}/primary", post(media::make_primary))
         .route("/api/v1/reports/revenue-by-department", get(catalog::revenue_by_department))
         // Stellen & Kontakt
         .route("/api/v1/jobs", get(jobs::list_jobs).post(jobs::create_job))

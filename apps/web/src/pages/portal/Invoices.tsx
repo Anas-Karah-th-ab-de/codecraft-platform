@@ -9,6 +9,7 @@ export type Price = { id: string; product_id: string; code: string; name: I18n; 
 export type Product = {
   id: string; sku: string; slug: string; kind: string; department_id: string; department_code: string; device_kind: string | null;
   name: I18n; description: I18n; is_public: boolean; is_active: boolean; prices: Price[];
+  images: { id: string; card: string; full: string; width: number; height: number }[];
 };
 type Org = { id: string; name: string; locale: string; vat_id: string | null };
 type Inv = {

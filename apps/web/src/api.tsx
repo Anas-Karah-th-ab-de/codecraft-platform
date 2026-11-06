@@ -50,15 +50,44 @@ export async function openPdf(path: string) {
   else window.location.href = url;
 }
 
+/**
+ * Zwischenspeicher für GET-Anfragen (stale-while-revalidate):
+ * bereits geladene Seiten erscheinen sofort, im Hintergrund wird aktualisiert.
+ */
+const cache = new Map<string, unknown>();
+const inflight = new Map<string, Promise<unknown>>();
+
+function fetchCached<T>(path: string): Promise<T> {
+  let p = inflight.get(path) as Promise<T> | undefined;
+  if (!p) {
+    p = api<T>(path).then((d) => {
+      cache.set(path, d);
+      return d;
+    });
+    inflight.set(path, p);
+    p.finally(() => inflight.delete(path));
+  }
+  return p;
+}
+
+/** Vorab laden (z. B. beim Überfahren eines Links), damit die nächste Seite sofort da ist */
+export function prefetch(path: string) {
+  if (!cache.has(path)) fetchCached(path).catch(() => {});
+}
+
+/** Für Komponenten: liegt etwas im Zwischenspeicher? */
+export const peek = <T,>(path: string) => cache.get(path) as T | undefined;
+
 /** Daten laden mit Lade-/Fehlerzustand und `reload` */
 export function useApi<T>(path: string | null, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null);
+  const [data, setData] = useState<T | null>(() => (path ? ((cache.get(path) as T) ?? null) : null));
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!(path && cache.has(path)));
   const load = useCallback(() => {
     if (!path) return;
-    setLoading(true);
-    api<T>(path)
+    if (cache.has(path)) setData(cache.get(path) as T);
+    else setLoading(true);
+    fetchCached<T>(path)
       .then((d) => {
         setData(d);
         setError(null);
@@ -68,7 +97,33 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [path, ...deps]);
   useEffect(load, [load]);
-  return { data, error, loading, reload: load, setData };
+  const reload = useCallback(() => {
+    if (path) cache.delete(path);
+    load();
+  }, [path, load]);
+  return { data, error, loading, reload, setData };
+}
+
+/** Datei hochladen (multipart) */
+export async function upload<T = any>(path: string, file: File): Promise<T> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(path, { method: "POST", headers: { authorization: `Bearer ${getToken()}` }, body: fd });
+  if (!res.ok) {
+    let msg = res.statusText;
+    try {
+      msg = (await res.json()).message ?? msg;
+    } catch {
+      /* kein JSON */
+    }
+    throw new ApiError(res.status, msg);
+  }
+  return res.json();
+}
+
+/** Nach Änderungen im Portal: öffentliche Daten neu laden lassen */
+export function invalidate(prefix: string) {
+  for (const k of cache.keys()) if (k.startsWith(prefix)) cache.delete(k);
 }
 
 export type Me = {
@@ -134,6 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* egal */
     }
     sessionStorage.removeItem(TOKEN_KEY);
+    cache.clear(); // keine Daten des vorherigen Benutzers im Speicher lassen
     setMe(null);
   };
 

@@ -10,7 +10,8 @@ Ersetzt schrittweise `code-craft-vps-life-time` (3× Next.js, ~155 k Zeilen).
 | Geräteprotokoll (no_std) | Rust | `crates/protocol` | ✅ v1 |
 | Geräte-Agent (PC, KI-Appliance, POS) | Rust | `crates/agent` | ✅ Reports, Lizenzstatus |
 | ESP32-Firmware | Rust (ESP-IDF) | `firmware/esp32` | 🟡 Gerüst |
-| Webseite + Portal (DE/EN/AR, RTL) | React + Vite, vom Server ausgeliefert | `apps/web` | ✅ Start, Produkte, Karriere, Kontakt · Portal mit Login/2FA |
+| Webseite + Portal (DE/EN/AR, RTL) | React + Vite, vom Server ausgeliefert | `apps/web` | ✅ Start, Produkte + Detailseiten, Karriere, Kontakt · Portal mit Login/2FA |
+| Produktbilder | Upload → 480/1600 px (JPEG/PNG), `/media` mit Langzeit-Cache | `crates/server/src/routes/media.rs` | ✅ |
 | Rechnungs-PDF | HTML-Vorlage → Headless-Chromium | `crates/server/src/pdf.rs` | ✅ DE/EN/AR |
 
 ## Lokal starten (ein Befehl)
@@ -22,6 +23,8 @@ Ersetzt schrittweise `code-craft-vps-life-time` (3× Next.js, ~155 k Zeilen).
 ./dev.sh test     # alle Tests (Rust + TypeScript)
 ```
 
+Bilder liegen unter `data/media` (`MEDIA_DIR`), nicht im Git.
+
 Frontend-Entwicklung mit Hot-Reload: Server laufen lassen, dann `cd apps/web && npm run dev` (Port 5173).
 
 ## Schnellstart manuell (WSL/Ubuntu)
@@ -30,7 +33,7 @@ Frontend-Entwicklung mit Hot-Reload: Server laufen lassen, dann `cd apps/web && 
 sudo apt install postgresql && sudo service postgresql start
 sudo -u postgres createuser -s $USER && createdb codecraft
 export DATABASE_URL=postgres:///codecraft
-cargo test --workspace                                                   # 36 Tests inkl. DB
+cargo test --workspace                                                   # 39 Tests inkl. DB
 cargo run -p codecraft-server -- create-admin ak@code-craft.tech "Anas" "<passwort>"
 cargo run -p codecraft-server                                            # API auf 127.0.0.1:8080
 ```
@@ -41,6 +44,8 @@ cargo run -p codecraft-server                                            # API a
 |---|---|---|
 | GET | `/health` | – |
 | POST | `/api/v1/auth/login` (+ `code` bei 2FA) · `/logout` · `/password` · `/2fa/setup|enable|disable` | – / Sitzung |
+| GET | `/api/v1/public/products/{slug}?locale=` | öffentlich |
+| POST · DELETE · POST | `/api/v1/products/{id}/images` (multipart `file`) · `/product-images/{id}` · `/product-images/{id}/primary` | CatalogWrite |
 | GET | `/api/v1/public/jobs` · `/public/jobs/{slug}` · POST `/apply` · POST `/public/contact` | öffentlich |
 | GET/POST | `/api/v1/users` | UserManage (Admin) |
 | GET/POST · PUT | `/api/v1/jobs` · `/jobs/{id}/status` · GET `/applications` · `/contact-requests` | JobsManage |

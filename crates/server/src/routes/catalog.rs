@@ -76,6 +76,7 @@ pub struct ProductOut {
     #[serde(flatten)]
     pub product: ProductRow,
     pub prices: Vec<PriceRow>,
+    pub images: Vec<super::media::ImageOut>,
 }
 
 const PRODUCT_COLS: &str = "p.id, p.sku, p.slug, p.kind, p.department_id, d.code AS department_code, p.device_kind,
@@ -96,14 +97,39 @@ async fn products_with_prices(db: &sqlx::PgPool, only_public: bool) -> ApiResult
         sqlx::query_as(&format!("SELECT {PRICE_COLS} FROM product_prices {price_filter} ORDER BY sort, code"))
             .fetch_all(db)
             .await?;
+    let ids: Vec<Uuid> = products.iter().map(|p| p.id).collect();
+    let images = super::media::images_for(db, &ids).await?;
     Ok(products
         .into_iter()
         .map(|product| {
             let (mine, rest): (Vec<_>, Vec<_>) = prices.drain(..).partition(|p| p.product_id == product.id);
             prices = rest;
-            ProductOut { product, prices: mine }
+            let images = images.iter().filter(|i| i.product_id == product.id).map(Into::into).collect();
+            ProductOut { product, prices: mine, images }
         })
         .collect())
+}
+
+fn public_product(p: &ProductOut, locale: &str) -> Value {
+    json!({
+        "id": p.product.id,
+        "sku": p.product.sku,
+        "slug": p.product.slug,
+        "kind": p.product.kind,
+        "department": p.product.department_code,
+        "name": p.product.name.get(locale),
+        "description": p.product.description.get(locale),
+        "images": p.images,
+        "prices": p.prices.iter().map(|pr| json!({
+            "id": pr.id,
+            "code": pr.code,
+            "name": pr.name.get(locale),
+            "billing": pr.billing,
+            "amount_cents": pr.amount_cents,
+            "currency": pr.currency,
+            "features": pr.features.get(locale).cloned().unwrap_or(json!([])),
+        })).collect::<Vec<_>>(),
+    })
 }
 
 pub async fn products(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<ProductOut>>> {
@@ -134,26 +160,21 @@ pub async fn public_catalog(State(s): State<AppState>, Query(q): Query<LocaleQue
         "departments": depts.iter().map(|(id, code, name, color, icon)| json!({
             "id": id, "code": code, "name": name.get(&locale), "color": color, "icon": icon,
         })).collect::<Vec<_>>(),
-        "products": products.iter().map(|p| json!({
-            "id": p.product.id,
-            "sku": p.product.sku,
-            "slug": p.product.slug,
-            "kind": p.product.kind,
-            "department": p.product.department_code,
-            "name": p.product.name.get(&locale),
-            "description": p.product.description.get(&locale),
-            "prices": p.prices.iter().map(|pr| json!({
-                "id": pr.id,
-                "code": pr.code,
-                "name": pr.name.get(&locale),
-                "billing": pr.billing,
-                "amount_cents": pr.amount_cents,
-                "currency": pr.currency,
-                "features": pr.features.get(&locale).cloned().unwrap_or(json!([])),
-            })).collect::<Vec<_>>(),
-        })).collect::<Vec<_>>(),
+        "products": products.iter().map(|p| public_product(p, &locale)).collect::<Vec<_>>(),
     });
     Ok(Json(out))
+}
+
+/// Produktdetail für die Webseite (nur aktive, öffentliche Produkte)
+pub async fn public_product_detail(
+    State(s): State<AppState>,
+    axum::extract::Path(slug): axum::extract::Path<String>,
+    Query(q): Query<LocaleQuery>,
+) -> ApiResult<Json<Value>> {
+    let locale = q.locale.as_deref().filter(|l| matches!(*l, "de" | "en" | "ar")).unwrap_or("de");
+    let products = products_with_prices(&s.db, true).await?;
+    let p = products.iter().find(|p| p.product.slug == slug).ok_or(ApiError::NotFound)?;
+    Ok(Json(public_product(p, locale)))
 }
 
 // ── Produkt anlegen ─────────────────────────────────────────────────────────
