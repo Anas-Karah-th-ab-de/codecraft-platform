@@ -1,0 +1,24 @@
+[package]
+name = "codecraft-esp32"
+description = "Firmware für eigene ESP32-Hardware – meldet Status an die Plattform (Protokoll v1)"
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+
+[[bin]]
+name = "codecraft-esp32"
+harness = false
+
+[profile.release]
+opt-level = "s"
+
+[dependencies]
+codecraft-protocol = { path = "../../crates/protocol" }
+esp-idf-svc = { version = "0.51", features = ["binstart"] }
+embedded-svc = "0.28"
+serde_json = "1"
+log = "0.4"
+anyhow = "1"
+
+[build-dependencies]
+embuild = "0.33"

@@ -1,0 +1,16 @@
+[Unit]
+Description=KM Code Craft API
+After=network-online.target postgresql.service
+
+[Service]
+User=codecraft
+EnvironmentFile=/etc/codecraft/server.env
+ExecStart=/opt/codecraft/codecraft-server
+Restart=always
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

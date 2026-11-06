@@ -1,0 +1,17 @@
+[package]
+name = "codecraft-protocol"
+description = "Geräteprotokoll (Agent, ESP32, KI-Appliance, POS) – no_std-fähig"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["std"]
+std = ["serde/std"]
+
+[dependencies]
+serde = { workspace = true, features = ["alloc"] }
+
+[dev-dependencies]
+serde_json.workspace = true

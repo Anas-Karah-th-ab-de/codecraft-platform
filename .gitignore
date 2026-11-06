@@ -1,0 +1,6 @@
+/target
+firmware/esp32/target
+.env
+*.local
+node_modules
+dist

@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+members = ["crates/domain", "crates/protocol", "crates/server", "crates/agent"]
+# firmware/esp32 wird separat mit der ESP-Toolchain gebaut (eigenes Target)
+exclude = ["firmware/esp32"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+license = "UNLICENSED"
+authors = ["Mohamad Anas Kara Mohamad <ak@code-craft.tech>"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+codecraft-domain = { path = "crates/domain" }
+codecraft-protocol = { path = "crates/protocol" }
+serde = { version = "1", default-features = false, features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
+chrono = { version = "0.4", default-features = false, features = ["serde", "clock", "std"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
