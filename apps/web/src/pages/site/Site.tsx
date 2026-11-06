@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
@@ -52,7 +52,7 @@ export function SiteLayout() {
       <a href="#inhalt" className="skip">{locale === "ar" ? "انتقل إلى المحتوى" : locale === "en" ? "Skip to content" : "Zum Inhalt"}</a>
       <header className="site-header">
         <div className="container">
-          <Link to="/" className="logo"><span>KM</span> Code Craft</Link>
+          <Link to="/" className="logo" aria-label="KM Code Craft – Start"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <nav className={`nav ${menu ? "open" : ""}`} aria-label="Hauptmenü">
             <NavLink to="/" end>{t("nav.home")}</NavLink>
             <NavLink to="/produkte">{t("nav.products")}</NavLink>
@@ -74,8 +74,9 @@ export function SiteLayout() {
       <footer className="site-footer">
         <div className="container footer-grid">
           <div>
-            <div className="logo"><span>KM</span> Code Craft</div>
-            <p className="muted">{t("home.sub")}</p>
+            <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
+            <p className="muted">{t("hero.sub")}</p>
+            <p className="muted" style={{ fontSize: ".9em" }}>{t("footer.made")}</p>
           </div>
           <div>
             <b>{t("nav.products")}</b>
@@ -85,6 +86,7 @@ export function SiteLayout() {
           <div>
             <b>{t("nav.contact")}</b>
             <a href="mailto:ak@code-craft.tech" dir="ltr">ak@code-craft.tech</a>
+            <a href="https://linkedin.com/company/code-craft-tech" target="_blank" rel="noopener noreferrer">LinkedIn</a>
             <Link to="/portal">{t("nav.portal")}</Link>
           </div>
         </div>
@@ -201,16 +203,8 @@ export function Home() {
   const depts = data?.departments.filter((d) => data.products.some((p) => p.department === d.code)) ?? [];
   return (
     <>
-      <section className="hero">
-        <div className="container">
-          <h1>{t("home.title")}</h1>
-          <p>{t("home.sub")}</p>
-          <div className="row" style={{ marginTop: 24 }}>
-            <Link className="btn" to="/produkte">{t("home.cta")}</Link>
-            <Link className="btn ghost" to="/kontakt">{t("home.contact")}</Link>
-          </div>
-        </div>
-      </section>
+      <HeroVideo />
+      <Services />
       <section className="section container">
         <h2>{t("home.featured")}</h2>
         {!data ? <SkeletonGrid n={3} /> : <div className="grid">{data.products.slice(0, 3).map((p) => <ProductCard key={p.id} p={p} />)}</div>}
@@ -229,6 +223,116 @@ export function Home() {
               </p>
             </Link>
           ))}
+        </div>
+      </section>
+      <WhyAbout />
+    </>
+  );
+}
+
+// ── Startseite: Video-Hero, Leistungen, Warum/Über uns ──────────────────────
+
+function HeroVideo() {
+  const { t, locale } = useI18n();
+  const ref = useRef<HTMLVideoElement>(null);
+  const [muted, setMuted] = useState(true);
+  const lang = locale === "ar" ? "ar" : "de"; // EN nutzt das deutsche Video
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    // Weniger Bewegung oder Datensparmodus → nur Standbild, kein Video
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const save = (navigator as any).connection?.saveData;
+    const small = matchMedia("(max-width: 1023px)").matches;
+    setSrc(reduce || save ? null : `/brand/hero-${lang}-${small ? 720 : 1080}.mp4`);
+    setMuted(true);
+  }, [lang]);
+  useEffect(() => {
+    // Video läuft nur, solange es sichtbar ist (spart Akku und Daten)
+    const v = ref.current;
+    if (!v || !src) return;
+    v.muted = true;
+    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? v.play().catch(() => {}) : v.pause()));
+    io.observe(v);
+    return () => io.disconnect();
+  }, [src]);
+  const toggle = () => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+    v.play().catch(() => {});
+  };
+  return (
+    <section className="hero hero-video">
+      <video ref={ref} key={src ?? lang} className="hv" poster={`/brand/hero-${lang}.jpg`} src={src ?? undefined}
+        autoPlay muted loop playsInline preload="metadata" aria-hidden="true" />
+      <div className="hv-shade" />
+      <div className="container">
+        {src && (
+          <button className="hv-sound" onClick={toggle} aria-pressed={!muted}>
+            <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span> {t(muted ? "hero.soundOn" : "hero.soundOff")}
+          </button>
+        )}
+        <h1 className="hv-title"><bdi dir="ltr">Technology. <span>Crafted.</span></bdi></h1>
+        <p>{t("hero.sub")}</p>
+        <div className="row" style={{ marginTop: 26 }}>
+          <Link className="btn" to="/kontakt">{t("home.contact")}</Link>
+          <Link className="btn ghost" to="/produkte">{t("home.cta")}</Link>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const SVC_ICON = ["💻", "🖥️", "🧭", "☁️", "🎓"];
+
+function Services() {
+  const { t } = useI18n();
+  return (
+    <section className="section container">
+      <h2>{t("svc.title")}</h2>
+      <p className="muted" style={{ marginTop: -6 }}>{t("svc.sub")}</p>
+      <div className="grid svc-grid">
+        {SVC_ICON.map((ic, i) => (
+          <div key={i} className="card svc">
+            <span className="ic" aria-hidden="true">{ic}</span>
+            <h3>{t(`svc.${i + 1}.t` as Parameters<typeof t>[0])}</h3>
+            <p className="muted">{t(`svc.${i + 1}.d` as Parameters<typeof t>[0])}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WhyAbout() {
+  const { t } = useI18n();
+  return (
+    <>
+      <section className="section container" style={{ paddingTop: 0 }}>
+        <h2>{t("why.title")}</h2>
+        <div className="usp">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i}>
+              <h3>{t(`why.${i}.t` as Parameters<typeof t>[0])}</h3>
+              <p className="muted">{t(`why.${i}.d` as Parameters<typeof t>[0])}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="section container about" style={{ paddingTop: 0 }}>
+        <img src="/brand/logo.png" alt="" width="520" height="218" loading="lazy" />
+        <div>
+          <h2>{t("about.title")}</h2>
+          <p>{t("about.p1")}</p>
+          <p className="muted">{t("about.p2")}</p>
+        </div>
+      </section>
+      <section className="section container" style={{ paddingTop: 0 }}>
+        <div className="cta-band">
+          <h2>{t("cta.title")}</h2>
+          <p>{t("cta.sub")}</p>
+          <Link className="btn" to="/kontakt">{t("cta.btn")} →</Link>
         </div>
       </section>
     </>

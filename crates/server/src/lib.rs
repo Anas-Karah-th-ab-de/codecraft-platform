@@ -11,6 +11,7 @@ use axum::Router;
 use sqlx::PgPool;
 use std::path::PathBuf;
 use std::time::Duration;
+use tower_http::compression::predicate::{DefaultPredicate, NotForContentType, Predicate};
 use tower_http::services::{ServeDir, ServeFile};
 use tower_http::set_header::SetResponseHeaderLayer;
 use tower_http::{compression::CompressionLayer, trace::TraceLayer};
@@ -57,11 +58,18 @@ pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
             HeaderValue::from_static("public, max-age=31536000, immutable"),
         ),
     );
+    // Logo, Videos, Poster: feste Namen → einen Tag cachen (Range-Anfragen für Videos unterstützt ServeDir)
+    let brand = Router::new().fallback_service(ServeDir::new(static_dir.join("brand"))).layer(
+        SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, HeaderValue::from_static("public, max-age=86400")),
+    );
     app(state)
         .nest_service("/media", media)
+        .nest_service("/brand", brand)
         .nest_service("/assets", assets)
         .fallback_service(spa)
-        .layer(CompressionLayer::new())
+        .layer(
+            CompressionLayer::new().compress_when(DefaultPredicate::new().and(NotForContentType::const_new("video/"))),
+        )
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),

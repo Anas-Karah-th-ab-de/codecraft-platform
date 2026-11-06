@@ -28,7 +28,7 @@ export default function Portal() {
   return (
     <div className="portal">
       <aside className="side">
-        <Link to="/" className="logo"><span>KM</span> Code Craft</Link>
+        <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
         {links.filter((l) => l[2]).map(([to, key]) => (
           <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}</NavLink>
         ))}
@@ -90,7 +90,7 @@ function Login() {
     <div className="login-wrap">
       <form className="card" onSubmit={submit}>
         <div className="row between" style={{ marginBottom: 14 }}>
-          <Link to="/" className="logo"><span>KM</span> Code Craft</Link>
+          <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <LangSwitch />
         </div>
         <h2>{t("login.title")}</h2>
