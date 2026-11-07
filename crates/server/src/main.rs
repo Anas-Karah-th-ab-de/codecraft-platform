@@ -58,13 +58,78 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", codecraft_server::mail::guard::new_key());
         return Ok(());
     }
-    // mail-import <datei.pager>… : Mailcow-Export übernehmen (Postfach = Dateiname ohne .pager)
+    // mail-account <adresse> <name> <rolle> : Konto mit Postfach anlegen bzw. Passwort setzen.
+    // Passwort kommt über stdin (nie als Argument, damit es nicht in der Prozessliste steht).
+    if args.first().map(String::as_str) == Some("mail-account") {
+        let [_, address, name, role] = args.as_slice() else {
+            return Err("Nutzung: echo PASSWORT | codecraft-server mail-account <adresse> <name> <rolle>".into());
+        };
+        let role_enum: codecraft_domain::access::Role = serde_json::from_value(serde_json::json!(role))?;
+        let mut pw = String::new();
+        std::io::stdin().read_line(&mut pw)?;
+        let pw = pw.trim_end_matches(['\r', '\n']);
+        if pw.len() < 8 {
+            return Err("Passwort zu kurz (mindestens 8 Zeichen)".into());
+        }
+        let hash = auth::hash_password(pw).map_err(|e| e.to_string())?;
+        let address = address.to_lowercase();
+        let mut tx = db.begin().await?;
+        let existing: Option<Uuid> = sqlx::query_scalar("SELECT id FROM users WHERE lower(email) = $1")
+            .bind(&address)
+            .fetch_optional(&mut *tx)
+            .await?;
+        let user_id = match existing {
+            Some(id) => {
+                sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
+                    .bind(id)
+                    .bind(&hash)
+                    .execute(&mut *tx)
+                    .await?;
+                id
+            }
+            None => {
+                let id = Uuid::now_v7();
+                sqlx::query(
+                    "INSERT INTO users (id, email, display_name, role, password_hash) VALUES ($1, $2, $3, $4, $5)",
+                )
+                .bind(id)
+                .bind(&address)
+                .bind(name)
+                .bind(role)
+                .bind(&hash)
+                .execute(&mut *tx)
+                .await?;
+                id
+            }
+        };
+        let mailbox = codecraft_server::routes::chat::provision(&mut tx, user_id, &address, name, role_enum, None)
+            .await
+            .map_err(|e| format!("{e:?}"))?;
+        tx.commit().await?;
+        println!("{address}: Konto bereit, Postfach {}", mailbox.unwrap_or_else(|| "–".into()));
+        return Ok(());
+    }
+    // mail-import [--into <adresse>] [--folder <ordner>] <datei.pager>… : Mailcow-Export übernehmen
+    // (Postfach = Dateiname ohne .pager, außer bei --into)
     if args.first().map(String::as_str) == Some("mail-import") {
-        for file in &args[1..] {
+        let (mut into, mut folder, mut files) = (None::<String>, None::<String>, vec![]);
+        let mut it = args[1..].iter();
+        while let Some(a) = it.next() {
+            match a.as_str() {
+                "--into" => into = it.next().cloned(),
+                "--folder" => folder = it.next().cloned(),
+                f => files.push(f.to_string()),
+            }
+        }
+        for file in &files {
             let path = std::path::Path::new(file);
-            let address =
-                path.file_name().and_then(|n| n.to_str()).unwrap_or("").trim_end_matches(".pager").to_string();
-            let records = codecraft_server::mail::import::parse_pager(&std::fs::read(path)?);
+            let address = into.clone().unwrap_or_else(|| {
+                path.file_name().and_then(|n| n.to_str()).unwrap_or("").trim_end_matches(".pager").to_string()
+            });
+            let mut records = codecraft_server::mail::import::parse_pager(&std::fs::read(path)?);
+            if let Some(f) = &folder {
+                records.iter_mut().for_each(|r| r.mailbox = f.clone());
+            }
             match codecraft_server::mail::import::import(&db, &address, &records).await {
                 Ok((done, skipped)) => {
                     println!("{address}: {} gelesen, {done} übernommen, {skipped} übersprungen", records.len())
