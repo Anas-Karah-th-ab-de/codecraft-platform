@@ -30,13 +30,16 @@ pub async fn serve(db: PgPool, bind: String, implicit_tls: bool) {
 pub async fn run(db: PgPool, listener: TcpListener, implicit_tls: bool) {
     loop {
         let Ok((sock, peer)) = listener.accept().await else { continue };
+        // höchstens 20 gleichzeitige Verbindungen je IP (Mail-Programme öffnen mehrere)
+        let Some(slot) = super::guard::connection(peer.ip(), 20) else { continue };
         let db = db.clone();
         tokio::spawn(async move {
+            let _slot = slot;
             let stream = if implicit_tls {
                 let Some(acc) = tls::acceptor() else { return };
-                match acc.accept(sock).await {
-                    Ok(t) => Stream::Tls(Box::new(t)),
-                    Err(_) => return,
+                match timeout(Duration::from_secs(15), acc.accept(sock)).await {
+                    Ok(Ok(t)) => Stream::Tls(Box::new(t)),
+                    _ => return,
                 }
             } else {
                 Stream::Plain(sock)
@@ -900,6 +903,14 @@ async fn rows(s: &Sess, uids: &[i64], with_raw: bool) -> Result<Vec<Row>, sqlx::
     .bind(with_raw)
     .fetch_all(&s.db)
     .await
+    .map(|rows: Vec<Row>| {
+        rows.into_iter()
+            .map(|mut r| {
+                r.9 = r.9.map(super::guard::open);
+                r
+            })
+            .collect()
+    })
 }
 
 fn flags(r: &Row) -> String {
@@ -1355,7 +1366,7 @@ async fn search(s: &mut Sess, io: &mut Io, args: &[Tok], uid: bool) -> Result<St
                 .fetch_all(&s.db)
                 .await
                 .map_err(|e| e.to_string())?;
-        raws.extend(all);
+        raws.extend(all.into_iter().map(|(u, r)| (u, super::guard::open(r))));
     }
     let ctx = Ctx { rows: &rows, raws };
     let mut hits = vec![];

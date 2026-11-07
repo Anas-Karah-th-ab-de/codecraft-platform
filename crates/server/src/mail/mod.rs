@@ -4,6 +4,7 @@
 //! - `outbound`: Warteschlange und Versand an fremde Server (MX, STARTTLS, Wiederholungen)
 //! - `imap`: IMAP4rev1-Server für Handy- und Desktop-Programme
 
+pub mod guard;
 pub mod imap;
 pub mod import;
 pub mod outbound;
@@ -142,7 +143,7 @@ pub async fn store(
     .bind(m.has_attachments)
     .bind(auth_results)
     .bind(seen)
-    .bind(raw)
+    .bind(guard::seal(raw))
     .fetch_one(db)
     .await?;
     if !seen {
@@ -261,7 +262,16 @@ pub async fn dns_records(db: &PgPool, domain: &str) -> Result<Vec<(String, Strin
     let mut out = vec![
         ("MX".into(), domain.to_string(), format!("10 {host}.")),
         ("TXT".into(), domain.to_string(), "v=spf1 mx -all".into()),
-        ("TXT".into(), format!("_dmarc.{domain}"), format!("v=DMARC1; p=quarantine; rua=mailto:postmaster@{domain}")),
+        // streng: Absender-Domain muss exakt passen; nach erfolgreichem Test auf p=reject stellen
+        (
+            "TXT".into(),
+            format!("_dmarc.{domain}"),
+            format!("v=DMARC1; p=quarantine; adkim=s; aspf=s; pct=100; rua=mailto:postmaster@{domain}"),
+        ),
+        // MTA-STS: fremde Server dürfen nur verschlüsselt und nur an unseren MX zustellen
+        ("CNAME".into(), format!("mta-sts.{domain}"), format!("{host}.")),
+        ("TXT".into(), format!("_mta-sts.{domain}"), "v=STSv1; id=2026110701".into()),
+        ("TXT".into(), format!("_smtp._tls.{domain}"), format!("v=TLSRPTv1; rua=mailto:postmaster@{domain}")),
     ];
     if let Some((sel, Some(p))) = row {
         out.push(("TXT".into(), format!("{sel}._domainkey.{domain}"), format!("v=DKIM1; k=rsa; p={p}")));
@@ -378,7 +388,7 @@ pub async fn submit(
         .bind(&from)
         .bind(domain)
         .bind(list)
-        .bind(&signed)
+        .bind(guard::seal(&signed))
         .execute(db)
         .await?;
     }

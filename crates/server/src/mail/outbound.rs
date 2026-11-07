@@ -65,6 +65,7 @@ async fn process(
     db: &PgPool,
     (id, mailbox, from, domain, rcpts, raw, attempts, created): Job,
 ) -> Result<(), sqlx::Error> {
+    let raw = super::guard::open(raw);
     let res = deliver(&domain, &from, &rcpts, &raw).await;
     let temp: Vec<String> = res.iter().filter(|r| r.1 == Outcome::Temporary).map(|r| r.0.clone()).collect();
     for (rcpt, outcome, msg) in &res {

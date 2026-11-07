@@ -88,14 +88,15 @@ pub async fn list(State(s): State<AppState>, user: User, Query(q): Query<ListQue
 }
 
 async fn load(s: &AppState, mb: &MailUser, id: Uuid) -> ApiResult<(String, Vec<u8>, Option<String>, bool, bool)> {
-    sqlx::query_as(
+    let r: (String, Vec<u8>, Option<String>, bool, bool) = sqlx::query_as(
         "SELECT folder, raw, auth_results, flagged, answered FROM mail_messages WHERE id = $1 AND mailbox_id = $2",
     )
     .bind(id)
     .bind(mb.mailbox_id)
     .fetch_optional(&s.db)
     .await?
-    .ok_or(ApiError::NotFound)
+    .ok_or(ApiError::NotFound)?;
+    Ok((r.0, mail::guard::open(r.1), r.2, r.3, r.4))
 }
 
 pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
@@ -308,6 +309,9 @@ pub async fn send(State(s): State<AppState>, user: User, Json(b): Json<Send>) ->
         return Err(ApiError::BadRequest("Anhänge zusammen höchstens 25 MB".into()));
     }
     let raw = m.write_to_vec().map_err(|e| ApiError::BadRequest(e.to_string()))?;
+    if !mail::guard::send_allowed(mb.mailbox_id, rcpts.len()) {
+        return Err(ApiError::TooManyRequests);
+    }
     let id = mail::submit(&s.db, &mb, &rcpts, &raw, true).await?;
     Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
 }
@@ -452,4 +456,12 @@ pub async fn delete_alias(State(s): State<AppState>, user: User, Path(addr): Pat
     user.require(Permission::UserManage, None)?;
     sqlx::query("DELETE FROM mail_aliases WHERE address = $1").bind(addr.to_lowercase()).execute(&s.db).await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// MTA-STS-Richtlinie (https://mta-sts.<domain>/.well-known/mta-sts.txt): nur TLS, nur unser MX
+pub async fn mta_sts() -> impl IntoResponse {
+    (
+        [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+        format!("version: STSv1\nmode: enforce\nmx: {}\nmax_age: 604800\n", mail::hostname()),
+    )
 }

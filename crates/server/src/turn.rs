@@ -268,6 +268,47 @@ struct Allocation {
 
 type Table = Arc<Mutex<HashMap<SocketAddr, Allocation>>>;
 
+/// Nur für Tests: Weiterleitung an lokale Adressen erlauben
+pub static ALLOW_PRIVATE_PEERS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Schutz vor Missbrauch als Tür ins interne Netz: keine Weiterleitung an Loopback, private,
+/// Link-Local-, Multicast-, Carrier-NAT- oder eigene Adressen.
+pub fn peer_allowed(ip: IpAddr) -> bool {
+    if ALLOW_PRIVATE_PEERS.load(std::sync::atomic::Ordering::Relaxed) {
+        return true;
+    }
+    if ip == public_ip() {
+        return false;
+    }
+    match ip {
+        IpAddr::V4(v) => {
+            let o = v.octets();
+            !(v.is_loopback()
+                || v.is_private()
+                || v.is_link_local()
+                || v.is_multicast()
+                || v.is_broadcast()
+                || v.is_unspecified()
+                || v.is_documentation()
+                || o[0] == 0
+                || (o[0] == 100 && (64..128).contains(&o[1]))
+                || (o[0] == 198 && (o[1] == 18 || o[1] == 19))
+                || o[0] >= 240)
+        }
+        IpAddr::V6(v) => {
+            if let Some(v4) = v.to_ipv4_mapped() {
+                return peer_allowed(IpAddr::V4(v4));
+            }
+            let s = v.segments();
+            !(v.is_loopback()
+                || v.is_unspecified()
+                || v.is_multicast()
+                || (s[0] & 0xfe00) == 0xfc00
+                || (s[0] & 0xffc0) == 0xfe80)
+        }
+    }
+}
+
 fn public_ip() -> IpAddr {
     std::env::var("TURN_PUBLIC_IP").ok().and_then(|s| s.parse().ok()).unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST))
 }
@@ -432,6 +473,9 @@ async fn handle(sock: &Arc<UdpSocket>, table: &Table, m: &Msg<'_>, from: SocketA
         CREATE_PERMISSION => {
             let peers: Vec<SocketAddr> =
                 m.attrs.iter().filter(|a| a.0 == A_PEER).filter_map(|a| read_xor_addr(a.1, &tid)).collect();
+            if peers.iter().any(|p| !peer_allowed(p.ip())) {
+                return Some(Out::error(CREATE_PERMISSION, &tid, 403, "Forbidden").sign(&key));
+            }
             let mut t = table.lock().unwrap();
             match t.get_mut(&from) {
                 Some(a) if a.key == key && !peers.is_empty() => {
@@ -447,6 +491,9 @@ async fn handle(sock: &Arc<UdpSocket>, table: &Table, m: &Msg<'_>, from: SocketA
         CHANNEL_BIND => {
             let ch = m.attr(A_CHANNEL).filter(|v| v.len() >= 2).map(|v| u16::from_be_bytes([v[0], v[1]]));
             let peer = m.attr(A_PEER).and_then(|v| read_xor_addr(v, &tid));
+            if peer.is_some_and(|p| !peer_allowed(p.ip())) {
+                return Some(Out::error(CHANNEL_BIND, &tid, 403, "Forbidden").sign(&key));
+            }
             let mut t = table.lock().unwrap();
             match (t.get_mut(&from), ch, peer) {
                 (Some(a), Some(ch), Some(peer)) if a.key == key && (0x4000..0x8000).contains(&ch) => {
@@ -528,6 +575,10 @@ mod tests {
         tokio::spawn(run(server));
         let client = UdpSocket::bind("127.0.0.1:0").await.unwrap();
         let peer = UdpSocket::bind("127.0.0.1:0").await.unwrap();
+        assert!(!peer_allowed("127.0.0.1".parse().unwrap()) && !peer_allowed("10.1.2.3".parse().unwrap()));
+        assert!(!peer_allowed("::ffff:192.168.1.1".parse().unwrap()) && !peer_allowed("169.254.1.1".parse().unwrap()));
+        assert!(peer_allowed("8.8.8.8".parse().unwrap()) && peer_allowed("2a00:1450::1".parse().unwrap()));
+        ALLOW_PRIVATE_PEERS.store(true, std::sync::atomic::Ordering::Relaxed); // Test läuft über 127.0.0.1
         let mut buf = ();
         async fn recv(s: &UdpSocket, _: &mut ()) -> Vec<u8> {
             let mut b = vec![0u8; 2048];

@@ -53,6 +53,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{token}");
         return Ok(());
     }
+    // mail-key : neuen Schlüssel für MAIL_ENC_KEY ausgeben
+    if args.first().map(String::as_str) == Some("mail-key") {
+        println!("{}", codecraft_server::mail::guard::new_key());
+        return Ok(());
+    }
     // mail-import <datei.pager>… : Mailcow-Export übernehmen (Postfach = Dateiname ohne .pager)
     if args.first().map(String::as_str) == Some("mail-import") {
         for file in &args[1..] {

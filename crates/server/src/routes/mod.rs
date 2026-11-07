@@ -76,6 +76,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/chat/rooms/{id}/messages", get(chat::messages).post(chat::post_message))
         .route("/api/v1/chat/rooms/{id}/read", post(chat::mark_read))
         // Webmail
+        .route("/.well-known/mta-sts.txt", get(mail::mta_sts))
         .route("/api/v1/mail", get(mail::overview))
         .route("/api/v1/mail/messages", get(mail::list))
         .route("/api/v1/mail/messages/{id}", get(mail::get).patch(mail::patch).delete(mail::delete))

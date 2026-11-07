@@ -12,6 +12,36 @@ tools/legacy/matrix-export.sh      # Matrix-Verlauf als Archiv → ~/prod-export
 
 Der Matrix-Verlauf wird nicht in den neuen Chat übernommen: 42 Nachrichten, fast nur Testdaten. Er liegt als Archiv vor.
 
+## 0b. Nichts darf verloren gehen
+
+- `tools/legacy/mail-backup.sh` sichert die Mailcow-Rohdaten nur lesend auf den lokalen Rechner, mit SHA256-Prüfsummen:
+  - vmail: alle Postfächer, inklusive gelöschter Ordner
+  - crypt: die Schlüssel. Ohne sie sind die Rohdaten unlesbar.
+- Mailcow selbst bleibt unverändert, bis Schritt 4 ausdrücklich freigegeben ist.
+- Nach dem Import muss die Anzahl je Postfach und Ordner mit `doveadm mailbox status` übereinstimmen. Der Import zeigt dafür „gelesen / übernommen / übersprungen“ an.
+- Im neuen System läuft täglich ein `pg_dump` der Datenbank. Er wird verschlüsselt und auch außerhalb des Servers abgelegt.
+
+## 0c. Sicherheit (Pflicht in Produktion)
+
+```
+MAIL_ENC_KEY=$(codecraft-server mail-key)   # AES-256-GCM für alle Mails in der DB – sicher verwahren!
+# niemals setzen: MAIL_ALLOW_PLAIN_AUTH
+```
+
+- **Verschlüsselung in der Datenbank:** Mails sind mit AES-256-GCM verschlüsselt.
+  - Betreff, Absender und Vorschau bleiben lesbar, damit Suche und Liste funktionieren.
+  - Ohne den Schlüssel sind Datenbank-Dumps wertlos. Verliert man ihn, sind die Inhalte aber nicht mehr lesbar. Deshalb den Schlüssel doppelt sichern.
+- **Verbindungen:** Anmeldung nur über TLS. Pro IP höchstens 10 SMTP- und 20 IMAP-Verbindungen. Nach 8 Fehlversuchen wird die Anmeldung 15 Minuten gesperrt.
+- **Konten:** Bei aktiver Zwei-Faktor-Anmeldung braucht man App-Passwörter. Pro Postfach sind 300 Empfänger pro Stunde erlaubt.
+- **Anhänge:** Programme, Skripte, Makro-Dokumente und ISO-Dateien werden abgewiesen. Das gilt auch, wenn sie getarnt sind, zum Beispiel als „.pdf.exe“ oder an der Programm-Signatur erkennbar.
+- **Prüfung beim Empfang:** SPF, DKIM und DMARC werden geprüft.
+- **DNS-Regeln:**
+  - DMARC ist streng (adkim=s, aspf=s). Nach erfolgreichem Test `p=reject` setzen.
+  - MTA-STS und TLS-RPT sind gesetzt. Fremde Server dürfen nur verschlüsselt an uns zustellen.
+- **TURN-Relay:** Er leitet nie an interne oder private Adressen weiter, damit niemand darüber an Postgres oder Redis kommt. Die Zugangsdaten gelten 24 Stunden.
+- **Web-Header:** CSP, HSTS, Permissions-Policy, X-Frame-Options und COOP sind gesetzt.
+- **HTML-Mails:** Sie werden abgeschottet angezeigt (Sandbox, keine Skripte). Externe Bilder werden erst auf Klick geladen.
+
 ## 1. Benutzer und Postfächer anlegen (Portal → Benutzer)
 
 | Mailcow | Neu | Hinweis |

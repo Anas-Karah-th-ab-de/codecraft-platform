@@ -61,6 +61,7 @@ async fn setup(db: &PgPool) -> (String, String, String) {
         assert_eq!(s, StatusCode::CREATED, "{v}");
     }
     mail::ensure_dkim(db).await.unwrap();
+    mail::guard::set_key_for_tests([9; 32]);
     mail::tls::ALLOW_PLAIN_AUTH.store(true, std::sync::atomic::Ordering::Relaxed);
     (admin, login(db, "jana@gmail.com", "sehr-geheim-123").await, login(db, "tom@gmail.com", "sehr-geheim-123").await)
 }
@@ -193,8 +194,21 @@ async fn smtp_inbound_submission_and_webmail(db: PgPool) {
     assert!(c.line().await.starts_with("250"));
     let (_, list) = call(&db, "GET", "/api/v1/mail/messages", &tom, None).await;
     assert_eq!(list[0]["subject"], "Intern");
-    let raw: Vec<u8> =
+    let stored: Vec<u8> =
         sqlx::query_scalar("SELECT raw FROM mail_messages WHERE subject = 'Intern'").fetch_one(&db).await.unwrap();
+    assert!(
+        stored.starts_with(b"CCE1") && !String::from_utf8_lossy(&stored).contains("Hi Tom"),
+        "in der DB verschlüsselt"
+    );
+    let raw = mail::guard::open(stored);
+    // gefährlicher Anhang von außen wird abgewiesen
+    let (mut c, _) = Client::connect(mx).await;
+    c.smtp("EHLO evil.example").await;
+    c.smtp("MAIL FROM:<x@evil.example>").await;
+    c.smtp("RCPT TO:<tom.weber@code-craft.tech>").await;
+    c.smtp("DATA").await;
+    c.send("Subject: Rechnung\r\nContent-Type: multipart/mixed; boundary=B\r\n\r\n--B\r\nContent-Type: text/plain\r\n\r\nSiehe Anhang\r\n--B\r\nContent-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=\"Rechnung.pdf.exe\"\r\nContent-Transfer-Encoding: base64\r\n\r\nTVqQAAMAAAAEAAAA\r\n--B--\r\n.\r\n").await;
+    assert!(c.line().await.starts_with("552 5.7.1"));
     assert!(String::from_utf8_lossy(&raw).contains("DKIM-Signature: v=1; a=rsa-sha256"), "DKIM fehlt");
 
     // ── Webmail: senden (lokal + extern), Antwort, Ordner ──
@@ -249,8 +263,9 @@ async fn outbound_client_talks_to_mx(db: PgPool) {
     .unwrap();
     assert_eq!(res[0].1, Outcome::Permanent, "{res:?}");
     assert_eq!(res[1].1, Outcome::Delivered, "{res:?}");
-    let body: Vec<u8> =
-        sqlx::query_scalar("SELECT raw FROM mail_messages WHERE subject = 'Von aussen'").fetch_one(&db).await.unwrap();
+    let body = mail::guard::open(
+        sqlx::query_scalar("SELECT raw FROM mail_messages WHERE subject = 'Von aussen'").fetch_one(&db).await.unwrap(),
+    );
     assert!(String::from_utf8_lossy(&body).ends_with("\r\n.Zeile mit Punkt\r\n"));
 }
 

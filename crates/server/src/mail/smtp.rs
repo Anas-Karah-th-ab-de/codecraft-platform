@@ -39,13 +39,16 @@ pub async fn serve(db: PgPool, bind: String, mode: Mode) {
 pub async fn run(db: PgPool, listener: TcpListener, mode: Mode) {
     loop {
         let Ok((sock, peer)) = listener.accept().await else { continue };
+        // höchstens 10 gleichzeitige Verbindungen je IP
+        let Some(slot) = super::guard::connection(peer.ip(), 10) else { continue };
         let db = db.clone();
         tokio::spawn(async move {
+            let _slot = slot;
             let stream = if mode == Mode::SubmissionTls {
                 let Some(acc) = tls::acceptor() else { return };
-                match acc.accept(sock).await {
-                    Ok(t) => Stream::Tls(Box::new(t)),
-                    Err(_) => return,
+                match timeout(Duration::from_secs(15), acc.accept(sock)).await {
+                    Ok(Ok(t)) => Stream::Tls(Box::new(t)),
+                    _ => return,
                 }
             } else {
                 Stream::Plain(sock)
@@ -346,6 +349,10 @@ fn received(helo: &str, ip: IpAddr, with: &str, rcpt: &str) -> String {
 /// Fremde Post annehmen: SPF/DKIM/DMARC prüfen, ggf. in „Spam“ ablegen oder abweisen.
 async fn accept_inbound(db: &PgPool, env: &Envelope, body: &[u8], ip: IpAddr, helo: &str, tls_on: bool) -> String {
     let mail_from = env.from.clone().unwrap_or_default();
+    if let Some(name) = super::guard::dangerous_attachment(body) {
+        tracing::warn!("Gefährlicher Anhang abgewiesen: {name} von {mail_from} ({ip})");
+        return format!("552 5.7.1 Anhang aus Sicherheitsgruenden gesperrt: {name}");
+    }
     let mut auth_header = String::new();
     let mut junk = false;
     if !ip.is_loopback() {
@@ -411,6 +418,9 @@ async fn accept_submission(
     let env_from = env.from.clone().unwrap_or_default();
     if !own(&header_from) || !(env_from.is_empty() || own(&env_from)) {
         return format!("553 5.7.1 Absender muss {} sein", user.address);
+    }
+    if !super::guard::send_allowed(user.mailbox_id, env.rcpts.len()) {
+        return "451 4.7.1 Versandlimit erreicht, bitte spaeter erneut versuchen".into();
     }
     let mut raw = format!(
         "Received: from {helo} ([{ip}])\r\n\tby {} with ESMTPSA; {}\r\n",
