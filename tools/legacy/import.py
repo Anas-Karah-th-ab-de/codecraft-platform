@@ -54,6 +54,18 @@ def clean(s):
     return s or None
 
 
+def iso(x):  # wie Prisma-Date im JSON des Altsystems
+    return None if not x else (x if x.endswith('Z') else x + ('.000' if '.' not in x else '') + 'Z')
+
+
+def num(x):
+    return float(x) if x is not None else None
+
+
+def drop_none(d):
+    return {k: v for k, v in d.items() if v is not None}
+
+
 def norm(name):
     return re.sub(r'\s+', ' ', (name or '').strip()).casefold()
 
@@ -76,7 +88,12 @@ for c in customers:
         groups[norm(c['companyName'])].append(c)
 org_of = {}  # legacy customer id → org uuid
 org_locale = {}
-out = ['\\set ON_ERROR_STOP 1', 'BEGIN;', '-- Kunden']
+out = ['\\set ON_ERROR_STOP 1', 'BEGIN;', '-- Firmenvorlage für den Druck (Layout des Altsystems)']
+tpl = next((t for t in J('InvoiceTemplate') if t.get('isDefault')), None)
+if tpl:
+    out.append(f"INSERT INTO document_templates (id, data) VALUES ('default', {q(json.dumps(tpl, ensure_ascii=False))}::jsonb)"
+               f" ON CONFLICT (id) DO NOTHING;")
+out.append('-- Kunden')
 for key, cs in groups.items():
     oid = uid('org', key)
     refs = lambda c: sum(1 for i in invoices if i['customerId'] == c['id']) + sum(
@@ -157,12 +174,26 @@ for inv in sorted(invoices, key=lambda i: i['issuedAt']):
     if m:
         max_cc[int(m.group(1))] = max(max_cc[int(m.group(1))], int(m.group(2)))
     st = {'PAID': 'paid', 'CANCELLED': 'cancelled', 'DRAFT': 'draft'}.get(inv['status'], 'issued')
+    snap = {
+        'invoiceNumber': inv['invoiceNumber'], 'issuedAt': iso(inv['issuedAt']), 'dueDate': iso(inv['dueDate']),
+        'serviceFrom': iso(inv.get('serviceFrom')), 'serviceTo': iso(inv.get('serviceTo')),
+        'customerName': inv['customerName'], 'customerAddress': inv.get('customerAddress') or {},
+        'items': [{'description': it['description'], 'quantity': num(it['quantity']), 'unitPrice': num(it['unitPrice']),
+                   'totalPrice': num(it['totalPrice']), 'discount': num(it['discount']) if it.get('discount') else None,
+                   'discountType': it.get('discountType')}
+                  for it in sorted(items_by[inv['id']], key=lambda x: (x['sortOrder'], x['id']))],
+        'subtotal': num(inv['subtotal']), 'tax': num(inv['tax']), 'taxRate': num(inv['taxRate']), 'total': num(inv['total']),
+        'currency': inv['currency'], 'notes': inv.get('notes'),
+        'discount': num(inv['discount']) if inv.get('discount') else None, 'discountType': inv.get('discountType'),
+        'discountAmount': num(inv['discountAmount']) if inv.get('discountAmount') else None,
+        'discountDescription': inv.get('discountDescription'), 'unitType': inv.get('unitType') or 'QUANTITY',
+    }
     body = [
         f"INSERT INTO invoices (id, organization_id, kind, status, currency, tax_mode, locale, notes, project_id,"
-        f" service_from, service_to, legacy_id, created_at) VALUES ({q(iid)}, {q(org)}, 'invoice', 'draft',"
+        f" service_from, service_to, legacy_id, created_at, pdf_snapshot) VALUES ({q(iid)}, {q(org)}, 'invoice', 'draft',"
         f" {q(inv['currency'])}, {q(tax_mode)}, {q(org_locale[org])}, {q(notes)},"
         f" {q(proj_of.get(inv.get('projectId')))}, {q(day(inv.get('serviceFrom')))}, {q(day(inv.get('serviceTo')))},"
-        f" {q(inv['id'])}, {q(ts(inv['createdAt']))});"]
+        f" {q(inv['id'])}, {q(ts(inv['createdAt']))}, {q(json.dumps(snap, ensure_ascii=False))}::jsonb);"]
     for n, (d, mq, u, p, blk) in enumerate(lines, 1):
         body.append(
             f"INSERT INTO invoice_items (id, invoice_id, position, description, quantity_milli, unit, unit_price_cents,"
@@ -200,13 +231,39 @@ for x in quotes:
     tax_mode = 'reverse_charge' if x.get('reverseCharge') else ('standard' if rate > 0 else 'not_taxable')
     status = x['status'].lower() if x['status'].lower() in ('draft', 'sent', 'accepted', 'rejected', 'expired') else 'sent'
     its = sorted((i for i in q_items if i['proposalId'] == x['id']), key=lambda i: (i['sortOrder'], i['id']))
+    cust = next(c for c in customers if c['id'] == x['customerId'])
+    by_block = sorted(its, key=lambda i: (i.get('blockNr') is None, i.get('blockNr') or 0, i['sortOrder']))
+    truthy = lambda v: num(v) if v else None
+    snap = drop_none({
+        'proposalNr': x['proposalNr'], 'title': x['title'], 'description': x.get('description'),
+        'revision': x.get('revision'), 'projectStart': iso(x.get('projectStart')), 'projectEnd': iso(x.get('projectEnd')),
+        'hourlyRate': truthy(x.get('hourlyRate')), 'discountedHourlyRate': truthy(x.get('discountedHourlyRate')),
+        'totalHours': truthy(x.get('totalHours')),
+        'subtotal': num(x['subtotal']), 'tax': num(x['tax']), 'taxRate': num(x['taxRate']), 'total': num(x['total']),
+        'currency': x['currency'], 'reverseCharge': bool(x.get('reverseCharge')),
+        'reverseChargeNote': x.get('reverseChargeNote'), 'advancePaymentPercent': x.get('advancePaymentPercent'),
+        'status': x['status'], 'validUntil': iso(x.get('validUntil')), 'issuedAt': iso(x['createdAt']),
+        'customerName': cust['companyName'],
+        'customerAddress': drop_none({'companyName': cust['companyName'], 'street': cust.get('street'),
+                                      'zip': cust.get('postalCode'), 'city': cust.get('city'), 'country': cust['country']}),
+        'items': [drop_none({'blockNr': i.get('blockNr'), 'blockTitle': i.get('blockTitle'), 'positionNr': i.get('positionNr'),
+                             'description': i['description'], 'quantity': num(i['quantity']), 'unit': i['unit'],
+                             'unitPrice': num(i['unitPrice']), 'totalPrice': num(i['totalPrice'])}) for i in by_block],
+        'milestones': [drop_none({'milestoneNr': m['milestoneNr'], 'title': m['title'], 'blocks': m.get('blocks'),
+                                  'goal': m.get('goal')})
+                       for m in sorted((m for m in q_miles if m['proposalId'] == x['id']), key=lambda m: m['sortOrder'])],
+        'paymentSchedule': [drop_none({'dueLabel': p['dueLabel'], 'amount': num(p['amount']), 'currency': p['currency'],
+                                       'description': p.get('description')})
+                            for p in sorted((p for p in q_pay if p['proposalId'] == x['id']), key=lambda p: p['sortOrder'])],
+        'notes': x.get('notes'),
+    })
     if sum(cents(i['totalPrice']) for i in its) != cents(x['subtotal']):
         problems.append(f"{x['proposalNr']}: Positionen ≠ Zwischensumme")
     body = [
         f"INSERT INTO quotes (id, organization_id, project_id, number, title, description, revision, status, currency,"
         f" tax_mode, tax_rate_bp, tax_note, locale, valid_until, project_start, project_end, hourly_rate_cents,"
         f" discounted_rate_cents, total_hours_milli, advance_percent, net_cents, tax_cents, gross_cents, notes,"
-        f" sent_at, responded_at, customer_response, legacy_id, created_at, updated_at) VALUES ({q(qid)}, {q(org)},"
+        f" sent_at, responded_at, customer_response, legacy_id, created_at, updated_at, pdf_snapshot) VALUES ({q(qid)}, {q(org)},"
         f" {q(proj_of.get(x.get('projectId')))}, {q(x['proposalNr'])}, {q(x['title'].strip())},"
         f" {q(x.get('description') or '')}, {q(clean(x.get('revision')))}, {q(status)}, {q(x['currency'])},"
         f" {q(tax_mode)}, {int(rate * 100)}, {q(clean(x.get('reverseChargeNote')))}, {q(org_locale[org])},"
@@ -216,7 +273,8 @@ for x in quotes:
         f" {q(milli(x['totalHours']) if x.get('totalHours') is not None else None)},"
         f" {q(x.get('advancePaymentPercent'))}, {cents(x['subtotal'])}, {cents(x['tax'])}, {cents(x['total'])},"
         f" {q(x.get('notes') or '')}, {q(ts(x.get('sentAt')))}, {q(ts(x.get('respondedAt')))},"
-        f" {q(clean(x.get('customerResponse')))}, {q(x['id'])}, {q(ts(x['createdAt']))}, {q(ts(x['updatedAt']))});"]
+        f" {q(clean(x.get('customerResponse')))}, {q(x['id'])}, {q(ts(x['createdAt']))}, {q(ts(x['updatedAt']))},"
+        f" {q(json.dumps(snap, ensure_ascii=False))}::jsonb);"]
     for n, i in enumerate(its, 1):
         body.append(
             f"INSERT INTO quote_items (id, quote_id, position, block_nr, block_title, position_nr, description,"

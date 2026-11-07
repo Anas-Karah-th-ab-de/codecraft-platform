@@ -9,7 +9,7 @@ mkdir -p "$OUT"; chmod 700 "$OUT"
 S="ssh -o BatchMode=yes $HOST"
 TS=$(date +%Y%m%d-%H%M)
 $S "docker exec codecraft-postgres pg_dump -U codecraft -Fc employee_portal" > "$OUT/employee_portal-$TS.dump"
-for t in Customer Project Invoice InvoiceItem CostProposal CostProposalItem CostProposalMilestone CostProposalPaymentSchedule; do
+for t in InvoiceTemplate Customer Project Invoice InvoiceItem CostProposal CostProposalItem CostProposalMilestone CostProposalPaymentSchedule; do
   $S "docker exec codecraft-postgres psql -U codecraft -d employee_portal -At -c \"select coalesce(json_agg(t),'[]') from \\\"$t\\\" t\"" > "$OUT/$t.json"
   echo "$t: $(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))))" "$OUT/$t.json")"
 done

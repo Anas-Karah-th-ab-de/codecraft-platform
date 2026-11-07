@@ -595,6 +595,8 @@ pub async fn cancel(
 pub struct PdfQuery {
     /// `html` liefert die Druckansicht statt PDF
     pub format: Option<String>,
+    /// Sprache des Belegs (Standard: Sprache der Rechnung)
+    pub locale: Option<String>,
 }
 
 /// Rechnung als PDF (oder HTML-Druckansicht). Entwürfe erhalten ein Wasserzeichen.
@@ -619,6 +621,42 @@ pub async fn pdf(
             .await?;
     let inv = &d.invoice;
     let items = lines(&d.items);
+    let name = inv.number.clone().unwrap_or_else(|| format!("Entwurf-{}", &id.to_string()[..8]));
+    let pdf_response = |bytes: Vec<u8>| {
+        (
+            [
+                (axum::http::header::CONTENT_TYPE, "application/pdf".to_string()),
+                (axum::http::header::CONTENT_DISPOSITION, format!("inline; filename=\"{name}.pdf\"")),
+            ],
+            bytes,
+        )
+            .into_response()
+    };
+    // 1. Layout des Altsystems (übernommene Belege: Original-Druckdaten)
+    if q.format.as_deref() != Some("html") {
+        let (snapshot,): (Option<serde_json::Value>,) =
+            sqlx::query_as("SELECT pdf_snapshot FROM invoices WHERE id = $1").bind(id).fetch_one(&mut *conn).await?;
+        let data = snapshot.unwrap_or_else(|| {
+            crate::legacy_pdf::invoice_data(
+                inv.number.as_deref(),
+                inv.issue_date,
+                inv.due_date,
+                (inv.service_from, inv.service_to),
+                inv.recipient_name.as_deref().unwrap_or(&org_name),
+                inv.recipient_address.as_deref().unwrap_or(&org_addr),
+                &items,
+                &d.totals,
+                &inv.currency,
+                &inv.notes,
+            )
+        });
+        let template = crate::legacy_pdf::template(&mut conn).await;
+        let locale = q.locale.as_deref().unwrap_or(&inv.locale);
+        if let Some(bytes) = crate::legacy_pdf::render("invoice", locale, template, data).await {
+            return Ok(pdf_response(bytes));
+        }
+    }
+    // 2. Ersatz: eigene HTML-Vorlage über Chromium
     let doc = crate::pdf::PdfInvoice {
         kind: &inv.kind,
         number: inv.number.as_deref(),
@@ -644,17 +682,9 @@ pub async fn pdf(
         tax_notice: d.tax_notice,
     };
     let html = crate::pdf::render_html(&doc, &crate::pdf::Company::from_env());
-    let name = inv.number.clone().unwrap_or_else(|| format!("Entwurf-{}", &id.to_string()[..8]));
     if q.format.as_deref() != Some("html") {
         if let Some(bytes) = crate::pdf::html_to_pdf(&html).await {
-            return Ok((
-                [
-                    (axum::http::header::CONTENT_TYPE, "application/pdf".to_string()),
-                    (axum::http::header::CONTENT_DISPOSITION, format!("inline; filename=\"{name}.pdf\"")),
-                ],
-                bytes,
-            )
-                .into_response());
+            return Ok(pdf_response(bytes));
         }
         tracing::warn!("Chromium nicht verfügbar – liefere HTML-Druckansicht");
     }

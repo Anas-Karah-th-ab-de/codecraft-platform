@@ -1,0 +1,15 @@
+{
+  "name": "codecraft-pdf-legacy",
+  "private": true,
+  "description": "Rechnungs- und KV-PDFs im Layout des Altsystems (jsPDF)",
+  "scripts": {
+    "build": "tsc -p ."
+  },
+  "dependencies": {
+    "jspdf": "4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "~5.6.0"
+  }
+}

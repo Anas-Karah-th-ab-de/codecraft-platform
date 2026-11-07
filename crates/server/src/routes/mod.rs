@@ -65,6 +65,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/projects/{id}", get(projects::get))
         .route("/api/v1/quotes", get(projects::list_quotes))
         .route("/api/v1/quotes/{id}", get(projects::get_quote))
+        .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
         // Geräte
         .route("/api/v1/devices", get(devices::list).post(devices::register))
         .route("/api/v1/devices/report", post(devices::report))

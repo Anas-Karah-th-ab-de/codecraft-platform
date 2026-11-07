@@ -25,6 +25,8 @@ fi
 
 # Frontend bauen
 (cd apps/web && { [ -d node_modules ] || npm install --no-audit --no-fund; } && npx vite build --logLevel warn)
+# Belege im Layout des Altsystems (jsPDF)
+(cd pdf-legacy && { [ -d node_modules ] || npm ci --no-audit --no-fund; } && npm run build --silent)
 
 # Server bauen
 cargo build --release -q -p codecraft-server

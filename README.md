@@ -64,3 +64,17 @@ cargo run -p codecraft-server                                            # API a
 | POST | `/api/v1/devices/report` | Gerätetoken |
 
 Siehe [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) und [docs/MIGRATION.md](docs/MIGRATION.md).
+
+## Belege im Layout des Altsystems
+
+Rechnungen und Kostenvoranschläge werden mit dem unveränderten jsPDF-Code des Altsystems gedruckt
+(`pdf-legacy/`, Node). Übernommene Belege tragen ihre Original-Druckdaten (`pdf_snapshot`) und sehen
+exakt aus wie vorher; Firmendaten/Bank/Texte kommen aus `document_templates` (alte `InvoiceTemplate`).
+`invoice-pdf.ts` und `proposal-pdf.ts` nicht anpassen – sonst ändert sich das Layout.
+
+```bash
+(cd pdf-legacy && npm ci && npm run build)   # macht ./dev.sh automatisch
+tools/legacy/export.sh                        # Altsystem lesend sichern (~/prod-export, nicht ins Git)
+python3 tools/legacy/import.py ~/prod-export > /tmp/import.sql && psql -d codecraft -f /tmp/import.sql
+```
+Ohne Node fällt der Server auf die eigene HTML-Vorlage (Chromium) zurück.

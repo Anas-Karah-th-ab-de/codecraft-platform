@@ -247,3 +247,44 @@ pub async fn get_quote(State(s): State<AppState>, user: User, Path(id): Path<Uui
     .await?;
     Ok(Json(QuoteDetail { quote, extra, items, milestones, payments }))
 }
+
+#[derive(Debug, serde::Deserialize)]
+pub struct PdfQuery {
+    pub locale: Option<String>,
+}
+
+/// Kostenvoranschlag als PDF im Layout des Altsystems
+pub async fn quote_pdf(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    axum::extract::Query(q): axum::extract::Query<PdfQuery>,
+) -> ApiResult<axum::response::Response> {
+    use axum::response::IntoResponse;
+    let org = scope(&user, Permission::InvoiceRead)?;
+    let row: Option<(Uuid, String, String, String, Option<serde_json::Value>)> =
+        sqlx::query_as("SELECT organization_id, number, status, locale, pdf_snapshot FROM quotes WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.db)
+            .await?;
+    let (qorg, number, status, locale, snapshot) = row.ok_or(ApiError::NotFound)?;
+    if org.is_some() && (Some(qorg) != org || status == "draft") {
+        return Err(ApiError::NotFound);
+    }
+    let data = snapshot
+        .ok_or_else(|| ApiError::BadRequest("Für diesen Kostenvoranschlag liegen keine Druckdaten vor".into()))?;
+    let mut conn = s.db.acquire().await?;
+    let template = crate::legacy_pdf::template(&mut conn).await;
+    let locale = q.locale.unwrap_or(locale);
+    let bytes = crate::legacy_pdf::render("proposal", &locale, template, data)
+        .await
+        .ok_or_else(|| ApiError::BadRequest("PDF-Erzeugung nicht verfügbar (pdf-legacy)".into()))?;
+    Ok((
+        [
+            (axum::http::header::CONTENT_TYPE, "application/pdf".to_string()),
+            (axum::http::header::CONTENT_DISPOSITION, format!("inline; filename=\"{number}-{locale}.pdf\"")),
+        ],
+        bytes,
+    )
+        .into_response())
+}

@@ -8,3 +8,5 @@ dist
 apps/web/node_modules
 apps/web/dist
 /data
+/pdf-legacy/node_modules
+/pdf-legacy/dist
