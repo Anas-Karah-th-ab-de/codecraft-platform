@@ -16,6 +16,7 @@ type Inv = {
   id: string; organization_id: string; kind: string; number: string | null; status: string; currency: string; locale: string;
   tax_mode: string; gross_cents: number | null; created_at: string; issue_date: string | null; due_date: string | null;
   recipient_name: string | null; notes: string;
+  project_id: string | null; project_name: string | null; service_from: string | null; service_to: string | null; legacy: boolean;
 };
 type Item = { description: string; quantity_milli: number; unit: string; unit_price: number; vat_rate_bp: number; product_id: string | null; price_id: string | null };
 type Detail = Inv & { items: Item[]; totals: { net: number; tax: number; gross: number }; tax_notice: string | null };
@@ -63,7 +64,7 @@ function InvoiceList() {
               {rows.map((i) => (
                 <tr key={i.id}>
                   <td><Link to={`/portal/rechnungen/${i.id}`}>{i.number ?? `${t("st.draft")} …${i.id.slice(-6)}`}</Link>{i.kind === "credit_note" && " ↩"}</td>
-                  <td>{orgName(i.organization_id)}</td>
+                  <td>{orgName(i.organization_id)}{i.project_name && <div className="muted" style={{ fontSize: ".85em" }}>{i.project_name}</div>}</td>
                   <td>{fmtDate(i.issue_date ?? i.created_at, locale)}</td>
                   <td><Badge s={i.status} /></td>
                   <td className="n">{i.gross_cents != null ? money(i.gross_cents, locale, i.currency) : "–"}</td>
@@ -271,7 +272,14 @@ function InvoiceDetail() {
         <div className="card">
           <div className="muted">{t("p.customer")}</div>
           <b>{d.recipient_name ?? orgs.data?.find((o) => o.id === d.organization_id)?.name}</b>
+          {d.project_id && <div><Link to={`/portal/projekte/${d.project_id}`}>{d.project_name}</Link></div>}
         </div>
+        {d.service_from && (
+          <div className="card">
+            <div className="muted">{t("p.service_period")}</div>
+            <b>{fmtDate(d.service_from, locale)} – {fmtDate(d.service_to, locale)}</b>
+          </div>
+        )}
         <div className="card">
           <div className="muted">{t("p.date")}</div>
           <b>{fmtDate(d.issue_date, locale)}</b> {d.due_date && <span className="muted">→ {fmtDate(d.due_date, locale)}</span>}
@@ -279,6 +287,7 @@ function InvoiceDetail() {
         <div className="card">
           <div className="muted">{t("p.tax_mode")} · {t("p.language")}</div>
           <b>{t(`tax.${d.tax_mode}` as Key)} · {d.locale.toUpperCase()}</b>
+          {d.legacy && <div className="muted" style={{ fontSize: ".85em" }}>↺ {t("p.legacy")}</div>}
         </div>
       </div>
       <div className="card" style={{ padding: 0 }}>

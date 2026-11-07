@@ -38,6 +38,8 @@ pub struct PdfInvoice<'a> {
     pub currency: &'a str,
     pub issue_date: Option<chrono::NaiveDate>,
     pub due_date: Option<chrono::NaiveDate>,
+    /// Leistungszeitraum (von, bis)
+    pub service: Option<(chrono::NaiveDate, chrono::NaiveDate)>,
     pub recipient_name: &'a str,
     pub recipient_address: &'a str,
     pub recipient_vat_id: Option<&'a str>,
@@ -61,6 +63,7 @@ struct L {
     number: &'static str,
     date: &'static str,
     due: &'static str,
+    period: &'static str,
     to: &'static str,
     vat_id: &'static str,
     pos: &'static str,
@@ -84,6 +87,8 @@ fn labels(locale: &str) -> L {
             number: "No.",
             date: "Date",
             due: "Due",
+
+            period: "Service period",
             to: "Bill to",
             vat_id: "VAT ID",
             pos: "#",
@@ -104,6 +109,8 @@ fn labels(locale: &str) -> L {
             number: "رقم",
             date: "التاريخ",
             due: "تاريخ الاستحقاق",
+
+            period: "فترة الخدمة",
             to: "إلى",
             vat_id: "الرقم الضريبي",
             pos: "#",
@@ -124,6 +131,8 @@ fn labels(locale: &str) -> L {
             number: "Nr.",
             date: "Datum",
             due: "Fällig",
+
+            period: "Leistungszeitraum",
             to: "Rechnungsempfänger",
             vat_id: "USt-IdNr.",
             pos: "Pos.",
@@ -252,7 +261,7 @@ table {{ width: 100%; border-collapse: collapse; }}
 </style></head><body>
 {draft}
 <div class="head"><div class="brand">{cname}<small>{caddr}</small></div>
-<div><h1>{title}</h1><div class="meta">{ln}: <b>{number}</b><br>{ld}: {idate}<br>{ldue}: {ddate}</div></div></div>
+<div><h1>{title}</h1><div class="meta">{ln}: <b>{number}</b><br>{ld}: {idate}<br>{ldue}: {ddate}{period}</div></div></div>
 <div class="addr"><b>{lto}</b>{rname}<br>{raddr}{vat_line}</div>
 <table class="items"><thead><tr><th>{lpos}</th><th>{ldesc}</th><th class=n>{lqty}</th><th class=n>{lprice}</th><th class=n>{ltotal}</th></tr></thead>
 <tbody>{rows}</tbody></table>
@@ -269,6 +278,15 @@ table {{ width: 100%; border-collapse: collapse; }}
         ldue = l.due,
         idate = ltr(date(inv.issue_date, inv.locale)),
         ddate = ltr(date(inv.due_date, inv.locale)),
+        period = inv
+            .service
+            .map(|(f, t)| format!(
+                "<br>{}: {} – {}",
+                l.period,
+                ltr(date(Some(f), inv.locale)),
+                ltr(date(Some(t), inv.locale))
+            ))
+            .unwrap_or_default(),
         lto = l.to,
         rname = esc(inv.recipient_name),
         raddr = esc(inv.recipient_address).replace('\n', "<br>"),
@@ -319,6 +337,10 @@ pub async fn html_to_pdf(html: &str) -> Option<Vec<u8>> {
     let out = dir.join(format!("{id}.pdf"));
     tokio::fs::write(&src, html).await.ok()?;
     let run = tokio::process::Command::new(&bin)
+        // Ohne Anzeige starten: eine gesetzte, aber nicht erreichbare Anzeige (z. B. WSLg)
+        // lässt Chromium sonst auch im Headless-Modus hängen
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
         .arg("--headless")
         .arg("--disable-gpu")
         .arg("--no-pdf-header-footer")

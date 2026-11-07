@@ -4,6 +4,7 @@ import { api, can, useApi, useAuth } from "../../api";
 import { money, useI18n, type Key } from "../../i18n";
 import { Field, LangSwitch, Loading, useSubmit } from "../../ui";
 import Invoices from "./Invoices";
+import { Projects, Quotes } from "./Projects";
 import ProductsAdmin from "./Products";
 import { Customers, Devices, Jobs, Requests, Users } from "./Admin";
 
@@ -15,6 +16,8 @@ export default function Portal() {
 
   const links: [string, Key, boolean][] = [
     ["", "p.dashboard", true],
+    ["projekte", "p.projects", true],
+    ["angebote", "p.quotes", true],
     ["rechnungen", "p.invoices", true],
     ["kunden", "p.customers", me.is_employee],
     ["produkte", "p.products", me.is_employee],
@@ -46,6 +49,8 @@ export default function Portal() {
       <section className="main">
         <Routes>
           <Route index element={<Dashboard />} />
+          <Route path="projekte/*" element={<Projects />} />
+          <Route path="angebote/*" element={<Quotes />} />
           <Route path="rechnungen/*" element={<Invoices />} />
           <Route path="kunden" element={<Customers />} />
           <Route path="produkte" element={<ProductsAdmin />} />

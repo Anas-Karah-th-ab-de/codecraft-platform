@@ -53,11 +53,20 @@ pub struct InvoiceRow {
     pub issued_at: Option<chrono::DateTime<Utc>>,
     pub paid_at: Option<chrono::DateTime<Utc>>,
     pub cancelled_at: Option<chrono::DateTime<Utc>>,
+    pub project_id: Option<Uuid>,
+    pub project_name: Option<String>,
+    pub service_from: Option<NaiveDate>,
+    pub service_to: Option<NaiveDate>,
+    /// aus dem Altsystem übernommen
+    pub legacy: bool,
 }
 
-const COLS: &str = "id, organization_id, kind, corrects_invoice_id, number, status, currency::text AS currency,
+pub(crate) const COLS: &str =
+    "id, organization_id, kind, corrects_invoice_id, number, status, currency::text AS currency,
     tax_mode, locale, notes, recipient_name, recipient_address, recipient_vat_id, issue_date, due_date,
-    net_cents, tax_cents, gross_cents, created_at, issued_at, paid_at, cancelled_at";
+    net_cents, tax_cents, gross_cents, created_at, issued_at, paid_at, cancelled_at, project_id,
+    (SELECT pr.name FROM projects pr WHERE pr.id = invoices.project_id) AS project_name,
+    service_from, service_to, legacy_id IS NOT NULL AS legacy";
 
 #[derive(Debug, sqlx::FromRow)]
 struct ItemRow {
@@ -618,6 +627,7 @@ pub async fn pdf(
         currency: &inv.currency,
         issue_date: inv.issue_date,
         due_date: inv.due_date,
+        service: inv.service_from.map(|f| (f, inv.service_to.unwrap_or(f))),
         recipient_name: inv.recipient_name.as_deref().unwrap_or(&org_name),
         recipient_address: inv.recipient_address.as_deref().unwrap_or(&org_addr),
         recipient_vat_id: if inv.recipient_name.is_some() {

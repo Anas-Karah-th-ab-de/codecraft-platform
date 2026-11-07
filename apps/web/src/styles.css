@@ -251,3 +251,16 @@ html { scroll-behavior: smooth; }
   .side .me .row { margin-top: 0 !important; flex-wrap: nowrap; gap: 6px; }
   .side .me select { padding: 5px 6px; font-size: .85em; }
 }
+
+/* Projekte & Angebote */
+.proj { display: flex; flex-direction: column; gap: 6px; color: inherit; }
+.proj:hover { text-decoration: none; border-color: var(--brand2); }
+.proj h3 { margin: 4px 0 0; font-size: 1.05em; }
+.proj-num { margin-top: auto; padding-top: 8px; font-size: .9em; }
+.badge.active, .badge.sent { background: #dbeafe; color: #1e40af; }
+.badge.accepted, .badge.completed { background: #d1fae5; color: #065f46; }
+.badge.rejected, .badge.expired, .badge.archived { background: #fee2e2; color: #991b1b; }
+.badge.on_hold { background: #fef3c7; color: #92400e; }
+tr.blk td { background: #f1f5f9; font-weight: 700; }
+.ms { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.ms:last-child { border-bottom: 0; }

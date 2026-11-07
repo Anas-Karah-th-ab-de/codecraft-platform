@@ -17,7 +17,7 @@ pub enum Series {
 impl Series {
     pub fn prefix(self) -> &'static str {
         match self {
-            Series::Invoice => "RE",
+            Series::Invoice => "CC", // Fortsetzung der Reihe aus dem Altsystem
             Series::CreditNote => "GS",
             Series::Proposal => "KV",
         }
@@ -32,7 +32,7 @@ impl Series {
     }
 }
 
-/// `RE-2026-00042`
+/// `CC-2026-00042`
 pub fn format_number(series: Series, year: i32, seq: i64) -> String {
     format!("{}-{year}-{seq:05}", series.prefix())
 }
@@ -43,7 +43,7 @@ mod tests {
 
     #[test]
     fn formats() {
-        assert_eq!(format_number(Series::Invoice, 2026, 42), "RE-2026-00042");
+        assert_eq!(format_number(Series::Invoice, 2026, 42), "CC-2026-00042");
         assert_eq!(format_number(Series::CreditNote, 2026, 1), "GS-2026-00001");
         assert_eq!(format_number(Series::Proposal, 2027, 123456), "KV-2027-123456");
     }

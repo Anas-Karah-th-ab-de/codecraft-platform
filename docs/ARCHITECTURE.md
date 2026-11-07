@@ -74,7 +74,7 @@ Stundensätze), in `SoftwareProduct` (POS) und in `Product` (Hardware). Jetzt gi
 - Beträge `i64` Cent, Mengen in Tausendstel; Position kaufmännisch gerundet, USt je Steuersatz auf die Nettosumme.
 - Steuermodi: `standard`, `reverse_charge` (USt-IdNr. Pflicht), `not_taxable`; Pflichthinweis in DE/EN/AR.
 - Status: `draft → issued → paid`, `issued|paid → cancelled` (nur über Gutschrift `GS-…`).
-- Nummern `RE-JJJJ-NNNNN` aus `number_sequences` in **derselben Transaktion** wie die Ausstellung → keine Lücken, keine Doppelten (getestet mit 10 parallelen Ausstellungen).
+- Nummern `CC-JJJJ-NNNNN` (Fortsetzung der Altsystem-Reihe) aus `number_sequences` in **derselben Transaktion** wie die Ausstellung → keine Lücken, keine Doppelten (getestet mit 10 parallelen Ausstellungen).
 - Trigger `invoices_guard` / `invoice_items_guard` verhindern Änderungen an festgeschriebenen Belegen auch bei direktem SQL.
 - Empfängeradresse und Summen werden beim Ausstellen eingefroren.
 

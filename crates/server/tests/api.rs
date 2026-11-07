@@ -79,7 +79,7 @@ async fn invoice_lifecycle(db: PgPool) {
 
     let (s, v) = call(&db, "POST", &format!("/api/v1/invoices/{id}/issue"), &admin, None).await;
     assert_eq!(s, StatusCode::OK, "{v}");
-    assert!(v["number"].as_str().unwrap().starts_with("RE-"));
+    assert!(v["number"].as_str().unwrap().starts_with("CC-"));
     assert!(v["number"].as_str().unwrap().ends_with("-00001"));
     assert_eq!(v["gross_cents"], 103530);
     assert_eq!(v["recipient_name"], "Firma GmbH");

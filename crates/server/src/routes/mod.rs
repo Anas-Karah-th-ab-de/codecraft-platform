@@ -5,6 +5,7 @@ mod invoices;
 mod jobs;
 pub mod media;
 mod organizations;
+mod projects;
 
 use crate::AppState;
 use axum::extract::DefaultBodyLimit;
@@ -59,6 +60,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/invoices/{id}/pay", post(invoices::mark_paid))
         .route("/api/v1/invoices/{id}/cancel", post(invoices::cancel))
         .route("/api/v1/invoices/{id}/pdf", get(invoices::pdf))
+        // Projekte & Kostenvoranschläge
+        .route("/api/v1/projects", get(projects::list))
+        .route("/api/v1/projects/{id}", get(projects::get))
+        .route("/api/v1/quotes", get(projects::list_quotes))
+        .route("/api/v1/quotes/{id}", get(projects::get_quote))
         // Geräte
         .route("/api/v1/devices", get(devices::list).post(devices::register))
         .route("/api/v1/devices/report", post(devices::report))

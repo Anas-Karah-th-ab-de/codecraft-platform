@@ -16,6 +16,9 @@ pub struct Organization {
     pub vat_id: Option<String>,
     pub email: Option<String>,
     pub locale: String,
+    pub customer_number: Option<String>,
+    pub contact_name: Option<String>,
+    pub phone: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,7 +49,7 @@ pub async fn create(
     let org: Organization = sqlx::query_as(
         "INSERT INTO organizations (id, name, address, vat_id, email, locale)
          VALUES ($1, $2, $3, $4, $5, $6)
-         RETURNING id, name, address, vat_id, email, locale",
+         RETURNING id, name, address, vat_id, email, locale, customer_number, contact_name, phone",
     )
     .bind(Uuid::now_v7())
     .bind(b.name.trim())
@@ -66,13 +69,13 @@ pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<O
     // Kunden sehen nur die eigene Organisation
     let rows: Vec<Organization> = if user.role.is_employee() {
         user.require(Permission::CustomerRead, None)?;
-        sqlx::query_as("SELECT id, name, address, vat_id, email, locale FROM organizations ORDER BY name")
+        sqlx::query_as("SELECT id, name, address, vat_id, email, locale, customer_number, contact_name, phone FROM organizations ORDER BY name")
             .fetch_all(&s.db)
             .await?
     } else {
         let org = user.organization_id.ok_or(ApiError::Forbidden)?;
         user.require(Permission::CustomerRead, Some(org))?;
-        sqlx::query_as("SELECT id, name, address, vat_id, email, locale FROM organizations WHERE id = $1")
+        sqlx::query_as("SELECT id, name, address, vat_id, email, locale, customer_number, contact_name, phone FROM organizations WHERE id = $1")
             .bind(org)
             .fetch_all(&s.db)
             .await?
@@ -83,7 +86,7 @@ pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<O
 pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Organization>> {
     user.require(Permission::CustomerRead, Some(id))?;
     let org: Organization =
-        sqlx::query_as("SELECT id, name, address, vat_id, email, locale FROM organizations WHERE id = $1")
+        sqlx::query_as("SELECT id, name, address, vat_id, email, locale, customer_number, contact_name, phone FROM organizations WHERE id = $1")
             .bind(id)
             .fetch_optional(&s.db)
             .await?
