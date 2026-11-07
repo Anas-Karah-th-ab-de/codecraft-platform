@@ -29,7 +29,7 @@ type Conns = HashMap<Uuid, Vec<(u64, UnboundedSender<String>)>>;
 static HUB: LazyLock<Mutex<Conns>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-fn send_user(user: Uuid, msg: &str) {
+pub fn send_user(user: Uuid, msg: &str) {
     if let Some(list) = HUB.lock().unwrap().get(&user) {
         for (_, tx) in list {
             let _ = tx.send(msg.to_owned());
@@ -434,7 +434,7 @@ pub async fn mark_read(State(s): State<AppState>, user: User, Path(room): Path<U
 }
 
 /// ICE-Server für WebRTC: eigener STUN-Server (gleicher Host, UDP 3478)
-pub async fn ice(headers: HeaderMap, _user: User) -> Json<Value> {
+pub async fn ice(headers: HeaderMap, user: User) -> Json<Value> {
     let host = std::env::var("PUBLIC_HOST").ok().unwrap_or_else(|| {
         headers
             .get("host")
@@ -443,7 +443,12 @@ pub async fn ice(headers: HeaderMap, _user: User) -> Json<Value> {
             .unwrap_or_else(|| "localhost".into())
     });
     let port = std::env::var("STUN_PORT").unwrap_or_else(|_| "3478".into());
-    Json(json!({ "iceServers": [{ "urls": format!("stun:{host}:{port}") }], "online": online_users() }))
+    let mut servers = vec![json!({ "urls": format!("stun:{host}:{port}") })];
+    if crate::turn::enabled() {
+        let (username, credential) = crate::turn::credentials(user.id);
+        servers.push(json!({ "urls": format!("turn:{host}:{port}?transport=udp"), "username": username, "credential": credential }));
+    }
+    Json(json!({ "iceServers": servers, "online": online_users() }))
 }
 
 // ── WebSocket ────────────────────────────────────────────────────────────────

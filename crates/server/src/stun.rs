@@ -2,7 +2,7 @@
 //!
 //! Browser fragen per UDP „Wie sieht meine öffentliche Adresse aus?“ – die Antwort
 //! (XOR-MAPPED-ADDRESS) brauchen sie, um Anrufe über Router/NAT hinweg aufzubauen.
-//! Kein Fremddienst nötig. Ein TURN-Relay für strenge Firewalls folgt in Stufe 3.
+//! Kein Fremddienst nötig. Das TURN-Relay für strenge Firewalls steckt in `turn`.
 
 use std::net::{IpAddr, SocketAddr};
 use tokio::net::UdpSocket;

@@ -3,9 +3,11 @@
 pub mod auth;
 pub mod error;
 pub mod legacy_pdf;
+pub mod mail;
 pub mod pdf;
 pub mod routes;
 pub mod stun;
+pub mod turn;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue};

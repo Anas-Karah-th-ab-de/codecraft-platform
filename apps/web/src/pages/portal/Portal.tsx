@@ -9,11 +9,11 @@ import ProductsAdmin from "./Products";
 import { Customers, Devices, Jobs, Requests, Users } from "./Admin";
 import { CommProvider } from "./Comm";
 import Chat, { useUnread } from "./Chat";
+import Mail, { AppPasswords, useMailUnread } from "./Mail";
 
-function UnreadBadge() {
-  const n = useUnread();
-  return n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null;
-}
+const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
+const UnreadBadge = () => <Badge n={useUnread()} />;
+const MailBadge = () => <Badge n={useMailUnread()} />;
 
 export default function Portal() {
   const { me, ready, logout } = useAuth();
@@ -24,6 +24,7 @@ export default function Portal() {
   const links: [string, Key, boolean][] = [
     ["", "p.dashboard", true],
     ["nachrichten", "p.messages", true],
+    ["mail", "p.mail", me.is_employee],
     ["projekte", "p.projects", true],
     ["angebote", "p.quotes", true],
     ["rechnungen", "p.invoices", true],
@@ -42,7 +43,7 @@ export default function Portal() {
       <aside className="side">
         <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
         {links.filter((l) => l[2]).map(([to, key]) => (
-          <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}</NavLink>
+          <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}{to === "mail" && <MailBadge />}</NavLink>
         ))}
         <div className="me">
           <div style={{ color: "#fff", fontWeight: 600 }}>{me.display_name}</div>
@@ -59,6 +60,7 @@ export default function Portal() {
         <Routes>
           <Route index element={<Dashboard />} />
           <Route path="nachrichten" element={<Chat />} />
+          <Route path="mail" element={<Mail />} />
           <Route path="projekte/*" element={<Projects />} />
           <Route path="angebote/*" element={<Quotes />} />
           <Route path="rechnungen/*" element={<Invoices />} />
@@ -253,6 +255,7 @@ function Account() {
           </form>
         </div>
       </div>
+      {me.is_employee && <div style={{ marginTop: 16 }}><AppPasswords /></div>}
     </>
   );
 }

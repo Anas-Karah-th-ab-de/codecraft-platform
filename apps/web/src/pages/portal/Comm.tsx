@@ -1,4 +1,6 @@
-// Eigener Chat + Sprach-/Videoanrufe (WebRTC) – Verbindung, Zustand und Anruf-Oberfläche.
+// Eigener Chat + Sprach-/Videoanrufe (WebRTC, Mesh: 1:1 und Gruppen bis ~6 Personen).
+// Signale laufen über den WebSocket des Portals; der Server reicht sie nur zwischen Raummitgliedern weiter.
+// Paar-Regel: Bei jedem Teilnehmerpaar erstellt die kleinere Benutzer-ID das Angebot (offer).
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
@@ -13,7 +15,7 @@ export const TX = {
     hangup: "Auflegen", mute: "Stumm", unmute: "Ton an", camOff: "Kamera aus", camOn: "Kamera an",
     callAudio: "Anruf", callVideo: "Videoanruf", missed: "Verpasster Anruf", declined: "Anruf abgelehnt", busy: "Besetzt",
     noMedia: "Kein Zugriff auf Mikrofon/Kamera. Bitte im Browser erlauben.", conn: "Verbindung wird hergestellt …",
-    mailbox: "Postfach", you: "Sie",
+    mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden",
   },
   en: {
     title: "Messages", newChat: "New chat", search: "Search …", empty: "Pick a chat on the left or start a new one.",
@@ -24,7 +26,7 @@ export const TX = {
     hangup: "Hang up", mute: "Mute", unmute: "Unmute", camOff: "Camera off", camOn: "Camera on",
     callAudio: "Call", callVideo: "Video call", missed: "Missed call", declined: "Call declined", busy: "Busy",
     noMedia: "No access to microphone/camera. Please allow it in your browser.", conn: "Connecting …",
-    mailbox: "Mailbox", you: "You",
+    mailbox: "Mailbox", you: "You", groupCall: "Group call", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing",
   },
   ar: {
     title: "الرسائل", newChat: "محادثة جديدة", search: "بحث …", empty: "اختر محادثة أو ابدأ محادثة جديدة.",
@@ -35,14 +37,19 @@ export const TX = {
     hangup: "إنهاء", mute: "كتم", unmute: "إلغاء الكتم", camOff: "إيقاف الكاميرا", camOn: "تشغيل الكاميرا",
     callAudio: "مكالمة", callVideo: "مكالمة فيديو", missed: "مكالمة فائتة", declined: "تم رفض المكالمة", busy: "مشغول",
     noMedia: "لا يوجد وصول إلى الميكروفون/الكاميرا. يرجى السماح بذلك في المتصفح.", conn: "جارٍ الاتصال …",
-    mailbox: "البريد", you: "أنت",
+    mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة",
   },
 };
 
 type Ev = { type: string; [k: string]: any };
+type Person = { id: string; name: string };
 type Call = {
-  state: "outgoing" | "incoming" | "connecting" | "live";
-  room: string; peer: string; peerName: string; media: "audio" | "video"; startedAt?: number;
+  state: "outgoing" | "incoming" | "live";
+  room: string; title: string; media: "audio" | "video"; group: boolean;
+  host: string;            // wer angerufen hat (für Annehmen/Ablehnen)
+  invited: Person[];       // angeklingelt
+  peers: Person[];         // verbunden bzw. im Aufbau
+  startedAt?: number;
 };
 
 type Comm = {
@@ -52,7 +59,7 @@ type Comm = {
   bump: () => void;
   subscribe: (fn: (e: Ev) => void) => () => void;
   send: (e: Ev) => void;
-  startCall: (room: string, peer: string, peerName: string, media: "audio" | "video") => void;
+  startCall: (room: string, people: Person[], title: string, media: "audio" | "video", group?: boolean) => void;
   call: Call | null;
 };
 const Ctx = createContext<Comm | null>(null);
@@ -69,19 +76,25 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const [unreadBump, setBump] = useState(0);
   const subs = useRef(new Set<(e: Ev) => void>());
   const wsRef = useRef<WebSocket | null>(null);
-  const [call, setCall] = useState<Call | null>(null);
+  const [call, setCallState] = useState<Call | null>(null);
   const callRef = useRef<Call | null>(null);
-  callRef.current = call;
-  const pc = useRef<RTCPeerConnection | null>(null);
+  const setCall = (c: Call | null | ((c: Call | null) => Call | null)) => {
+    const next = typeof c === "function" ? c(callRef.current) : c;
+    callRef.current = next;
+    setCallState(next);
+  };
+  const pcs = useRef(new Map<string, RTCPeerConnection>());
+  const pending = useRef(new Map<string, RTCIceCandidateInit[]>());
   const local = useRef<MediaStream | null>(null);
-  const [remote, setRemote] = useState<MediaStream | null>(null);
+  const [remotes, setRemotes] = useState<Record<string, MediaStream>>({});
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
-  const pendingIce = useRef<RTCIceCandidateInit[]>([]);
   const ice = useRef<RTCIceServer[]>([]);
   const [muted, setMuted] = useState(false);
   const [camOff, setCamOff] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const ringTimer = useRef<number | null>(null);
+  const myId = me?.id ?? "";
 
   const send = useCallback((e: Ev) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(e));
@@ -119,118 +132,185 @@ export function CommProvider({ children }: { children: ReactNode }) {
 
   const subscribe = useCallback((fn: (e: Ev) => void) => { subs.current.add(fn); return () => { subs.current.delete(fn); }; }, []);
 
-  // ── Anruf-Logik (1:1, WebRTC) ──
+  // ── Medien und Verbindungen ──
   const media = async (kind: "audio" | "video") => {
     const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: kind === "video" ? { width: 1280, height: 720 } : false });
     local.current = s; setLocalStream(s); setMuted(false); setCamOff(false);
     return s;
   };
-  const makePc = (room: string, peer: string) => {
+
+  const connectTo = async (room: string, peer: string) => {
+    if (pcs.current.has(peer)) return;
+    // ICE-Server (inkl. TURN-Zugang) frisch holen – Zugangsdaten laufen ab
+    try { ice.current = (await api<{ iceServers: RTCIceServer[] }>("/api/v1/chat/ice")).iceServers; } catch { /* alte behalten */ }
     const p = new RTCPeerConnection({ iceServers: ice.current });
+    pcs.current.set(peer, p);
     p.onicecandidate = (e) => { if (e.candidate) signal(room, peer, { kind: "ice", candidate: e.candidate.toJSON() }); };
-    p.ontrack = (e) => setRemote(e.streams[0]);
+    p.ontrack = (e) => setRemotes((r) => ({ ...r, [peer]: e.streams[0] }));
     p.onconnectionstatechange = () => {
       if (p.connectionState === "connected") setCall((c) => (c ? { ...c, state: "live", startedAt: c.startedAt ?? Date.now() } : c));
-      if (p.connectionState === "failed") end(true);
+      if (p.connectionState === "failed") dropPeer(peer);
     };
     local.current?.getTracks().forEach((t) => p.addTrack(t, local.current!));
-    pc.current = p;
-    return p;
+    if (myId < peer) {
+      const offer = await p.createOffer();
+      await p.setLocalDescription(offer);
+      signal(room, peer, { kind: "offer", sdp: offer });
+    }
   };
+
+  const dropPeer = (peer: string) => {
+    pcs.current.get(peer)?.close();
+    pcs.current.delete(peer);
+    pending.current.delete(peer);
+    setRemotes((r) => { const n = { ...r }; delete n[peer]; return n; });
+    const c = callRef.current;
+    if (!c) return;
+    const peers = c.peers.filter((x) => x.id !== peer);
+    if (peers.length === 0 && c.state === "live") { end(false); return; }
+    setCall({ ...c, peers });
+  };
+
   const cleanup = () => {
     if (ringTimer.current) clearTimeout(ringTimer.current);
-    pc.current?.close(); pc.current = null;
+    pcs.current.forEach((p) => p.close()); pcs.current.clear(); pending.current.clear();
     local.current?.getTracks().forEach((t) => t.stop()); local.current = null;
-    setLocalStream(null); setRemote(null); pendingIce.current = []; setCall(null);
+    setLocalStream(null); setRemotes({}); setSharing(false); setCall(null);
   };
-  const logCall = (c: Call, text: string) =>
-    api(`/api/v1/chat/rooms/${c.room}/messages`, { method: "POST", body: { body: text, kind: "call" } }).catch(() => {});
+  const logCall = (room: string, text: string) =>
+    api(`/api/v1/chat/rooms/${room}/messages`, { method: "POST", body: { body: text, kind: "call" } }).catch(() => {});
 
   const end = (notify: boolean) => {
     const c = callRef.current;
     if (!c) return;
-    if (notify) signal(c.room, c.peer, { kind: "hangup" });
-    const label = c.media === "video" ? T.callVideo : T.callAudio;
-    if (c.state === "live" && c.startedAt) logCall(c, `📞 ${label} · ${fmtDur(Date.now() - c.startedAt)}`);
-    else if (c.state === "outgoing") logCall(c, `📞 ${T.missed}`);
+    if (notify) {
+      if (c.state === "incoming") signal(c.room, c.host, { kind: "decline" });
+      else new Set([...c.peers.map((p) => p.id), ...c.invited.map((p) => p.id)]).forEach((id) => signal(c.room, id, { kind: "hangup" }));
+    }
+    const label = c.group ? T.groupCall : c.media === "video" ? T.callVideo : T.callAudio;
+    // Protokoll schreibt, wer als Letzte/r auflegt bzw. wer vergeblich angerufen hat
+    if (c.state === "live" && c.startedAt && (notify ? !c.group || c.host === myId : c.group && c.host === myId)) logCall(c.room, `📞 ${label} · ${fmtDur(Date.now() - c.startedAt)}`);
+    else if (c.state === "outgoing") logCall(c.room, `📞 ${T.missed}`);
     cleanup();
   };
 
-  const startCall = async (room: string, peer: string, peerName: string, m: "audio" | "video") => {
+  const startCall = async (room: string, people: Person[], title: string, m: "audio" | "video", group = false) => {
     if (callRef.current) return;
+    const others = people.filter((p) => p.id !== myId);
+    if (others.length === 0) return;
     try { await media(m); } catch { setNotice(T.noMedia); return; }
-    setCall({ state: "outgoing", room, peer, peerName, media: m });
-    signal(room, peer, { kind: "ring", media: m });
-    ringTimer.current = window.setTimeout(() => end(true), 45000); // nach 45 s: verpasst
+    setCall({ state: "outgoing", room, title, media: m, group, host: myId, invited: others, peers: [] });
+    others.forEach((p) => signal(room, p.id, { kind: "ring", media: m, group, title }));
+    ringTimer.current = window.setTimeout(() => { if (callRef.current?.state === "outgoing") end(true); }, 45000);
   };
 
   const accept = async () => {
     const c = callRef.current;
     if (!c) return;
-    try { await media(c.media); } catch { setNotice(T.noMedia); decline(); return; }
-    setCall({ ...c, state: "connecting" });
-    signal(c.room, c.peer, { kind: "accept" });
-  };
-  const decline = () => {
-    const c = callRef.current;
-    if (c) signal(c.room, c.peer, { kind: "decline" });
-    cleanup();
+    try { await media(c.media); } catch { setNotice(T.noMedia); end(true); return; }
+    setCall({ ...c, state: "live" });
+    signal(c.room, c.host, { kind: "accept" });
   };
 
   async function onSignal(e: Ev) {
     const d = e.data ?? {};
     const c = callRef.current;
+    const from: string = e.from;
+    const person = { id: from, name: e.name as string };
     switch (d.kind) {
       case "ring":
-        if (c) { signal(e.room, e.from, { kind: "busy" }); return; }
-        setCall({ state: "incoming", room: e.room, peer: e.from, peerName: e.name, media: d.media === "video" ? "video" : "audio" });
+        if (c) { signal(e.room, from, { kind: "busy" }); return; }
+        setCall({ state: "incoming", room: e.room, title: d.group ? (d.title ?? e.name) : e.name, media: d.media === "video" ? "video" : "audio",
+          group: !!d.group, host: from, invited: [], peers: [person] });
         return;
       case "accept": {
-        if (!c || c.peer !== e.from) return;
-        if (ringTimer.current) clearTimeout(ringTimer.current);
-        setCall({ ...c, state: "connecting" });
-        const p = makePc(c.room, c.peer);
-        const offer = await p.createOffer();
-        await p.setLocalDescription(offer);
-        signal(c.room, c.peer, { kind: "offer", sdp: offer });
+        // Gastgeber: Neue/n mit allen bisherigen bekannt machen
+        if (!c || c.room !== e.room) return;
+        if (ringTimer.current && c.state === "outgoing") clearTimeout(ringTimer.current);
+        const existing = c.peers.filter((p) => p.id !== from);
+        signal(c.room, from, { kind: "peers", list: existing });
+        existing.forEach((p) => signal(c.room, p.id, { kind: "joined", user: person }));
+        setCall({ ...c, state: c.state === "outgoing" ? "live" : c.state, peers: [...existing, person] });
+        await connectTo(c.room, from);
+        return;
+      }
+      case "peers":
+        if (!c || c.room !== e.room) return;
+        for (const p of d.list as Person[]) {
+          if (p.id === myId) continue;
+          setCall((x) => (x && !x.peers.some((q) => q.id === p.id) ? { ...x, peers: [...x.peers, p] } : x));
+          await connectTo(c.room, p.id);
+        }
+        await connectTo(c.room, from);
+        return;
+      case "joined": {
+        if (!c || c.room !== e.room || d.user.id === myId) return;
+        const p = d.user as Person;
+        setCall((x) => (x && !x.peers.some((q) => q.id === p.id) ? { ...x, peers: [...x.peers, p] } : x));
+        await connectTo(c.room, p.id);
         return;
       }
       case "offer": {
-        if (!c || c.peer !== e.from) return;
-        const p = makePc(c.room, c.peer);
+        if (!c || c.room !== e.room) return;
+        if (!pcs.current.has(from)) await connectTo(c.room, from);
+        const p = pcs.current.get(from)!;
         await p.setRemoteDescription(d.sdp);
-        for (const i of pendingIce.current) await p.addIceCandidate(i).catch(() => {});
-        pendingIce.current = [];
+        for (const i of pending.current.get(from) ?? []) await p.addIceCandidate(i).catch(() => {});
+        pending.current.delete(from);
         const answer = await p.createAnswer();
         await p.setLocalDescription(answer);
-        signal(c.room, c.peer, { kind: "answer", sdp: answer });
+        signal(c.room, from, { kind: "answer", sdp: answer });
         return;
       }
-      case "answer":
-        if (pc.current && c?.peer === e.from) {
-          await pc.current.setRemoteDescription(d.sdp);
-          for (const i of pendingIce.current) await pc.current.addIceCandidate(i).catch(() => {});
-          pendingIce.current = [];
-        }
+      case "answer": {
+        const p = pcs.current.get(from);
+        if (!p) return;
+        await p.setRemoteDescription(d.sdp);
+        for (const i of pending.current.get(from) ?? []) await p.addIceCandidate(i).catch(() => {});
+        pending.current.delete(from);
         return;
-      case "ice":
-        if (!c || c.peer !== e.from) return;
-        if (pc.current?.remoteDescription) await pc.current.addIceCandidate(d.candidate).catch(() => {});
-        else pendingIce.current.push(d.candidate);
+      }
+      case "ice": {
+        const p = pcs.current.get(from);
+        if (p?.remoteDescription) await p.addIceCandidate(d.candidate).catch(() => {});
+        else pending.current.set(from, [...(pending.current.get(from) ?? []), d.candidate]);
         return;
+      }
       case "hangup":
-        // Protokolliert wird nur von der Seite, die auflegt (siehe end)
-        if (c && c.peer === e.from) cleanup();
+        if (!c) return;
+        if (c.state === "incoming" && c.host === from) { cleanup(); return; }
+        dropPeer(from);
         return;
       case "decline":
       case "busy":
-        if (c && c.peer === e.from) { setNotice(d.kind === "busy" ? T.busy : T.declined); logCall(c, `📞 ${d.kind === "busy" ? T.busy : T.declined}`); cleanup(); }
+        if (!c || c.state !== "outgoing") return;
+        {
+          const invited = c.invited.filter((p) => p.id !== from);
+          if (!c.group || invited.length === 0) {
+            setNotice(d.kind === "busy" ? T.busy : T.declined);
+            logCall(c.room, `📞 ${d.kind === "busy" ? T.busy : T.declined}`);
+            cleanup();
+          } else setCall({ ...c, invited });
+        }
         return;
     }
   }
 
   const toggleMute = () => { local.current?.getAudioTracks().forEach((t) => (t.enabled = muted)); setMuted(!muted); };
   const toggleCam = () => { local.current?.getVideoTracks().forEach((t) => (t.enabled = camOff)); setCamOff(!camOff); };
+  const toggleScreen = async () => {
+    const cam = local.current?.getVideoTracks()[0];
+    const swap = (track: MediaStreamTrack) => pcs.current.forEach((p) => p.getSenders().find((s) => s.track?.kind === "video")?.replaceTrack(track));
+    if (!sharing) {
+      try {
+        const scr = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const t = scr.getVideoTracks()[0];
+        swap(t); setSharing(true);
+        setLocalStream(new MediaStream([t, ...(local.current?.getAudioTracks() ?? [])]));
+        t.onended = () => { if (cam) swap(cam); setSharing(false); setLocalStream(local.current); };
+      } catch { /* abgebrochen */ }
+    } else if (cam) { swap(cam); setSharing(false); setLocalStream(local.current); }
+  };
 
   const value = useMemo<Comm>(() => ({ online, connected, unreadBump, bump: () => setBump((b) => b + 1), subscribe, send, startCall, call }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -241,8 +321,8 @@ export function CommProvider({ children }: { children: ReactNode }) {
       {children}
       {notice && <div className="toast" role="status" onClick={() => setNotice(null)}>{notice}</div>}
       {call && (
-        <CallView call={call} T={T} local={localStream} remote={remote} muted={muted} camOff={camOff}
-          onAccept={accept} onDecline={decline} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} />
+        <CallView call={call} T={T} local={localStream} remotes={remotes} muted={muted} camOff={camOff} sharing={sharing}
+          onAccept={accept} onDecline={() => end(true)} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} onScreen={toggleScreen} />
       )}
     </Ctx.Provider>
   );
@@ -254,25 +334,46 @@ function Video({ stream, muted, className }: { stream: MediaStream | null; muted
   return <video ref={ref} className={className} autoPlay playsInline muted={muted} />;
 }
 
+function Audio({ stream }: { stream: MediaStream }) {
+  const ref = useRef<HTMLAudioElement>(null);
+  useEffect(() => { if (ref.current) ref.current.srcObject = stream; }, [stream]);
+  return <audio ref={ref} autoPlay />;
+}
+
+const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+
 function CallView(p: {
-  call: Call; T: (typeof TX)["de"]; local: MediaStream | null; remote: MediaStream | null; muted: boolean; camOff: boolean;
-  onAccept: () => void; onDecline: () => void; onHangup: () => void; onMute: () => void; onCam: () => void;
+  call: Call; T: (typeof TX)["de"]; local: MediaStream | null; remotes: Record<string, MediaStream>; muted: boolean; camOff: boolean; sharing: boolean;
+  onAccept: () => void; onDecline: () => void; onHangup: () => void; onMute: () => void; onCam: () => void; onScreen: () => void;
 }) {
   const { call, T } = p;
   const [, tick] = useState(0);
   useEffect(() => { const i = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(i); }, []);
-  const status = call.state === "incoming" ? `${T.incoming}` : call.state === "outgoing" ? T.calling
-    : call.state === "connecting" ? T.connecting : call.startedAt ? fmtDur(Date.now() - call.startedAt) : "";
-  const initials = call.peerName.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
   const video = call.media === "video";
+  const live = call.state === "live";
+  const status = call.state === "incoming" ? T.incoming : call.state === "outgoing" ? T.calling
+    : call.startedAt ? fmtDur(Date.now() - call.startedAt) : T.connecting;
+  const tiles = call.peers;
+  const full = video && live;
   return (
-    <div className={`callview ${video ? "is-video" : ""} st-${call.state}`} role="dialog" aria-label={video ? T.callVideo : T.callAudio}>
-      {video && <Video stream={p.remote} className="cv-remote" />}
-      {!video && <audio ref={(el) => { if (el) el.srcObject = p.remote; }} autoPlay />}
+    <div className={`callview ${full ? "is-video st-live" : ""} st-${call.state} ${tiles.length > 1 ? "multi" : ""}`} role="dialog"
+      aria-label={call.group ? T.groupCall : video ? T.callVideo : T.callAudio}>
+      {full ? (
+        <div className={`cv-grid n${Math.min(tiles.length, 6)}`}>
+          {tiles.map((t) => (
+            <div key={t.id} className="cv-tile">
+              {p.remotes[t.id] ? <Video stream={p.remotes[t.id]} className="cv-remote" /> : <div className="cv-avatar">{initials(t.name)}</div>}
+              <span className="cv-name">{t.name}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        Object.entries(p.remotes).map(([id, s]) => <Audio key={id} stream={s} />)
+      )}
       <div className="cv-info">
-        {!(video && call.state === "live") && <div className="cv-avatar">{initials}</div>}
-        <b>{call.peerName}</b>
-        <span>{status}</span>
+        {!full && <div className="cv-avatar">{call.group ? "👥" : initials(call.title)}</div>}
+        <b>{call.title}</b>
+        <span>{status}{call.group && live && ` · ${tiles.length + 1} ${T.participants}`}</span>
       </div>
       {video && p.local && <Video stream={p.local} muted className="cv-local" />}
       <div className="cv-controls">
@@ -285,6 +386,9 @@ function CallView(p: {
           <>
             <button className={`cv-btn ${p.muted ? "on" : ""}`} onClick={p.onMute} aria-pressed={p.muted}>🎙 {p.muted ? T.unmute : T.mute}</button>
             {video && <button className={`cv-btn ${p.camOff ? "on" : ""}`} onClick={p.onCam} aria-pressed={p.camOff}>📷 {p.camOff ? T.camOn : T.camOff}</button>}
+            {video && live && "getDisplayMedia" in (navigator.mediaDevices ?? {}) && (
+              <button className={`cv-btn ${p.sharing ? "on" : ""}`} onClick={p.onScreen}>🖥 {p.sharing ? T.screenStop : T.screen}</button>
+            )}
             <button className="cv-btn end" onClick={p.onHangup}>✕ {T.hangup}</button>
           </>
         )}

@@ -137,10 +137,20 @@ export default function Chat() {
               </div>
               {room.kind === "direct" && room.peer_id && (
                 <div className="row">
-                  <button className="btn small ghost" onClick={() => comm.startCall(room.id, room.peer_id!, title(room), "audio")}>📞 {T.audio}</button>
-                  <button className="btn small" onClick={() => comm.startCall(room.id, room.peer_id!, title(room), "video")}>📹 {T.video}</button>
+                  <button className="btn small ghost" onClick={() => comm.startCall(room.id, [{ id: room.peer_id!, name: title(room) }], title(room), "audio")}>📞 {T.audio}</button>
+                  <button className="btn small" onClick={() => comm.startCall(room.id, [{ id: room.peer_id!, name: title(room) }], title(room), "video")}>📹 {T.video}</button>
                 </div>
               )}
+              {room.kind !== "direct" && (() => {
+                // Gruppenanruf: alle Mitglieder, die gerade online sind
+                const people = members.filter((m) => m.id !== me?.id && comm.online.has(m.id)).map((m) => ({ id: m.id, name: m.display_name }));
+                return (
+                  <div className="row">
+                    <button className="btn small ghost" disabled={!people.length} title={T.groupCall} onClick={() => comm.startCall(room.id, people, title(room), "audio", true)}>📞</button>
+                    <button className="btn small" disabled={!people.length} onClick={() => comm.startCall(room.id, people, title(room), "video", true)}>📹 {T.groupCall} ({people.length + 1})</button>
+                  </div>
+                );
+              })()}
             </header>
             <div className="room-msgs">
               {msgs.map((m, i) => {
@@ -166,29 +176,52 @@ export default function Chat() {
         )}
       </section>
 
-      {picker && <Picker T={T} onPick={startDirect} onClose={() => setPicker(false)} online={comm.online} />}
+      {picker && <Picker T={T} onPick={startDirect} onClose={() => setPicker(false)} online={comm.online} canGroup={!!me?.is_employee}
+        onGroup={async (name, ids) => {
+          setPicker(false);
+          const r = await api<{ id: string }>("/api/v1/chat/rooms", { method: "POST", body: { name, members: ids } });
+          await loadRooms();
+          open(r.id);
+        }} />}
     </div>
   );
 }
 
-function Picker({ T, onPick, onClose, online }: { T: (typeof TX)["de"]; onPick: (c: Contact) => void; onClose: () => void; online: Set<string> }) {
+function Picker({ T, onPick, onClose, online, canGroup, onGroup }: {
+  T: (typeof TX)["de"]; onPick: (c: Contact) => void; onClose: () => void; online: Set<string>;
+  canGroup: boolean; onGroup: (name: string, ids: string[]) => void;
+}) {
   const [list, setList] = useState<Contact[]>([]);
   const [q, setQ] = useState("");
+  const [group, setGroup] = useState(false);
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [name, setName] = useState("");
   useEffect(() => { api<Contact[]>("/api/v1/chat/contacts").then(setList).catch(() => {}); }, []);
   const shown = useMemo(() => list.filter((c) => `${c.display_name} ${c.organization_name ?? ""}`.toLowerCase().includes(q.toLowerCase())), [list, q]);
+  const toggle = (id: string) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={T.contacts}>
-        <h2>{T.contacts}</h2>
+        <div className="row between">
+          <h2>{group ? T.group : T.contacts}</h2>
+          {canGroup && <button className="btn small ghost" onClick={() => setGroup(!group)}>{group ? T.contacts : `＋ ${T.group}`}</button>}
+        </div>
+        {group && <input className="chat-search" placeholder={T.groupName} value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />}
         <input className="chat-search" autoFocus placeholder={T.search} value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="pick-list">
           {shown.map((c) => (
-            <button key={c.id} className="chat-item" onClick={() => onPick(c)}>
-              <span className={`av ${online.has(c.id) ? "online" : ""}`}>{initials(c.display_name)}</span>
+            <button key={c.id} className={`chat-item ${group && sel.has(c.id) ? "on" : ""}`} onClick={() => (group ? toggle(c.id) : onPick(c))}>
+              <span className={`av ${online.has(c.id) ? "online" : ""}`}>{group && sel.has(c.id) ? "✓" : initials(c.display_name)}</span>
               <span className="ci-main"><b>{c.display_name}</b><span className="ci-last">{c.organization_name ?? c.mailbox ?? c.role}</span></span>
             </button>
           ))}
         </div>
+        {group && (
+          <div className="row between" style={{ marginTop: 12 }}>
+            <small className="muted">{sel.size} {T.members}</small>
+            <button className="btn" disabled={!name.trim() || sel.size === 0} onClick={() => onGroup(name.trim(), [...sel])}>{T.create}</button>
+          </div>
+        )}
       </div>
     </div>
   );

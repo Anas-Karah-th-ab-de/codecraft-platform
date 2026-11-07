@@ -4,6 +4,7 @@ pub mod chat;
 mod devices;
 mod invoices;
 mod jobs;
+pub mod mail;
 pub mod media;
 mod organizations;
 mod projects;
@@ -74,6 +75,19 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/chat/rooms", get(chat::rooms).post(chat::create_room))
         .route("/api/v1/chat/rooms/{id}/messages", get(chat::messages).post(chat::post_message))
         .route("/api/v1/chat/rooms/{id}/read", post(chat::mark_read))
+        // Webmail
+        .route("/api/v1/mail", get(mail::overview))
+        .route("/api/v1/mail/messages", get(mail::list))
+        .route("/api/v1/mail/messages/{id}", get(mail::get).patch(mail::patch).delete(mail::delete))
+        .route("/api/v1/mail/messages/{id}/raw", get(mail::raw))
+        .route("/api/v1/mail/messages/{id}/attachments/{n}", get(mail::attachment))
+        .route("/api/v1/mail/send", post(mail::send).layer(DefaultBodyLimit::max(40 * 1024 * 1024)))
+        .route("/api/v1/mail/admin", get(mail::admin))
+        .route("/api/v1/mail/domains", post(mail::add_domain))
+        .route("/api/v1/mail/aliases", post(mail::add_alias))
+        .route("/api/v1/mail/aliases/{address}", delete(mail::delete_alias))
+        .route("/api/v1/account/app-passwords", get(mail::app_passwords).post(mail::create_app_password))
+        .route("/api/v1/account/app-passwords/{id}", delete(mail::delete_app_password))
         // Geräte
         .route("/api/v1/devices", get(devices::list).post(devices::register))
         .route("/api/v1/devices/report", post(devices::report))
