@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
 import { Field, LangSwitch, useSubmit } from "../../ui";
+import { HOME } from "./homeText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type Img = { id: string; card: string; full: string; width: number; height: number };
@@ -54,7 +55,9 @@ export function SiteLayout() {
         <div className="container">
           <Link to="/" className="logo" aria-label="KM Code Craft – Start"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <nav className={`nav ${menu ? "open" : ""}`} aria-label="Hauptmenü">
-            <NavLink to="/" end>{t("nav.home")}</NavLink>
+            <Link to="/#kasse">{HOME[locale].nav.till}</Link>
+            <Link to="/#ki">{HOME[locale].nav.ai}</Link>
+            <Link to="/#leistungen">{HOME[locale].nav.services}</Link>
             <NavLink to="/produkte">{t("nav.products")}</NavLink>
             <NavLink to="/karriere" onMouseEnter={() => prefetch(`/api/v1/public/jobs?locale=${locale}`)}>{t("nav.careers")}</NavLink>
             <NavLink to="/kontakt">{t("nav.contact")}</NavLink>
@@ -186,173 +189,6 @@ function SkeletonGrid({ n = 6 }: { n?: number }) {
 }
 
 // ── Seiten ──────────────────────────────────────────────────────────────────
-
-export function Home() {
-  const { t } = useI18n();
-  const { data } = useCatalog();
-  useTitle();
-  const depts = data?.departments.filter((d) => data.products.some((p) => p.department === d.code)) ?? [];
-  return (
-    <>
-      <HeroVideo />
-      <Services />
-      <section className="section container home-products">
-        <div className="hp-head">
-          <h2>{t("home.featured")}</h2>
-          <Link to="/produkte" className="hp-all">{t("home.cta")}</Link>
-        </div>
-        {depts.length > 0 && (
-          <nav className="hp-depts" aria-label={t("home.departments")}>
-            {depts.map((d) => (
-              <Link key={d.code} to={`/produkte?bereich=${d.code}`} style={{ ["--c" as any]: d.color }}>{d.name}</Link>
-            ))}
-          </nav>
-        )}
-        {!data ? <SkeletonGrid n={3} /> : <div className="grid">{data.products.slice(0, 3).map((p) => <ProductCard key={p.id} p={p} />)}</div>}
-      </section>
-      <Datasheet />
-      <section className="section container">
-        <div className="cta-trace">
-          <div>
-            <h2>{t("cta.title")}</h2>
-            <p>{t("cta.sub")}</p>
-          </div>
-          <Link className="btn" to="/kontakt">{t("cta.btn")}</Link>
-        </div>
-      </section>
-    </>
-  );
-}
-
-// ── Startseite: Video-Hero mit Leiterbahn, Leistungen als Bus, Datenblatt ──
-
-/** Leiterbahnen im Stil des Logos: rechtwinklig mit 45°-Knicken, Lötpunkte am Ende */
-const TRACES = [
-  "M 0 300 H 120 L 160 260 H 330 L 360 230 H 600",
-  "M 0 330 H 150 L 190 290 H 300",
-  "M 220 400 V 340 L 250 310 H 420 L 450 280 V 120 L 480 90 H 600",
-  "M 520 400 V 330 L 540 310 H 600",
-  "M 380 0 V 60 L 410 90 H 560",
-];
-const PADS: [number, number][] = [[300, 290], [560, 90], [600, 230], [600, 310], [560, 90], [420, 310]];
-
-function Traces() {
-  return (
-    <svg className="hv-traces" viewBox="0 0 600 400" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
-      {TRACES.map((d, i) => (
-        <path key={i} d={d} pathLength={1} style={{ animationDelay: `${0.25 + i * 0.12}s` }} />
-      ))}
-      {PADS.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={5} style={{ animationDelay: `${1 + i * 0.08}s` }} />
-      ))}
-    </svg>
-  );
-}
-
-function HeroVideo() {
-  const { t, locale } = useI18n();
-  const ref = useRef<HTMLVideoElement>(null);
-  const [muted, setMuted] = useState(true);
-  const lang = locale === "ar" ? "ar" : "de"; // EN nutzt das deutsche Video
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    // Weniger Bewegung oder Datensparmodus → nur Standbild, kein Video
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const save = (navigator as any).connection?.saveData;
-    const small = matchMedia("(max-width: 1023px)").matches;
-    setSrc(reduce || save ? null : `/brand/hero-${lang}-${small ? 720 : 1080}.mp4`);
-    setMuted(true);
-  }, [lang]);
-  useEffect(() => {
-    // Video läuft nur, solange es sichtbar ist (spart Akku und Daten)
-    const v = ref.current;
-    if (!v || !src) return;
-    v.muted = true;
-    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? v.play().catch(() => {}) : v.pause()));
-    io.observe(v);
-    return () => io.disconnect();
-  }, [src]);
-  const toggle = () => {
-    const v = ref.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-    v.play().catch(() => {});
-  };
-  return (
-    <section className="hero-video">
-      <video ref={ref} key={src ?? lang} className="hv" poster={`/brand/hero-${lang}.jpg`} src={src ?? undefined}
-        autoPlay muted loop playsInline preload="metadata" aria-hidden="true" />
-      <div className="hv-shade" />
-      <Traces />
-      <div className="container hv-body">
-        <h1 className="hv-title"><bdi dir="ltr">Technology.<br />Crafted.</bdi></h1>
-        <p className="hv-sub">{t("hero.sub")}</p>
-        <div className="hv-actions">
-          <Link className="btn" to="/kontakt">{t("home.contact")}</Link>
-          <Link className="btn ghost" to="/produkte">{t("home.cta")}</Link>
-          {src && (
-            <button className="hv-sound" onClick={toggle} aria-pressed={!muted}>
-              <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span> {t(muted ? "hero.soundOn" : "hero.soundOff")}
-            </button>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function Services() {
-  const { t } = useI18n();
-  return (
-    <section className="section container svc-bus">
-      <div className="svc-intro">
-        <h2>{t("svc.title")}</h2>
-        <p>{t("svc.sub")}</p>
-      </div>
-      <ul className="bus">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <li key={i}>
-            <h3>{t(`svc.${i}.t` as Parameters<typeof t>[0])}</h3>
-            <p>{t(`svc.${i}.d` as Parameters<typeof t>[0])}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function Datasheet() {
-  const { t } = useI18n();
-  const rows: [Key, Key][] = [
-    ["ds.founded", "ds.founded_v"],
-    ["ds.seat", "ds.seat_v"],
-    ["why.1.t", "why.1.d"],
-    ["why.2.t", "why.2.d"],
-    ["why.3.t", "why.3.d"],
-    ["why.4.t", "why.4.d"],
-    ["ds.languages", "ds.languages_v"],
-  ];
-  return (
-    <section className="datasheet">
-      <div className="container ds-grid">
-        <div className="ds-text">
-          <h2>{t("about.title")}</h2>
-          <p>{t("about.p1")}</p>
-          <p className="ds-mission">{t("about.p2")}</p>
-        </div>
-        <dl className="ds-table">
-          {rows.map(([k, v]) => (
-            <div key={k}>
-              <dt>{t(k)}</dt>
-              <dd>{t(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      </div>
-    </section>
-  );
-}
 
 export function Products() {
   const { t } = useI18n();
