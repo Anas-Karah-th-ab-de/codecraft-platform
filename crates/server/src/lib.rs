@@ -5,6 +5,7 @@ pub mod error;
 pub mod legacy_pdf;
 pub mod pdf;
 pub mod routes;
+pub mod stun;
 
 use axum::extract::DefaultBodyLimit;
 use axum::http::{header, HeaderValue};

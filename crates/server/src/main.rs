@@ -67,6 +67,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("Kein Frontend unter {} – nur API", static_dir.display());
         app(state)
     };
+    // Eigener STUN-Server für Anrufe (UDP); STUN_BIND=off schaltet ihn ab
+    let stun = std::env::var("STUN_BIND").unwrap_or_else(|_| "0.0.0.0:3478".into());
+    if stun != "off" {
+        tokio::spawn(codecraft_server::stun::serve(stun));
+    }
     let listener = tokio::net::TcpListener::bind(&bind).await?;
     tracing::info!("codecraft-server: http://{bind}");
     axum::serve(listener, router)

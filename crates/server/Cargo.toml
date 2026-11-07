@@ -13,7 +13,8 @@ path = "src/main.rs"
 [dependencies]
 codecraft-domain.workspace = true
 codecraft-protocol.workspace = true
-axum = { version = "0.8", features = ["multipart"] }
+axum = { version = "0.8", features = ["multipart", "ws"] }
+futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 tower-http = { version = "0.6", features = ["trace", "cors", "limit", "fs", "compression-gzip", "set-header"] }
 argon2 = "0.5"
 image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
@@ -35,3 +36,4 @@ rand = "0.8"
 image = { version = "0.25", default-features = false, features = ["png"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
+tokio-tungstenite = "0.26"

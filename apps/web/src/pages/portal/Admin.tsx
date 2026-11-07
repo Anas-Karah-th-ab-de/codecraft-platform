@@ -272,7 +272,7 @@ export function Devices() {
 }
 
 // ── Benutzer ────────────────────────────────────────────────────────────────
-type UserRow = { id: string; email: string; display_name: string; role: string; is_active: boolean; two_factor: boolean; departments: string[]; last_login_at: string | null };
+type UserRow = { id: string; email: string; display_name: string; role: string; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null };
 
 export function Users() {
   const { t, locale } = useI18n();
@@ -291,10 +291,10 @@ export function Users() {
       <div className="card" style={{ padding: 0 }}>
         {!data ? <Loading error={error} /> : (
           <table>
-            <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{t("p.role")}</th><th>{t("p.department")}</th><th>2FA</th><th>{t("p.last_seen")}</th></tr></thead>
+            <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{t("p.mailbox")}</th><th>{t("p.role")}</th><th>{t("p.department")}</th><th>2FA</th><th>{t("p.last_seen")}</th></tr></thead>
             <tbody>
               {data.map((u) => (
-                <tr key={u.id}><td>{u.display_name}</td><td>{u.email}</td><td>{u.role}</td><td>{u.departments.join(", ") || "–"}</td>
+                <tr key={u.id}><td>{u.display_name}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td><td>{u.departments.join(", ") || "–"}</td>
                   <td>{u.two_factor ? "✅" : "—"}</td><td>{fmtDate(u.last_login_at, locale)}</td></tr>
               ))}
             </tbody>

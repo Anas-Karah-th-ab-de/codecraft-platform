@@ -231,6 +231,7 @@ pub struct UserRow {
     pub two_factor: bool,
     pub departments: Vec<String>,
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub mailbox: Option<String>,
 }
 
 pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<UserRow>>> {
@@ -239,7 +240,8 @@ pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json
         "SELECT u.id, u.email, u.display_name, u.role, u.organization_id, u.is_active,
                 u.totp_secret IS NOT NULL AS two_factor,
                 COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}') AS departments,
-                u.last_login_at
+                u.last_login_at,
+                (SELECT address FROM mailboxes mb WHERE mb.user_id = u.id) AS mailbox
            FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id
            LEFT JOIN departments d ON d.id = ud.department_id
@@ -303,9 +305,19 @@ pub async fn create_user(
             return Err(ApiError::BadRequest(format!("Abteilung {code} existiert nicht")));
         }
     }
-    super::audit(&mut tx, &user.actor(), "create", "user", id, json!({ "email": b.email, "role": role })).await?;
+    // Postfach + Chat-Zugang automatisch (Kunden: Support-Raum ihrer Firma)
+    let mailbox = super::chat::provision(&mut tx, id, &b.email, &b.display_name, b.role, b.organization_id).await?;
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "create",
+        "user",
+        id,
+        json!({ "email": b.email, "role": role, "mailbox": mailbox }),
+    )
+    .await?;
     tx.commit().await?;
-    Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
+    Ok((StatusCode::CREATED, Json(json!({ "id": id, "mailbox": mailbox }))))
 }
 
 /// Header-Helfer für Logs (IP hinter Proxy)

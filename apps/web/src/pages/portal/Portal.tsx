@@ -7,6 +7,13 @@ import Invoices from "./Invoices";
 import { Projects, Quotes } from "./Projects";
 import ProductsAdmin from "./Products";
 import { Customers, Devices, Jobs, Requests, Users } from "./Admin";
+import { CommProvider } from "./Comm";
+import Chat, { useUnread } from "./Chat";
+
+function UnreadBadge() {
+  const n = useUnread();
+  return n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null;
+}
 
 export default function Portal() {
   const { me, ready, logout } = useAuth();
@@ -16,6 +23,7 @@ export default function Portal() {
 
   const links: [string, Key, boolean][] = [
     ["", "p.dashboard", true],
+    ["nachrichten", "p.messages", true],
     ["projekte", "p.projects", true],
     ["angebote", "p.quotes", true],
     ["rechnungen", "p.invoices", true],
@@ -29,11 +37,12 @@ export default function Portal() {
   ];
 
   return (
+    <CommProvider>
     <div className="portal">
       <aside className="side">
         <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
         {links.filter((l) => l[2]).map(([to, key]) => (
-          <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}</NavLink>
+          <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}</NavLink>
         ))}
         <div className="me">
           <div style={{ color: "#fff", fontWeight: 600 }}>{me.display_name}</div>
@@ -49,6 +58,7 @@ export default function Portal() {
       <section className="main">
         <Routes>
           <Route index element={<Dashboard />} />
+          <Route path="nachrichten" element={<Chat />} />
           <Route path="projekte/*" element={<Projects />} />
           <Route path="angebote/*" element={<Quotes />} />
           <Route path="rechnungen/*" element={<Invoices />} />
@@ -63,6 +73,7 @@ export default function Portal() {
         </Routes>
       </section>
     </div>
+    </CommProvider>
   );
 }
 

@@ -1,5 +1,6 @@
 mod account;
 mod catalog;
+pub mod chat;
 mod devices;
 mod invoices;
 mod jobs;
@@ -66,6 +67,13 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/quotes", get(projects::list_quotes))
         .route("/api/v1/quotes/{id}", get(projects::get_quote))
         .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
+        // Kommunikation: Chat, Anrufe (WebRTC-Signalisierung), Echtzeit
+        .route("/api/v1/ws", get(chat::ws))
+        .route("/api/v1/chat/contacts", get(chat::contacts))
+        .route("/api/v1/chat/ice", get(chat::ice))
+        .route("/api/v1/chat/rooms", get(chat::rooms).post(chat::create_room))
+        .route("/api/v1/chat/rooms/{id}/messages", get(chat::messages).post(chat::post_message))
+        .route("/api/v1/chat/rooms/{id}/read", post(chat::mark_read))
         // Geräte
         .route("/api/v1/devices", get(devices::list).post(devices::register))
         .route("/api/v1/devices/report", post(devices::report))
