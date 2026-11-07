@@ -100,14 +100,6 @@ export function SiteLayout() {
 
 // ── Bausteine ───────────────────────────────────────────────────────────────
 
-const KIND_ICON: Record<string, string> = { software: "💻", hardware: "🔧", service: "🧑‍💻", appliance: "📦", rental: "🖥️" };
-const KIND_GRAD: Record<string, string> = {
-  software: "linear-gradient(135deg,#1e3a8a,#3b82f6)",
-  hardware: "linear-gradient(135deg,#334155,#64748b)",
-  service: "linear-gradient(135deg,#0f766e,#14b8a6)",
-  appliance: "linear-gradient(135deg,#7c2d12,#f97316)",
-  rental: "linear-gradient(135deg,#4c1d95,#8b5cf6)",
-};
 
 /** Produktbild mit festem Seitenverhältnis (keine Layout-Sprünge), Lazy-Loading, sonst gestalteter Platzhalter */
 function ProductImage({ p, img, size = "card", eager }: { p: Product; img?: Img; size?: "card" | "full"; eager?: boolean }) {
@@ -115,8 +107,7 @@ function ProductImage({ p, img, size = "card", eager }: { p: Product; img?: Img;
   const i = img ?? p.images[0];
   if (!i) {
     return (
-      <div className="pimg ph" style={{ background: KIND_GRAD[p.kind] ?? KIND_GRAD.software }} aria-hidden>
-        <span className="ph-icon">{KIND_ICON[p.kind] ?? "✨"}</span>
+      <div className="pimg ph" aria-hidden>
         <span className="ph-kind">{p.sku}</span>
       </div>
     );
@@ -205,32 +196,58 @@ export function Home() {
     <>
       <HeroVideo />
       <Services />
-      <section className="section container">
-        <h2>{t("home.featured")}</h2>
+      <section className="section container home-products">
+        <div className="hp-head">
+          <h2>{t("home.featured")}</h2>
+          <Link to="/produkte" className="hp-all">{t("home.cta")}</Link>
+        </div>
+        {depts.length > 0 && (
+          <nav className="hp-depts" aria-label={t("home.departments")}>
+            {depts.map((d) => (
+              <Link key={d.code} to={`/produkte?bereich=${d.code}`} style={{ ["--c" as any]: d.color }}>{d.name}</Link>
+            ))}
+          </nav>
+        )}
         {!data ? <SkeletonGrid n={3} /> : <div className="grid">{data.products.slice(0, 3).map((p) => <ProductCard key={p.id} p={p} />)}</div>}
-        <div style={{ textAlign: "center", marginTop: 20 }}>
-          <Link to="/produkte" className="btn ghost">{t("home.cta")} →</Link>
+      </section>
+      <Datasheet />
+      <section className="section container">
+        <div className="cta-trace">
+          <div>
+            <h2>{t("cta.title")}</h2>
+            <p>{t("cta.sub")}</p>
+          </div>
+          <Link className="btn" to="/kontakt">{t("cta.btn")}</Link>
         </div>
       </section>
-      <section className="section container" style={{ paddingTop: 0 }}>
-        <h2>{t("home.departments")}</h2>
-        <div className="grid">
-          {depts.map((d) => (
-            <Link key={d.code} to={`/produkte?bereich=${d.code}`} className="card dept" style={{ ["--c" as any]: d.color }}>
-              <h3>{d.name}</h3>
-              <p className="muted" style={{ margin: 0 }}>
-                {data!.products.filter((p) => p.department === d.code).map((p) => p.name).join(" · ")}
-              </p>
-            </Link>
-          ))}
-        </div>
-      </section>
-      <WhyAbout />
     </>
   );
 }
 
-// ── Startseite: Video-Hero, Leistungen, Warum/Über uns ──────────────────────
+// ── Startseite: Video-Hero mit Leiterbahn, Leistungen als Bus, Datenblatt ──
+
+/** Leiterbahnen im Stil des Logos: rechtwinklig mit 45°-Knicken, Lötpunkte am Ende */
+const TRACES = [
+  "M 0 300 H 120 L 160 260 H 330 L 360 230 H 600",
+  "M 0 330 H 150 L 190 290 H 300",
+  "M 220 400 V 340 L 250 310 H 420 L 450 280 V 120 L 480 90 H 600",
+  "M 520 400 V 330 L 540 310 H 600",
+  "M 380 0 V 60 L 410 90 H 560",
+];
+const PADS: [number, number][] = [[300, 290], [560, 90], [600, 230], [600, 310], [560, 90], [420, 310]];
+
+function Traces() {
+  return (
+    <svg className="hv-traces" viewBox="0 0 600 400" preserveAspectRatio="xMaxYMid slice" aria-hidden="true">
+      {TRACES.map((d, i) => (
+        <path key={i} d={d} pathLength={1} style={{ animationDelay: `${0.25 + i * 0.12}s` }} />
+      ))}
+      {PADS.map(([x, y], i) => (
+        <circle key={i} cx={x} cy={y} r={5} style={{ animationDelay: `${1 + i * 0.08}s` }} />
+      ))}
+    </svg>
+  );
+}
 
 function HeroVideo() {
   const { t, locale } = useI18n();
@@ -263,79 +280,77 @@ function HeroVideo() {
     v.play().catch(() => {});
   };
   return (
-    <section className="hero hero-video">
+    <section className="hero-video">
       <video ref={ref} key={src ?? lang} className="hv" poster={`/brand/hero-${lang}.jpg`} src={src ?? undefined}
         autoPlay muted loop playsInline preload="metadata" aria-hidden="true" />
       <div className="hv-shade" />
-      <div className="container">
-        {src && (
-          <button className="hv-sound" onClick={toggle} aria-pressed={!muted}>
-            <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span> {t(muted ? "hero.soundOn" : "hero.soundOff")}
-          </button>
-        )}
-        <h1 className="hv-title"><bdi dir="ltr">Technology. <span>Crafted.</span></bdi></h1>
-        <p>{t("hero.sub")}</p>
-        <div className="row" style={{ marginTop: 26 }}>
+      <Traces />
+      <div className="container hv-body">
+        <h1 className="hv-title"><bdi dir="ltr">Technology.<br />Crafted.</bdi></h1>
+        <p className="hv-sub">{t("hero.sub")}</p>
+        <div className="hv-actions">
           <Link className="btn" to="/kontakt">{t("home.contact")}</Link>
           <Link className="btn ghost" to="/produkte">{t("home.cta")}</Link>
+          {src && (
+            <button className="hv-sound" onClick={toggle} aria-pressed={!muted}>
+              <span aria-hidden="true">{muted ? "🔇" : "🔊"}</span> {t(muted ? "hero.soundOn" : "hero.soundOff")}
+            </button>
+          )}
         </div>
       </div>
     </section>
   );
 }
-
-const SVC_ICON = ["💻", "🖥️", "🧭", "☁️", "🎓"];
 
 function Services() {
   const { t } = useI18n();
   return (
-    <section className="section container">
-      <h2>{t("svc.title")}</h2>
-      <p className="muted" style={{ marginTop: -6 }}>{t("svc.sub")}</p>
-      <div className="grid svc-grid">
-        {SVC_ICON.map((ic, i) => (
-          <div key={i} className="card svc">
-            <span className="ic" aria-hidden="true">{ic}</span>
-            <h3>{t(`svc.${i + 1}.t` as Parameters<typeof t>[0])}</h3>
-            <p className="muted">{t(`svc.${i + 1}.d` as Parameters<typeof t>[0])}</p>
-          </div>
-        ))}
+    <section className="section container svc-bus">
+      <div className="svc-intro">
+        <h2>{t("svc.title")}</h2>
+        <p>{t("svc.sub")}</p>
       </div>
+      <ul className="bus">
+        {[1, 2, 3, 4, 5].map((i) => (
+          <li key={i}>
+            <h3>{t(`svc.${i}.t` as Parameters<typeof t>[0])}</h3>
+            <p>{t(`svc.${i}.d` as Parameters<typeof t>[0])}</p>
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
 
-function WhyAbout() {
+function Datasheet() {
   const { t } = useI18n();
+  const rows: [Key, Key][] = [
+    ["ds.founded", "ds.founded_v"],
+    ["ds.seat", "ds.seat_v"],
+    ["why.1.t", "why.1.d"],
+    ["why.2.t", "why.2.d"],
+    ["why.3.t", "why.3.d"],
+    ["why.4.t", "why.4.d"],
+    ["ds.languages", "ds.languages_v"],
+  ];
   return (
-    <>
-      <section className="section container" style={{ paddingTop: 0 }}>
-        <h2>{t("why.title")}</h2>
-        <div className="usp">
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i}>
-              <h3>{t(`why.${i}.t` as Parameters<typeof t>[0])}</h3>
-              <p className="muted">{t(`why.${i}.d` as Parameters<typeof t>[0])}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="section container about" style={{ paddingTop: 0 }}>
-        <img src="/brand/logo.png" alt="" width="520" height="218" loading="lazy" />
-        <div>
+    <section className="datasheet">
+      <div className="container ds-grid">
+        <div className="ds-text">
           <h2>{t("about.title")}</h2>
           <p>{t("about.p1")}</p>
-          <p className="muted">{t("about.p2")}</p>
+          <p className="ds-mission">{t("about.p2")}</p>
         </div>
-      </section>
-      <section className="section container" style={{ paddingTop: 0 }}>
-        <div className="cta-band">
-          <h2>{t("cta.title")}</h2>
-          <p>{t("cta.sub")}</p>
-          <Link className="btn" to="/kontakt">{t("cta.btn")} →</Link>
-        </div>
-      </section>
-    </>
+        <dl className="ds-table">
+          {rows.map(([k, v]) => (
+            <div key={k}>
+              <dt>{t(k)}</dt>
+              <dd>{t(v)}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
   );
 }
 

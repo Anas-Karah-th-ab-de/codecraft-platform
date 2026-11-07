@@ -4,6 +4,13 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { I18nProvider } from "./i18n";
 import { AuthProvider } from "./api";
 import { SiteLayout, Home, Products, ProductDetail, Careers, JobDetail, Contact } from "./pages/site/Site";
+import "@fontsource/unbounded/latin-600.css";
+import "@fontsource/unbounded/latin-700.css";
+import "@fontsource/ibm-plex-sans/latin-400.css";
+import "@fontsource/ibm-plex-sans/latin-600.css";
+import "@fontsource/ibm-plex-sans-arabic/400.css";
+import "@fontsource/ibm-plex-sans-arabic/600.css";
+import "@fontsource/ibm-plex-sans-arabic/700.css";
 import "./styles.css";
 
 // Portal wird erst beim Aufruf geladen → Webseite bleibt schlank und schnell
