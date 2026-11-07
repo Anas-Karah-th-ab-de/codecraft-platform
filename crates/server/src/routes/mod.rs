@@ -8,6 +8,7 @@ pub mod mail;
 pub mod media;
 mod organizations;
 mod projects;
+pub mod remote;
 
 use crate::AppState;
 use axum::extract::DefaultBodyLimit;
@@ -92,6 +93,18 @@ pub fn router() -> Router<AppState> {
         // Geräte
         .route("/api/v1/devices", get(devices::list).post(devices::register))
         .route("/api/v1/devices/report", post(devices::report))
+        // Fernwartung
+        .route("/api/v1/devices/ws", get(remote::device_ws))
+        .route("/api/v1/devices/{id}/remote", get(remote::status))
+        .route("/api/v1/devices/{id}/inventory", post(remote::inventory))
+        .route("/api/v1/devices/{id}/exec", post(remote::exec))
+        .route("/api/v1/devices/{id}/reboot", post(remote::reboot))
+        .route("/api/v1/devices/{id}/files", get(remote::list_dir))
+        .route(
+            "/api/v1/devices/{id}/file",
+            get(remote::get_file).post(remote::put_file).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
+        )
+        .route("/api/v1/devices/{id}/screen", get(remote::screen_ws))
 }
 
 async fn health() -> Json<Value> {

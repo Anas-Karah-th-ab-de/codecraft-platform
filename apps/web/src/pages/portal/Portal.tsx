@@ -10,6 +10,7 @@ import { Customers, Devices, Jobs, Requests, Users } from "./Admin";
 import { CommProvider } from "./Comm";
 import Chat, { useUnread } from "./Chat";
 import Mail, { AppPasswords, useMailUnread } from "./Mail";
+import Remote from "./Remote";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -69,6 +70,7 @@ export default function Portal() {
           <Route path="stellen" element={<Jobs />} />
           <Route path="anfragen" element={<Requests />} />
           <Route path="geraete" element={<Devices />} />
+          <Route path="geraete/:id" element={<Remote />} />
           <Route path="benutzer" element={<Users />} />
           <Route path="konto" element={<Account />} />
           <Route path="*" element={<Navigate to="/portal" replace />} />

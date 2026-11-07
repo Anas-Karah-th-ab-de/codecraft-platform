@@ -900,3 +900,16 @@ tr.blk td { background: var(--c-ivory-2); color: var(--c-text); font-family: var
   .cv-grid.n2, .cv-grid.n3, .cv-grid.n4 { grid-template-columns: 1fr; grid-auto-rows: 1fr; grid-template-rows: none; }
   .cv-grid.n5, .cv-grid.n6 { grid-template-columns: 1fr 1fr; grid-template-rows: none; grid-auto-rows: 1fr; }
 }
+
+/* ── Fernwartung ──────────────────────────────────────────────── */
+.remote .caps { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.badge.warn { background: var(--c-warn-bg); color: var(--c-warn); }
+.screen-card { padding: 12px; }
+.screen-wrap { margin-top: 10px; background: #0b0b0c; border-radius: 12px; overflow: hidden; display: grid; place-items: center; min-height: 360px; }
+canvas.screen { width: 100%; height: auto; display: block; cursor: crosshair; outline: none; }
+canvas.screen:focus { box-shadow: inset 0 0 0 3px var(--c-gold); }
+canvas.screen.idle, canvas.screen.waiting, canvas.screen.denied, canvas.screen.ended { opacity: .35; }
+.cmd-out { margin-top: 12px; }
+.cmd-out .ok { color: var(--c-ok); font-family: var(--f-mono, monospace); }
+.cmd-out .bad { color: var(--c-bad); font-family: var(--f-mono, monospace); }
+.cmd-out pre { background: var(--c-ink); color: var(--c-on-dark); padding: 10px 12px; border-radius: 10px; max-height: 360px; overflow: auto; white-space: pre-wrap; margin: 4px 0 0; font-size: 12.5px; }

@@ -227,7 +227,7 @@ export function Devices() {
             <thead><tr><th>Name</th><th>{t("p.device")}</th><th>{t("p.version")}</th><th>{t("p.last_seen")}</th><th>{t("p.status")}</th></tr></thead>
             <tbody>
               {data.map((d) => (
-                <tr key={d.id}><td>{d.name}</td><td>{d.kind}</td><td>{d.version ?? "–"}</td><td>{fmtDate(d.last_seen_at, locale)}</td>
+                <tr key={d.id}><td><a href={`/portal/geraete/${d.id}`} onClick={(e) => { e.preventDefault(); history.pushState({}, "", `/portal/geraete/${d.id}`); dispatchEvent(new PopStateEvent("popstate")); }}>{d.name}</a></td><td>{d.kind}</td><td>{d.version ?? "–"}</td><td>{fmtDate(d.last_seen_at, locale)}</td>
                   <td><span className={`badge ${d.online ? "online" : "offline"}`}>{d.online ? t("p.online") : t("p.offline")}</span></td></tr>
               ))}
             </tbody>
