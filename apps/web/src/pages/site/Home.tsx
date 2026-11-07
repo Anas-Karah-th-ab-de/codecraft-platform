@@ -218,7 +218,7 @@ function Till() {
           </aside>
         </div>
         <h2 className="hx-h2-small">{T.pricesH}</h2>
-        <div className="tiers">
+        <div className="pos-tiers">
           {(pos.data?.prices ?? []).map((p) => (
             <div key={p.id} className={`tier ${p.code === "professional" ? "pop" : ""}`}>
               <p className="tier-name">{p.name}{p.code === "professional" && <em>{T.popular}</em>}</p>

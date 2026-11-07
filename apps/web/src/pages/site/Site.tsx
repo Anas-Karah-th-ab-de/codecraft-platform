@@ -48,7 +48,7 @@ export function SiteLayout() {
   useEffect(() => setMenu(false), [pathname]);
   useEffect(() => prefetch(catalogPath(locale)), [locale]); // Katalog früh laden → Produktseite sofort da
   return (
-    <>
+    <div className="site">
       <ScrollToTop />
       <a href="#inhalt" className="skip">{locale === "ar" ? "انتقل إلى المحتوى" : locale === "en" ? "Skip to content" : "Zum Inhalt"}</a>
       <header className="site-header">
@@ -97,7 +97,7 @@ export function SiteLayout() {
           © {new Date().getFullYear()} KM Code Craft · Mohamad Anas Kara Mohamad · {t("footer.rights")}
         </div>
       </footer>
-    </>
+    </div>
   );
 }
 
