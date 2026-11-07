@@ -1,6 +1,6 @@
 import { Fragment, useState } from "react";
 import { Link, Route, Routes, useParams } from "react-router-dom";
-import { useApi } from "../../api";
+import { openPdf, useApi } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
 import { Badge, Loading } from "../../ui";
 
@@ -175,6 +175,11 @@ function QuoteView() {
       <Link to="/portal/angebote">← {t("p.quotes")}</Link>
       <div className="row" style={{ margin: "8px 0" }}>
         <h1 style={{ margin: 0 }}>{q.number}</h1><Badge s={q.status} />{q.revision && <span className="muted">{q.revision}</span>}
+        <span style={{ marginInlineStart: "auto" }} className="row">
+          {(["de", "en", "ar"] as const).map((l) => (
+            <button key={l} className="btn ghost small" onClick={() => openPdf(`/api/v1/quotes/${q.id}/pdf?locale=${l}`)}>⬇ PDF {l.toUpperCase()}</button>
+          ))}
+        </span>
       </div>
       <h2 dir={dir} style={{ fontSize: "1.15em" }}>{q.title}</h2>
       <div className="grid2" style={{ margin: "16px 0" }}>
