@@ -548,7 +548,7 @@ mod tests {
 
         // Allocate ohne Anmeldung → 401 mit Realm/Nonce
         let transport = (0x0019u16, vec![17, 0, 0, 0]);
-        client.send_to(&request(ALLOCATE, [2; 12], &[transport.clone()], None), addr).await.unwrap();
+        client.send_to(&request(ALLOCATE, [2; 12], std::slice::from_ref(&transport), None), addr).await.unwrap();
         let r = recv(&client, &mut buf).await;
         let m = parse(&r).unwrap();
         assert_eq!(m.class, ERROR);
