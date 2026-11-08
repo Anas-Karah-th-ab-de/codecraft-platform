@@ -13,6 +13,9 @@ const MT = {
     images: "Externe Bilder laden", raw: "Original", from: "Von", noMailbox: "Für dieses Konto gibt es kein Postfach.",
     used: "belegt", settings: "Einstellungen", dns: "DNS-Einträge", aliases: "Weiterleitungen", addAlias: "Weiterleitung anlegen",
     mailbox: "Postfach", queue: "Warteschlange", problems: "Zustellprobleme", wrote: "schrieb", more: "Mehr laden", tooBig: "Anhänge zusammen höchstens 25 MB.",
+    own: "Eigenes Postfach", readonly: "Nur lesen – jeder Zugriff wird protokolliert", rules: "Automatische Weiterleitung",
+    rMailbox: "Postfach", rSender: "Absender (leer = alle, @firma.de = ganze Domain)", rTarget: "Weiterleiten an", rKeep: "Kopie im Postfach behalten",
+    rAdd: "Regel anlegen", rAll: "alle Absender", rOnly: "nur weiterleiten", rCopy: "mit Kopie", rOff: "pausiert",
   },
   en: {
     title: "Email", compose: "Compose", inbox: "Inbox", sent: "Sent", drafts: "Drafts", trash: "Trash", junk: "Spam", archive: "Archive",
@@ -22,6 +25,9 @@ const MT = {
     images: "Load external images", raw: "Original", from: "From", noMailbox: "This account has no mailbox.",
     used: "used", settings: "Settings", dns: "DNS records", aliases: "Aliases", addAlias: "Add alias",
     mailbox: "Mailbox", queue: "Queue", problems: "Delivery problems", wrote: "wrote", more: "Load more", tooBig: "Attachments max. 25 MB in total.",
+    own: "Own mailbox", readonly: "Read only – every access is logged", rules: "Automatic forwarding",
+    rMailbox: "Mailbox", rSender: "Sender (empty = all, @company.com = whole domain)", rTarget: "Forward to", rKeep: "Keep a copy in the mailbox",
+    rAdd: "Add rule", rAll: "all senders", rOnly: "forward only", rCopy: "with copy", rOff: "paused",
   },
   ar: {
     title: "البريد", compose: "رسالة جديدة", inbox: "الوارد", sent: "المرسل", drafts: "المسودات", trash: "المحذوفات", junk: "البريد المزعج", archive: "الأرشيف",
@@ -31,6 +37,9 @@ const MT = {
     images: "تحميل الصور الخارجية", raw: "الأصل", from: "من", noMailbox: "لا يوجد بريد لهذا الحساب.",
     used: "مستخدم", settings: "الإعدادات", dns: "سجلات DNS", aliases: "عناوين التحويل", addAlias: "إضافة تحويل",
     mailbox: "صندوق البريد", queue: "قائمة الانتظار", problems: "مشاكل التسليم", wrote: "كتب", more: "تحميل المزيد", tooBig: "المرفقات بحد أقصى 25 ميغابايت.",
+    own: "صندوقي", readonly: "قراءة فقط – يتم تسجيل كل وصول", rules: "التحويل التلقائي",
+    rMailbox: "صندوق البريد", rSender: "المرسل (فارغ = الكل، ‎@company.com = النطاق كاملاً)", rTarget: "تحويل إلى", rKeep: "الاحتفاظ بنسخة في الصندوق",
+    rAdd: "إضافة قاعدة", rAll: "كل المرسلين", rOnly: "تحويل فقط", rCopy: "مع نسخة", rOff: "متوقف",
   },
 };
 type TT = (typeof MT)["de"];
@@ -46,6 +55,8 @@ type Full = {
   text: string | null; html: string | null; attachments: { index: number; name: string; mime: string; size: number }[];
   auth_results: string | null; flagged: boolean;
 };
+type Box = { id: string; address: string; owner: string; messages: number; unread: number; size: number };
+type Rule = { id: string; mailbox: string; sender: string | null; forward_to: string; keep_copy: boolean; active: boolean; note: string | null };
 type Draft = { to: string; cc: string; bcc: string; subject: string; text: string; reply_to_id?: string; files: File[] };
 
 const ICONS: Record<string, string> = { inbox: "📥", sent: "📤", drafts: "📝", trash: "🗑", junk: "⚠", archive: "🗄" };
@@ -81,17 +92,23 @@ export default function Mail() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [tab, setTab] = useState<"mail" | "admin">("mail");
   const [note, setNote] = useState<string | null>(null);
+  // Admin: fremdes Postfach ansehen (nur lesen, serverseitig protokolliert)
+  const [box, setBox] = useState("");
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const mq = box ? `mailbox=${box}` : "";
+  const isAdmin = me?.role === "admin";
+  useEffect(() => { if (isAdmin) api<Box[]>("/api/v1/mail/mailboxes").then(setBoxes).catch(() => {}); }, [isAdmin]);
 
-  const loadOv = useCallback(() => api<Overview>("/api/v1/mail").then(setOv).catch(() => setOv(false)), []);
+  const loadOv = useCallback(() => api<Overview>(`/api/v1/mail?${mq}`).then(setOv).catch(() => setOv(false)), [mq]);
   const loadList = useCallback((more = false) => {
     const before = more && items.length ? `&before=${encodeURIComponent(items[items.length - 1].sent_at)}` : "";
-    return api<Item[]>(`/api/v1/mail/messages?folder=${folder}&q=${encodeURIComponent(q)}${before}`)
+    return api<Item[]>(`/api/v1/mail/messages?folder=${folder}&q=${encodeURIComponent(q)}${before}&${mq}`)
       .then((r) => setItems((old) => (more ? [...old, ...r] : r))).catch(() => {});
-  }, [folder, q, items]);
+  }, [folder, q, items, mq]);
 
   useEffect(() => { loadOv(); }, [loadOv]);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setCur(null); loadList(); }, [folder]);
+  useEffect(() => { setCur(null); loadList(); }, [folder, box]);
   useEffect(() => { const t = setTimeout(() => loadList(), 300); return () => clearTimeout(t); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [q]);
   useEffect(() => comm.subscribe((e) => {
     if (e.type === "mail") { loadOv(); if (e.folder === folder) loadList(); setNote(`✉ ${e.from}: ${e.subject}`); }
@@ -99,8 +116,9 @@ export default function Mail() {
   }), [comm, folder]);
 
   const open = async (id: string) => {
-    const m = await api<Full>(`/api/v1/mail/messages/${id}`);
+    const m = await api<Full>(`/api/v1/mail/messages/${id}?${mq}`);
     setCur(m);
+    if (box) return;
     setItems((xs) => xs.map((x) => (x.id === id ? { ...x, seen: true } : x)));
     loadOv(); comm.bump();
   };
@@ -114,7 +132,7 @@ export default function Mail() {
     setCur(null); loadList(); loadOv();
   };
   const download = async (path: string, name: string) => {
-    const r = await fetch(path, { headers: { authorization: `Bearer ${getToken()}` } });
+    const r = await fetch(`${path}?${mq}`, { headers: { authorization: `Bearer ${getToken()}` } });
     const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await r.blob()), download: name });
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   };
@@ -140,7 +158,17 @@ export default function Mail() {
       {tab === "admin" ? <MailAdmin T={T} /> : (
         <div className={`mail ${cur ? "has-msg" : ""}`}>
           <aside className="mail-folders">
-            <button className="btn" onClick={() => setDraft({ to: "", cc: "", bcc: "", subject: "", text: "", files: [] })}>✎ {T.compose}</button>
+            {isAdmin && boxes.length > 0 && (
+              <select className="mail-box" value={box} onChange={(e) => { setBox(e.target.value); setFolder("inbox"); }}>
+                <option value="">{T.own}</option>
+                {boxes.filter((b) => b.address !== (box ? "" : ov && ov.address)).map((b) => (
+                  <option key={b.id} value={b.id}>{b.address}{b.unread ? ` (${b.unread})` : ""}</option>
+                ))}
+              </select>
+            )}
+            {box ? <div className="warn-box">👁 {T.readonly}</div> : (
+              <button className="btn" onClick={() => setDraft({ to: "", cc: "", bcc: "", subject: "", text: "", files: [] })}>✎ {T.compose}</button>
+            )}
             {ov && ov.folders.map((f) => (
               <button key={f.id} className={`mf ${f.id === folder ? "on" : ""}`} onClick={() => setFolder(f.id)}>
                 <span>{ICONS[f.id]} {T[f.id]}</span>
@@ -172,7 +200,7 @@ export default function Mail() {
           </section>
           <section className="mail-read">
             {!cur ? <div className="chat-empty">{T.pick}</div> : (
-              <Reader m={cur} T={T} onBack={() => setCur(null)} onReply={reply} onForward={forward}
+              <Reader m={cur} T={T} readOnly={!!box} onBack={() => setCur(null)} onReply={reply} onForward={forward}
                 onPatch={patch} onDelete={remove} onDownload={download} />
             )}
           </section>
@@ -185,8 +213,8 @@ export default function Mail() {
   );
 }
 
-function Reader({ m, T, onBack, onReply, onForward, onPatch, onDelete, onDownload }: {
-  m: Full; T: TT; onBack: () => void; onReply: (m: Full, all: boolean) => void; onForward: (m: Full) => void;
+function Reader({ m, T, readOnly, onBack, onReply, onForward, onPatch, onDelete, onDownload }: {
+  m: Full; T: TT; readOnly?: boolean; onBack: () => void; onReply: (m: Full, all: boolean) => void; onForward: (m: Full) => void;
   onPatch: (id: string, b: Record<string, unknown>) => void; onDelete: (id: string) => void; onDownload: (path: string, name: string) => void;
 }) {
   const [imgs, setImgs] = useState(false);
@@ -202,6 +230,7 @@ function Reader({ m, T, onBack, onReply, onForward, onPatch, onDelete, onDownloa
     <article className="reader">
       <div className="reader-bar">
         <button className="btn small ghost back" onClick={onBack} aria-label="Zurück">←</button>
+        {!readOnly && <>
         <button className="btn small" onClick={() => onReply(m, false)}>↩ {T.reply}</button>
         <button className="btn small ghost" onClick={() => onReply(m, true)}>{T.replyAll}</button>
         <button className="btn small ghost" onClick={() => onForward(m)}>↪ {T.forward}</button>
@@ -211,6 +240,7 @@ function Reader({ m, T, onBack, onReply, onForward, onPatch, onDelete, onDownloa
         {m.folder !== "archive" && <button className="btn small ghost" title={T.archiveIt} onClick={() => onPatch(m.id, { folder: "archive" })}>🗄</button>}
         <button className="btn small ghost" title={m.folder === "junk" ? T.notSpam : T.spam} onClick={() => onPatch(m.id, { folder: m.folder === "junk" ? "inbox" : "junk" })}>⚠</button>
         <button className="btn small ghost" title={T.del} onClick={() => onDelete(m.id)}>🗑</button>
+        </>}
       </div>
       <h2 className="reader-subj">{m.subject || "—"}</h2>
       <div className="reader-meta">
@@ -338,6 +368,7 @@ function MailAdmin({ T }: { T: TT }) {
         </form>
         {err && <p className="error">{err}</p>}
       </div>
+      <MailRules T={T} />
       <div className="card">
         <h2>{T.queue}</h2>
         <p>{d.queue.length === 0 ? "–" : d.queue.map((q) => `${q.status}: ${q.count}`).join(" · ")}</p>
@@ -348,6 +379,55 @@ function MailAdmin({ T }: { T: TT }) {
           ))}</tbody></table>
         </>}
       </div>
+    </div>
+  );
+}
+
+function MailRules({ T }: { T: TT }) {
+  const { me } = useAuth();
+  const [rules, setRules] = useState<Rule[]>([]);
+  const [boxes, setBoxes] = useState<Box[]>([]);
+  const [f, setF] = useState({ mailbox: "", sender: "", forward_to: "", keep_copy: true });
+  const [err, setErr] = useState<string | null>(null);
+  const load = () => api<Rule[]>("/api/v1/mail/rules").then(setRules).catch((e) => setErr(e.message));
+  useEffect(() => { if (me?.role === "admin") { load(); api<Box[]>("/api/v1/mail/mailboxes").then(setBoxes).catch(() => {}); } }, [me]);
+  if (me?.role !== "admin") return null;
+  return (
+    <div className="card">
+      <h2>{T.rules}</h2>
+      {rules.length > 0 && (
+        <table><thead><tr><th>{T.rMailbox}</th><th>{T.from}</th><th>{T.rTarget}</th><th /><th /></tr></thead><tbody>
+          {rules.map((r) => (
+            <tr key={r.id} style={r.active ? undefined : { opacity: 0.5 }}>
+              <td>{r.mailbox}</td><td>{r.sender ?? T.rAll}</td><td>{r.forward_to}</td>
+              <td className="muted">{r.active ? (r.keep_copy ? T.rCopy : T.rOnly) : T.rOff}</td>
+              <td className="n">
+                <button className="btn small ghost" onClick={() => api(`/api/v1/mail/rules/${r.id}`, { method: "PATCH", body: { active: !r.active } }).then(load)}>{r.active ? "⏸" : "▶"}</button>
+                <button className="btn small ghost" onClick={() => api(`/api/v1/mail/rules/${r.id}`, { method: "DELETE" }).then(load)}>✕</button>
+              </td>
+            </tr>
+          ))}
+        </tbody></table>
+      )}
+      <form className="grid2" style={{ marginTop: 12 }} onSubmit={(e) => {
+        e.preventDefault(); setErr(null);
+        api("/api/v1/mail/rules", { body: { ...f, sender: f.sender || null } })
+          .then(() => { setF({ mailbox: f.mailbox, sender: "", forward_to: "", keep_copy: true }); load(); }).catch((x) => setErr(x.message));
+      }}>
+        <label>{T.rMailbox}
+          <select required value={f.mailbox} onChange={(e) => setF({ ...f, mailbox: e.target.value })}>
+            <option value="">—</option>
+            {boxes.map((b) => <option key={b.id} value={b.address}>{b.address} · {b.owner}</option>)}
+          </select>
+        </label>
+        <label>{T.rSender}<input dir="ltr" placeholder="@kunde.de" value={f.sender} onChange={(e) => setF({ ...f, sender: e.target.value })} /></label>
+        <label>{T.rTarget}<input dir="ltr" type="email" required placeholder="ak@code-craft.tech" value={f.forward_to} onChange={(e) => setF({ ...f, forward_to: e.target.value })} /></label>
+        <label className="row" style={{ gap: 6, alignSelf: "end" }}>
+          <input type="checkbox" style={{ width: "auto" }} checked={f.keep_copy} onChange={(e) => setF({ ...f, keep_copy: e.target.checked })} /> {T.rKeep}
+        </label>
+        <button className="btn small" style={{ justifySelf: "start" }}>{T.rAdd}</button>
+      </form>
+      {err && <p className="error">{err}</p>}
     </div>
   );
 }

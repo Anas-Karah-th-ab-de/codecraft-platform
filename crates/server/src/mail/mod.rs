@@ -8,6 +8,8 @@ pub mod guard;
 pub mod imap;
 pub mod import;
 pub mod outbound;
+pub mod rules;
+pub mod shield;
 pub mod smtp;
 pub mod tls;
 
@@ -182,11 +184,19 @@ pub async fn deliver_local(
     let Some((mailbox, _)) = resolve_local(db, rcpt).await? else {
         return Ok(Local::Unknown);
     };
-    let (used, quota) = usage(db, mailbox).await?;
-    if used + raw.len() as i64 > quota {
-        return Ok(Local::OverQuota);
+    // Weiterleitungsregeln (nicht für Spam)
+    let rules = if junk { vec![] } else { rules::matching(db, mailbox, raw).await? };
+    let keep = rules.is_empty() || rules.iter().any(|r| r.keep_copy);
+    if keep {
+        let (used, quota) = usage(db, mailbox).await?;
+        if used + raw.len() as i64 > quota {
+            return Ok(Local::OverQuota);
+        }
+        store(db, mailbox, if junk { "junk" } else { "inbox" }, raw, auth_results, false).await?;
     }
-    store(db, mailbox, if junk { "junk" } else { "inbox" }, raw, auth_results, false).await?;
+    if !rules.is_empty() {
+        rules::forward(db.clone(), mailbox, raw.to_vec(), rules);
+    }
     Ok(Local::Delivered)
 }
 

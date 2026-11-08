@@ -359,3 +359,143 @@ async fn app_passwords_for_mail_programs(db: PgPool) {
     call(&db, "DELETE", &format!("/api/v1/account/app-passwords/{pid}"), &jana, None).await;
     assert!(mail::authenticate(&db, "jana.mueller@code-craft.tech", &pw).await.is_none());
 }
+
+async fn mailbox_id(db: &PgPool, address: &str) -> Uuid {
+    sqlx::query_scalar("SELECT id FROM mailboxes WHERE address = $1").bind(address).fetch_one(db).await.unwrap()
+}
+
+async fn wait_for(db: &PgPool, sql: &str, want: i64) {
+    for _ in 0..50 {
+        let n: i64 = sqlx::query_scalar(sql).fetch_one(db).await.unwrap();
+        if n >= want {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("Zeitüberschreitung: {sql}");
+}
+
+#[sqlx::test(migrator = "codecraft_server::MIGRATOR")]
+async fn admin_reads_all_mailboxes_and_forwards(db: PgPool) {
+    let (admin, jana, tom) = setup(&db).await;
+    let jana_mb = mailbox_id(&db, "jana.mueller@code-craft.tech").await;
+    let send = |to: &str, subject: &str| json!({ "to": [to], "subject": subject, "text": "Hallo" });
+
+    // Admin: alle Postfächer, Mitarbeiter nicht
+    let (s, list) = call(&db, "GET", "/api/v1/mail/mailboxes", &admin, None).await;
+    assert_eq!(s, StatusCode::OK);
+    assert!(list.as_array().unwrap().iter().any(|m| m["address"] == "jana.mueller@code-craft.tech"));
+    let (s, _) = call(&db, "GET", "/api/v1/mail/mailboxes", &tom, None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+
+    // Regeln: alles an Jana → Admin-Postfach (Kopie behalten); Mails von Tom zusätzlich nach extern
+    let (s, v) = call(
+        &db,
+        "POST",
+        "/api/v1/mail/rules",
+        &admin,
+        Some(json!({
+            "mailbox": "jana.mueller@code-craft.tech", "forward_to": "admin@code-craft.tech"
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST, "Admin hat kein Postfach admin@ → {v}");
+    let admin_addr: String = sqlx::query_scalar(
+        "SELECT m.address FROM mailboxes m JOIN users u ON u.id = m.user_id WHERE u.email = 'admin@example.org'",
+    )
+    .fetch_optional(&db)
+    .await
+    .unwrap()
+    .unwrap_or_default();
+    let target = if admin_addr.is_empty() { "tom.weber@code-craft.tech".to_string() } else { admin_addr.clone() };
+    let (s, v) = call(
+        &db,
+        "POST",
+        "/api/v1/mail/rules",
+        &admin,
+        Some(json!({
+            "mailbox": "jana.mueller@code-craft.tech", "forward_to": target
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let (s, _) = call(&db, "POST", "/api/v1/mail/rules", &admin, Some(json!({
+        "mailbox": "jana.mueller@code-craft.tech", "sender": "@code-craft.tech", "forward_to": "chef@extern-beispiel.de", "keep_copy": true
+    }))).await;
+    assert_eq!(s, StatusCode::CREATED);
+    let (s, _) = call(
+        &db,
+        "POST",
+        "/api/v1/mail/rules",
+        &tom,
+        Some(json!({
+            "mailbox": "jana.mueller@code-craft.tech", "forward_to": "x@y.de"
+        })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+
+    // Tom schreibt Jana
+    let (s, v) =
+        call(&db, "POST", "/api/v1/mail/send", &tom, Some(send("jana.mueller@code-craft.tech", "Projekt Alpha"))).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    // Jana hat sie (Kopie behalten), intern weitergeleitet (Original), extern als Anhang in der Warteschlange
+    let (_, inbox) = call(&db, "GET", "/api/v1/mail/messages?folder=inbox", &jana, None).await;
+    assert_eq!(inbox.as_array().unwrap().len(), 1);
+    let target_mb = mailbox_id(&db, &target).await;
+    wait_for(&db, &format!("SELECT count(*) FROM mail_messages WHERE mailbox_id = '{target_mb}' AND folder = 'inbox' AND subject = 'Projekt Alpha'"), 1).await;
+    wait_for(&db, "SELECT count(*) FROM mail_queue WHERE 'chef@extern-beispiel.de' = ANY(rcpts)", 1).await;
+    let raw: Vec<u8> = sqlx::query_scalar("SELECT raw FROM mail_queue WHERE 'chef@extern-beispiel.de' = ANY(rcpts)")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    // Warteschlange ist verschlüsselt
+    assert!(raw.starts_with(b"CCE1"));
+    let raw = mail::guard::open(raw);
+    let raw = String::from_utf8_lossy(&raw);
+    assert!(raw.contains("Subject: Fwd: Projekt Alpha"), "{raw}");
+    assert!(raw.contains("message/rfc822"), "{raw}");
+    assert!(raw.lines().any(|l| l.starts_with("From:") && l.contains("<jana.mueller@code-craft.tech>")), "{raw}");
+    assert!(raw.contains("DKIM-Signature:"), "weitergeleitete Nachricht muss signiert sein");
+    // keine Schleife: genau eine weitergeleitete Kopie
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let n: i64 = sqlx::query_scalar(&format!("SELECT count(*) FROM mail_messages WHERE mailbox_id = '{target_mb}' AND subject = 'Projekt Alpha' AND folder = 'inbox'"))
+        .fetch_one(&db).await.unwrap();
+    assert_eq!(n, 1);
+
+    // Admin liest Janas Post – ohne „gelesen“ zu setzen, mit Audit
+    let msg = inbox[0]["id"].as_str().unwrap();
+    let (s, m) = call(&db, "GET", &format!("/api/v1/mail/messages/{msg}?mailbox={jana_mb}"), &admin, None).await;
+    assert_eq!(s, StatusCode::OK, "{m}");
+    assert_eq!(m["subject"], "Projekt Alpha");
+    let (_, inbox) = call(&db, "GET", "/api/v1/mail/messages?folder=inbox", &jana, None).await;
+    assert_eq!(inbox[0]["seen"], false);
+    let (_, other) =
+        call(&db, "GET", &format!("/api/v1/mail/messages?folder=inbox&mailbox={jana_mb}"), &admin, None).await;
+    assert_eq!(other.as_array().unwrap().len(), 1);
+    // Mitarbeiter dürfen fremde Postfächer nicht lesen
+    let (s, _) = call(&db, "GET", &format!("/api/v1/mail/messages/{msg}?mailbox={jana_mb}"), &tom, None).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let n: i64 = sqlx::query_scalar("SELECT count(*) FROM audit_log WHERE action = 'mail_admin_read'")
+        .fetch_one(&db)
+        .await
+        .unwrap();
+    assert_eq!(n, 2);
+
+    // Regel „nur weiterleiten“ (ohne Kopie): Jana bekommt nichts mehr
+    sqlx::query("UPDATE mail_rules SET keep_copy = false").execute(&db).await.unwrap();
+    call(&db, "POST", "/api/v1/mail/send", &tom, Some(send("jana.mueller@code-craft.tech", "Beta"))).await;
+    wait_for(
+        &db,
+        &format!("SELECT count(*) FROM mail_messages WHERE mailbox_id = '{target_mb}' AND subject = 'Beta'"),
+        1,
+    )
+    .await;
+    let n: i64 = sqlx::query_scalar(&format!(
+        "SELECT count(*) FROM mail_messages WHERE mailbox_id = '{jana_mb}' AND subject = 'Beta'"
+    ))
+    .fetch_one(&db)
+    .await
+    .unwrap();
+    assert_eq!(n, 0);
+}

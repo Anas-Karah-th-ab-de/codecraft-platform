@@ -4,13 +4,14 @@ use crate::auth::{hash_password, User};
 use crate::error::{ApiError, ApiResult};
 use crate::mail::{self, MailUser, FOLDERS};
 use crate::AppState;
-use axum::extract::{Path, Query, State};
+use axum::extract::{FromRequestParts, Path, Query, State};
+use axum::http::request::Parts;
 use axum::http::{header, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
 use chrono::{DateTime, Utc};
-use codecraft_domain::access::Permission;
+use codecraft_domain::access::{Permission, Role};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
@@ -19,8 +20,50 @@ async fn mailbox(s: &AppState, user: &User) -> ApiResult<MailUser> {
     mail::mail_user(&s.db, user.id).await?.ok_or_else(|| ApiError::NotFound)
 }
 
-pub async fn overview(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>> {
-    let mb = mailbox(&s, &user).await?;
+/// Postfach einer Lese-Anfrage: das eigene – oder für Admins jedes (`?mailbox=<id>`).
+/// Admin-Zugriffe auf fremde Postfächer verändern nichts (kein „gelesen“) und stehen im Audit-Log.
+pub struct Mbx {
+    pub mb: MailUser,
+    pub foreign: bool,
+}
+
+impl FromRequestParts<AppState> for Mbx {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
+        let user = User::from_request_parts(parts, state).await?;
+        let other = parts
+            .uri
+            .query()
+            .and_then(|q| q.split('&').find_map(|kv| kv.strip_prefix("mailbox=")))
+            .and_then(|v| Uuid::parse_str(v).ok());
+        let own = mailbox(state, &user).await.ok();
+        let Some(id) = other.filter(|id| own.as_ref().map(|o| o.mailbox_id) != Some(*id)) else {
+            return Ok(Mbx { mb: own.ok_or(ApiError::NotFound)?, foreign: false });
+        };
+        if user.role != Role::Admin {
+            return Err(ApiError::Forbidden);
+        }
+        let (user_id, address): (Uuid, String) = sqlx::query_as("SELECT user_id, address FROM mailboxes WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&state.db)
+            .await?
+            .ok_or(ApiError::NotFound)?;
+        let mut c = state.db.acquire().await?;
+        crate::routes::audit(
+            &mut c,
+            &user.actor(),
+            "mail_admin_read",
+            "mailbox",
+            id,
+            json!({ "address": address, "path": parts.uri.path(), "query": parts.uri.query() }),
+        )
+        .await?;
+        Ok(Mbx { mb: MailUser { user_id, mailbox_id: id, address }, foreign: true })
+    }
+}
+
+pub async fn overview(State(s): State<AppState>, Mbx { mb, .. }: Mbx) -> ApiResult<Json<Value>> {
     let counts: Vec<(String, i64, i64)> = sqlx::query_as(
         "SELECT folder, count(*), count(*) FILTER (WHERE NOT seen) FROM mail_messages WHERE mailbox_id = $1 GROUP BY folder",
     )
@@ -62,8 +105,11 @@ pub struct Item {
     pub size: i32,
 }
 
-pub async fn list(State(s): State<AppState>, user: User, Query(q): Query<ListQuery>) -> ApiResult<Json<Vec<Item>>> {
-    let mb = mailbox(&s, &user).await?;
+pub async fn list(
+    State(s): State<AppState>,
+    Mbx { mb, .. }: Mbx,
+    Query(q): Query<ListQuery>,
+) -> ApiResult<Json<Vec<Item>>> {
     let folder = q.folder.unwrap_or_else(|| "inbox".into());
     if !FOLDERS.contains(&folder.as_str()) {
         return Err(ApiError::BadRequest("Unbekannter Ordner".into()));
@@ -99,12 +145,13 @@ async fn load(s: &AppState, mb: &MailUser, id: Uuid) -> ApiResult<(String, Vec<u
     Ok((r.0, mail::guard::open(r.1), r.2, r.3, r.4))
 }
 
-pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    let mb = mailbox(&s, &user).await?;
+pub async fn get(State(s): State<AppState>, Mbx { mb, foreign }: Mbx, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
     let (folder, raw, auth, flagged, answered) = load(&s, &mb, id).await?;
+    // Admin liest mit: Status „gelesen“ des Benutzers bleibt unverändert
     let sent_at: DateTime<Utc> =
-        sqlx::query_scalar("UPDATE mail_messages SET seen = true WHERE id = $1 RETURNING sent_at")
+        sqlx::query_scalar("UPDATE mail_messages SET seen = seen OR NOT $2 WHERE id = $1 RETURNING sent_at")
             .bind(id)
+            .bind(foreign)
             .fetch_one(&s.db)
             .await?;
     let m = mail::meta(&raw);
@@ -136,8 +183,7 @@ pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) ->
     })))
 }
 
-pub async fn raw(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Response> {
-    let mb = mailbox(&s, &user).await?;
+pub async fn raw(State(s): State<AppState>, Mbx { mb, .. }: Mbx, Path(id): Path<Uuid>) -> ApiResult<Response> {
     let (_, raw, ..) = load(&s, &mb, id).await?;
     Ok((
         [
@@ -151,10 +197,9 @@ pub async fn raw(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) ->
 
 pub async fn attachment(
     State(s): State<AppState>,
-    user: User,
+    Mbx { mb, .. }: Mbx,
     Path((id, n)): Path<(Uuid, usize)>,
 ) -> ApiResult<Response> {
-    let mb = mailbox(&s, &user).await?;
     let (_, raw, ..) = load(&s, &mb, id).await?;
     let parsed = mail_parser::MessageParser::default().parse(&raw).ok_or(ApiError::NotFound)?;
     let a = parsed.attachments().nth(n).ok_or(ApiError::NotFound)?;
@@ -464,4 +509,161 @@ pub async fn mta_sts() -> impl IntoResponse {
         [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
         format!("version: STSv1\nmode: enforce\nmx: {}\nmax_age: 604800\n", mail::hostname()),
     )
+}
+
+// ── Admin: alle Postfächer und Weiterleitungsregeln ───────────────────
+
+fn admin_only(user: &User) -> ApiResult<()> {
+    if user.role == Role::Admin {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden)
+    }
+}
+
+/// Alle Postfächer mit Größe und ungelesenen Nachrichten (Admin)
+pub async fn mailboxes(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>> {
+    admin_only(&user)?;
+    type Row = (Uuid, String, String, i64, i64, i64);
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT m.id, m.address, u.display_name,
+                count(x.id), count(x.id) FILTER (WHERE NOT x.seen AND x.folder = 'inbox'),
+                COALESCE(sum(x.size), 0)::bigint
+           FROM mailboxes m JOIN users u ON u.id = m.user_id
+           LEFT JOIN mail_messages x ON x.mailbox_id = m.id AND NOT x.deleted
+          WHERE m.is_active GROUP BY m.id, u.display_name ORDER BY m.address",
+    )
+    .fetch_all(&s.db)
+    .await?;
+    Ok(Json(json!(rows
+        .iter()
+        .map(|r| json!({ "id": r.0, "address": r.1, "owner": r.2, "messages": r.3, "unread": r.4, "size": r.5 }))
+        .collect::<Vec<_>>())))
+}
+
+pub async fn list_rules(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>> {
+    admin_only(&user)?;
+    type Row = (Uuid, String, Option<String>, String, bool, bool, Option<String>, DateTime<Utc>);
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT r.id, m.address, r.sender, r.forward_to, r.keep_copy, r.is_active, r.note, r.created_at
+           FROM mail_rules r JOIN mailboxes m ON m.id = r.mailbox_id ORDER BY m.address, r.created_at",
+    )
+    .fetch_all(&s.db)
+    .await?;
+    Ok(Json(json!(rows
+        .iter()
+        .map(|r| json!({ "id": r.0, "mailbox": r.1, "sender": r.2, "forward_to": r.3, "keep_copy": r.4, "active": r.5, "note": r.6, "created_at": r.7 }))
+        .collect::<Vec<_>>())))
+}
+
+#[derive(Deserialize)]
+pub struct NewRule {
+    /// Postfach-Adresse, deren eingehende Post weitergeleitet wird
+    pub mailbox: String,
+    /// leer = alle Absender; `a@b.de` oder `@b.de`
+    pub sender: Option<String>,
+    pub forward_to: String,
+    #[serde(default = "yes")]
+    pub keep_copy: bool,
+    pub note: Option<String>,
+}
+
+fn yes() -> bool {
+    true
+}
+
+pub async fn create_rule(
+    State(s): State<AppState>,
+    user: User,
+    Json(b): Json<NewRule>,
+) -> ApiResult<(StatusCode, Json<Value>)> {
+    admin_only(&user)?;
+    let target = mail::bare_address(&b.forward_to);
+    if !valid(&target) {
+        return Err(ApiError::BadRequest("Ungültige Zieladresse".into()));
+    }
+    if mail::is_local_domain(&s.db, mail::domain_of(&target)).await?
+        && mail::resolve_local(&s.db, &target).await?.is_none()
+    {
+        return Err(ApiError::BadRequest("Zieladresse existiert nicht".into()));
+    }
+    let sender = b.sender.map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty());
+    if let Some(p) = &sender {
+        let ok = if let Some(d) = p.strip_prefix('@') { d.contains('.') } else { valid(p) };
+        if !ok {
+            return Err(ApiError::BadRequest("Absender: a@b.de oder @b.de".into()));
+        }
+    }
+    let mb: Uuid = sqlx::query_scalar("SELECT id FROM mailboxes WHERE address = $1")
+        .bind(mail::bare_address(&b.mailbox))
+        .fetch_optional(&s.db)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Postfach nicht gefunden".into()))?;
+    let n: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM mail_rules WHERE mailbox_id = $1").bind(mb).fetch_one(&s.db).await?;
+    if n >= 50 {
+        return Err(ApiError::BadRequest("Höchstens 50 Regeln je Postfach".into()));
+    }
+    let id = Uuid::now_v7();
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "INSERT INTO mail_rules (id, mailbox_id, sender, forward_to, keep_copy, note, created_by) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    )
+    .bind(id)
+    .bind(mb)
+    .bind(&sender)
+    .bind(&target)
+    .bind(b.keep_copy)
+    .bind(b.note.as_deref().map(str::trim).filter(|x| !x.is_empty()))
+    .bind(user.id)
+    .execute(&mut *tx)
+    .await?;
+    crate::routes::audit(
+        &mut tx,
+        &user.actor(),
+        "mail_rule_create",
+        "mailbox",
+        mb,
+        json!({ "rule": id, "sender": sender, "forward_to": target, "keep_copy": b.keep_copy }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
+}
+
+#[derive(Deserialize)]
+pub struct RulePatch {
+    pub active: bool,
+}
+
+pub async fn patch_rule(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<RulePatch>,
+) -> ApiResult<StatusCode> {
+    admin_only(&user)?;
+    let r = sqlx::query("UPDATE mail_rules SET is_active = $2 WHERE id = $1")
+        .bind(id)
+        .bind(b.active)
+        .execute(&s.db)
+        .await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    let mut c = s.db.acquire().await?;
+    crate::routes::audit(&mut c, &user.actor(), "mail_rule_toggle", "mail_rule", id, json!({ "active": b.active }))
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn delete_rule(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+    admin_only(&user)?;
+    let r = sqlx::query("DELETE FROM mail_rules WHERE id = $1").bind(id).execute(&s.db).await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    let mut c = s.db.acquire().await?;
+    crate::routes::audit(&mut c, &user.actor(), "mail_rule_delete", "mail_rule", id, json!({})).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

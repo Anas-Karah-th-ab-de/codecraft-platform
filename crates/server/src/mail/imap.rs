@@ -30,7 +30,10 @@ pub async fn serve(db: PgPool, bind: String, implicit_tls: bool) {
 pub async fn run(db: PgPool, listener: TcpListener, implicit_tls: bool) {
     loop {
         let Ok((sock, peer)) = listener.accept().await else { continue };
-        // höchstens 20 gleichzeitige Verbindungen je IP (Mail-Programme öffnen mehrere)
+        // gesperrte IPs trennen; höchstens 20 gleichzeitige Verbindungen je IP (Mail-Programme öffnen mehrere)
+        if super::shield::banned(peer.ip()) {
+            continue;
+        }
         let Some(slot) = super::guard::connection(peer.ip(), 20) else { continue };
         let db = db.clone();
         tokio::spawn(async move {
@@ -546,6 +549,7 @@ struct Selected {
 
 struct Sess {
     db: PgPool,
+    ip: std::net::IpAddr,
     user: Option<MailUser>,
     sel: Option<Selected>,
 }
@@ -568,9 +572,9 @@ fn caps(tls_on: bool) -> String {
     c
 }
 
-async fn session(db: PgPool, stream: Stream, _peer: SocketAddr) -> std::io::Result<()> {
+async fn session(db: PgPool, stream: Stream, peer: SocketAddr) -> std::io::Result<()> {
     let mut io = BufReader::new(stream);
-    let mut s = Sess { db, user: None, sel: None };
+    let mut s = Sess { db, ip: peer.ip(), user: None, sel: None };
     let tls_on = io.get_ref().is_tls();
     send(&mut io, format!("* OK [CAPABILITY {}] KM Code Craft IMAP bereit\r\n", caps(tls_on)).as_bytes()).await?;
     let mut bad = 0;
@@ -770,6 +774,8 @@ async fn login(s: &mut Sess, l: &str, p: &str) -> Result<String, String> {
         }
         None => {
             tokio::time::sleep(Duration::from_secs(2)).await;
+            // 10 Fehlversuche in 15 min → IP 1 h gesperrt (auch für SMTP)
+            super::shield::auth_failed(s.ip);
             Err("[AUTHENTICATIONFAILED] Anmeldung fehlgeschlagen".into())
         }
     }

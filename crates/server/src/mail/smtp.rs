@@ -39,7 +39,10 @@ pub async fn serve(db: PgPool, bind: String, mode: Mode) {
 pub async fn run(db: PgPool, listener: TcpListener, mode: Mode) {
     loop {
         let Ok((sock, peer)) = listener.accept().await else { continue };
-        // höchstens 10 gleichzeitige Verbindungen je IP
+        // gesperrte IPs (Fehlanmeldungen) sofort trennen; höchstens 10 gleichzeitige Verbindungen je IP
+        if super::shield::banned(peer.ip()) {
+            continue;
+        }
         let Some(slot) = super::guard::connection(peer.ip(), 10) else { continue };
         let db = db.clone();
         tokio::spawn(async move {
@@ -77,6 +80,23 @@ async fn session(db: PgPool, stream: Stream, peer: SocketAddr, mode: Mode) -> st
     let mut user: Option<MailUser> = None;
     let mut env = Envelope { from: None, rcpts: vec![] };
     let mut bad = 0u32;
+    let external = !peer.ip().is_loopback();
+    if mode == Mode::Mx && external {
+        // Blocklisten abfragen, während wir auf Frühsender warten (Bots senden vor der Begrüßung)
+        let bl = tokio::spawn(super::shield::dnsbl(peer.ip()));
+        if let Ok(Ok(buf)) = timeout(Duration::from_secs(3), io.fill_buf()).await {
+            if !buf.is_empty() {
+                tracing::info!("SMTP {peer}: Frühsender abgewiesen");
+                let _ = reply(&mut io, "554 5.7.1 Protokollverstoss").await;
+                return Ok(());
+            }
+        }
+        if let Ok(Some(zone)) = bl.await {
+            tracing::info!("SMTP {peer}: auf Blockliste {zone}");
+            let _ = reply(&mut io, &format!("554 5.7.1 Ihre IP steht auf der Blockliste {zone}")).await;
+            return Ok(());
+        }
+    }
     reply(&mut io, &format!("220 {host} ESMTP KM Code Craft")).await?;
     loop {
         let Some(line) = read_line(&mut io, 4096).await? else { return Ok(()) };
@@ -89,6 +109,15 @@ async fn session(db: PgPool, stream: Stream, peer: SocketAddr, mode: Mode) -> st
         let auth_ok = mode != Mode::Mx && (tls_on || tls::plain_auth_allowed());
         match verb.as_str() {
             "EHLO" | "HELO" => {
+                // Fremde, die sich als unser Server oder unsere Domain ausgeben
+                let claimed = arg.trim().trim_start_matches('[').trim_end_matches(']').to_lowercase();
+                if mode == Mode::Mx
+                    && external
+                    && (claimed == host.to_lowercase() || super::is_local_domain(&db, &claimed).await.unwrap_or(false))
+                {
+                    reply(&mut io, "550 5.7.1 Gefälschter HELO-Name").await?;
+                    return Ok(());
+                }
                 helo = arg.clone();
                 env = Envelope { from: None, rcpts: vec![] };
                 if verb == "HELO" {
@@ -178,6 +207,10 @@ async fn session(db: PgPool, stream: Stream, peer: SocketAddr, mode: Mode) -> st
                         None => {
                             bad += 1;
                             tokio::time::sleep(Duration::from_secs(2)).await;
+                            if super::shield::auth_failed(peer.ip()) {
+                                reply(&mut io, "421 4.7.0 Zu viele Fehlanmeldungen – gesperrt").await?;
+                                return Ok(());
+                            }
                             reply(&mut io, "535 5.7.8 Anmeldung fehlgeschlagen").await?;
                         }
                     },
@@ -195,8 +228,17 @@ async fn session(db: PgPool, stream: Stream, peer: SocketAddr, mode: Mode) -> st
                         .split_whitespace()
                         .find_map(|p| p.to_uppercase().strip_prefix("SIZE=").and_then(|v| v.parse().ok()))
                         .unwrap_or(0);
+                    let own_domain = mode == Mode::Mx
+                        && external
+                        && !addr.is_empty()
+                        && super::is_local_domain(&db, domain_of(&addr)).await.unwrap_or(true);
                     if size > MAX_SIZE {
                         reply(&mut io, "552 5.3.4 Nachricht zu groß").await?;
+                    } else if own_domain {
+                        // Niemand darf ohne Anmeldung mit unserer Domain als Absender einliefern
+                        tracing::warn!("SMTP {peer}: gefälschter Absender {addr}");
+                        bad += 3;
+                        reply(&mut io, "550 5.7.1 Absender dieser Domain nur nach Anmeldung (Port 587)").await?;
                     } else {
                         env = Envelope { from: Some(addr), rcpts: vec![] };
                         reply(&mut io, "250 2.1.0 OK").await?;
@@ -217,8 +259,13 @@ async fn session(db: PgPool, stream: Stream, peer: SocketAddr, mode: Mode) -> st
                 } else if mode == Mode::Mx {
                     match super::resolve_local(&db, &addr).await {
                         Ok(Some(_)) => {
-                            env.rcpts.push(addr);
-                            reply(&mut io, "250 2.1.5 OK").await?;
+                            let from = env.from.clone().unwrap_or_default();
+                            if super::shield::greylist(peer.ip(), &from, &addr) {
+                                reply(&mut io, "451 4.7.1 Greylisting – bitte in 5 Minuten erneut versuchen").await?;
+                            } else {
+                                env.rcpts.push(addr);
+                                reply(&mut io, "250 2.1.5 OK").await?;
+                            }
                         }
                         Ok(None) => {
                             bad += 1;
@@ -353,6 +400,15 @@ async fn accept_inbound(db: &PgPool, env: &Envelope, body: &[u8], ip: IpAddr, he
         tracing::warn!("Gefährlicher Anhang abgewiesen: {name} von {mail_from} ({ip})");
         return format!("552 5.7.1 Anhang aus Sicherheitsgruenden gesperrt: {name}");
     }
+    // Kopfzeile „From“ mit eigener Domain von außen = Fälschung (eigene Post kommt nur über 587/465)
+    let header_from = super::meta(body).from_addr;
+    if !ip.is_loopback()
+        && !header_from.is_empty()
+        && super::is_local_domain(db, domain_of(&header_from)).await.unwrap_or(true)
+    {
+        tracing::warn!("SMTP {ip}: gefälschte Kopfzeile From {header_from}");
+        return "550 5.7.1 Absender dieser Domain nur nach Anmeldung (Port 587)".into();
+    }
     let mut auth_header = String::new();
     let mut junk = false;
     if !ip.is_loopback() {
@@ -366,6 +422,10 @@ async fn accept_inbound(db: &PgPool, env: &Envelope, body: &[u8], ip: IpAddr, he
                 a.verify_dmarc(mail_auth::dmarc::verify::DmarcParameters::new(&msg, &dkim, &from_dom, &spf)).await;
             let failed = dmarc.dkim_result() != &DmarcResult::Pass && dmarc.spf_result() != &DmarcResult::Pass;
             let failed = failed && !matches!(dmarc.dkim_result(), DmarcResult::None);
+            // SPF-Fehlschlag ohne gültige DKIM-Signatur → Spam-Ordner
+            if spf.result() == mail_auth::SpfResult::Fail && dmarc.dkim_result() != &DmarcResult::Pass {
+                junk = true;
+            }
             if failed {
                 match dmarc.policy() {
                     mail_auth::dmarc::Policy::Reject => {

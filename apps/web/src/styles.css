@@ -921,3 +921,7 @@ canvas.screen.idle, canvas.screen.waiting, canvas.screen.denied, canvas.screen.e
 .badge.grant-waiting { background: #fef3c7; color: #92400e; }
 .badge.grant-active { background: #dcfce7; color: #166534; }
 .badge.grant-expired, .badge.grant-revoked { background: #f1f5f9; color: #475569; }
+
+/* Admin: fremdes Postfach */
+.mail-box { margin-bottom: 8px; width: 100%; }
+.mail-folders .warn-box { font-size: .82em; margin-bottom: 8px; }
