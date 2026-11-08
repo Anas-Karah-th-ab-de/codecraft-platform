@@ -296,6 +296,8 @@ pub struct Send {
     pub subject: String,
     pub text: String,
     pub reply_to_id: Option<Uuid>,
+    /// Weiterleiten: Anhänge dieser (eigenen) Nachricht mitschicken
+    pub forward_id: Option<Uuid>,
     #[serde(default)]
     pub attachments: Vec<Attachment>,
 }
@@ -342,13 +344,34 @@ pub async fn send(State(s): State<AppState>, user: User, Json(b): Json<Send>) ->
         }
         sqlx::query("UPDATE mail_messages SET answered = true WHERE id = $1").bind(rid).execute(&s.db).await?;
     }
-    let mut total = 0usize;
+    let mut files: Vec<(String, String, Vec<u8>)> = vec![];
     for a in &b.attachments {
         let data = base64::engine::general_purpose::STANDARD
             .decode(a.data_b64.as_bytes())
             .map_err(|_| ApiError::BadRequest("Anhang beschädigt".into()))?;
+        files.push((a.mime.clone(), a.name.clone(), data));
+    }
+    if let Some(fid) = b.forward_id {
+        let (_, raw, ..) = load(&s, &mb, fid).await?;
+        if let Some(orig) = mail_parser::MessageParser::default().parse(&raw) {
+            for a in orig.attachments() {
+                let mime = a
+                    .content_type()
+                    .map(|c| format!("{}/{}", c.ctype(), c.subtype().unwrap_or("octet-stream")))
+                    .unwrap_or_else(|| "application/octet-stream".into());
+                files.push((mime, a.attachment_name().unwrap_or("anhang").to_string(), a.decoded().to_vec()));
+            }
+        }
+    }
+    let mut total = 0usize;
+    for (mime, name, data) in files {
+        if mail::guard::dangerous_file(&name, &mime, &data) {
+            return Err(ApiError::BadRequest(format!(
+                "{name}: Programme und Makro-Dateien werden nicht versendet (bitte als ZIP)"
+            )));
+        }
         total += data.len();
-        m = m.attachment(a.mime.clone(), a.name.clone(), data);
+        m = m.attachment(mime, name, data);
     }
     if total > 25 * 1024 * 1024 {
         return Err(ApiError::BadRequest("Anhänge zusammen höchstens 25 MB".into()));

@@ -57,7 +57,7 @@ type Full = {
 };
 type Box = { id: string; address: string; owner: string; messages: number; unread: number; size: number };
 type Rule = { id: string; mailbox: string; sender: string | null; forward_to: string; keep_copy: boolean; active: boolean; note: string | null };
-type Draft = { to: string; cc: string; bcc: string; subject: string; text: string; reply_to_id?: string; files: File[] };
+type Draft = { to: string; cc: string; bcc: string; subject: string; text: string; reply_to_id?: string; forward_id?: string; forwarded?: string[]; files: File[] };
 
 const ICONS: Record<string, string> = { inbox: "📥", sent: "📤", drafts: "📝", trash: "🗑", junk: "⚠", archive: "🗄" };
 const size = (b: number) => (b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`);
@@ -142,7 +142,8 @@ export default function Mail() {
     to: m.from_addr, cc: all ? [...m.to, ...m.cc].filter((a) => ov && a !== ov.address).join(", ") : "", bcc: "",
     subject: /^re:/i.test(m.subject) ? m.subject : `Re: ${m.subject}`, text: quote(m), reply_to_id: m.id, files: [],
   });
-  const forward = (m: Full) => setDraft({ to: "", cc: "", bcc: "", subject: `Fwd: ${m.subject}`, text: quote(m), files: [] });
+  const forward = (m: Full) => setDraft({ to: "", cc: "", bcc: "", subject: `Fwd: ${m.subject}`, text: quote(m), files: [],
+    forward_id: m.attachments.length ? m.id : undefined, forwarded: m.attachments.map((a) => a.name) });
 
   if (ov === false) return <div className="card">{T.noMailbox}</div>;
   const admin = can(me, "users");
@@ -284,13 +285,15 @@ function Compose({ T, draft, onClose, onSent }: { T: TT; draft: Draft; onClose: 
     setBusy(true);
     try {
       const attachments = await Promise.all(d.files.map(async (f) => ({ name: f.name, mime: f.type || "application/octet-stream", data_b64: await b64(f) })));
-      await api("/api/v1/mail/send", { body: { to: split(d.to), cc: split(d.cc), bcc: split(d.bcc), subject: d.subject, text: d.text, reply_to_id: d.reply_to_id, attachments } });
+      await api("/api/v1/mail/send", { body: { to: split(d.to), cc: split(d.cc), bcc: split(d.bcc), subject: d.subject, text: d.text, reply_to_id: d.reply_to_id, forward_id: d.forward_id, attachments } });
       onSent();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
   return (
     <div className="modal-bg" onClick={onClose}>
-      <form className="modal compose" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); submit(); }}>
+      <form className="modal compose" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); submit(); }}
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => { e.preventDefault(); setD({ ...d, files: [...d.files, ...Array.from(e.dataTransfer.files)] }); }}>
         <h2>{d.subject || T.compose}</h2>
         <label className="cf"><span>{T.to}</span><input autoFocus={!d.to} value={d.to} onChange={(e) => setD({ ...d, to: e.target.value })} required />
           {!showCc && <button type="button" className="btn small ghost" onClick={() => setShowCc(true)}>Cc/Bcc</button>}</label>
@@ -301,6 +304,10 @@ function Compose({ T, draft, onClose, onSent }: { T: TT; draft: Draft; onClose: 
         <label className="cf"><span>{T.subject}</span><input value={d.subject} onChange={(e) => setD({ ...d, subject: e.target.value })} /></label>
         <textarea className="compose-text" rows={14} value={d.text} autoFocus={!!d.to} onChange={(e) => setD({ ...d, text: e.target.value })} />
         <div className="atts">
+          {d.forward_id && d.forwarded?.map((n) => (
+            <span key={`fw-${n}`} className="att">↪📎 {n}
+              <button type="button" aria-label="Entfernen" onClick={() => setD({ ...d, forward_id: undefined, forwarded: [] })}>✕</button></span>
+          ))}
           {d.files.map((f, i) => (
             <span key={i} className="att">📎 {f.name} <small>{size(f.size)}</small>
               <button type="button" aria-label="Entfernen" onClick={() => setD({ ...d, files: d.files.filter((_, j) => j !== i) })}>✕</button></span>

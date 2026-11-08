@@ -93,6 +93,11 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/chat/rooms", get(chat::rooms).post(chat::create_room))
         .route("/api/v1/chat/rooms/{id}/messages", get(chat::messages).post(chat::post_message))
         .route("/api/v1/chat/rooms/{id}/read", post(chat::mark_read))
+        .route(
+            "/api/v1/chat/rooms/{id}/files",
+            post(chat::upload).layer(DefaultBodyLimit::max(chat::MAX_FILE + 1024 * 1024)),
+        )
+        .route("/api/v1/chat/files/{id}", get(chat::download))
         // Webmail
         .route("/.well-known/mta-sts.txt", get(mail::mta_sts))
         .route("/api/v1/mail", get(mail::overview))

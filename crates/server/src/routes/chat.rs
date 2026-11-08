@@ -343,7 +343,12 @@ pub struct MessageOut {
     pub kind: String,
     pub body: String,
     pub created_at: DateTime<Utc>,
+    /// bei kind = file: { id, name, mime, size }
+    pub file: Option<Value>,
 }
+
+const FILE_JSON: &str = "CASE WHEN f.id IS NULL THEN NULL
+         ELSE jsonb_build_object('id', f.id, 'name', f.name, 'mime', f.mime, 'size', f.size) END AS file";
 
 #[derive(Deserialize)]
 pub struct Page {
@@ -357,12 +362,12 @@ pub async fn messages(
     Query(p): Query<Page>,
 ) -> ApiResult<Json<Value>> {
     require_member(&s.db, room, user.id).await?;
-    let mut rows: Vec<MessageOut> = sqlx::query_as(
-        "SELECT m.id, m.room_id, m.sender_id, u.display_name AS sender_name, m.kind, m.body, m.created_at
-           FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id
+    let mut rows: Vec<MessageOut> = sqlx::query_as(&format!(
+        "SELECT m.id, m.room_id, m.sender_id, u.display_name AS sender_name, m.kind, m.body, m.created_at, {FILE_JSON}
+           FROM chat_messages m LEFT JOIN users u ON u.id = m.sender_id LEFT JOIN chat_files f ON f.id = m.file_id
           WHERE m.room_id = $1 AND ($2::timestamptz IS NULL OR m.created_at < $2)
-          ORDER BY m.created_at DESC LIMIT 60",
-    )
+          ORDER BY m.created_at DESC LIMIT 60"
+    ))
     .bind(room)
     .bind(p.before)
     .fetch_all(&s.db)
@@ -402,7 +407,8 @@ pub async fn post_message(
     };
     let msg: MessageOut = sqlx::query_as(
         "WITH ins AS (INSERT INTO chat_messages (id, room_id, sender_id, kind, body) VALUES ($1, $2, $3, $4, $5) RETURNING *)
-         SELECT ins.id, ins.room_id, ins.sender_id, u.display_name AS sender_name, ins.kind, ins.body, ins.created_at
+         SELECT ins.id, ins.room_id, ins.sender_id, u.display_name AS sender_name, ins.kind, ins.body, ins.created_at,
+                NULL::jsonb AS file
            FROM ins LEFT JOIN users u ON u.id = ins.sender_id",
     )
     .bind(Uuid::now_v7())
@@ -422,6 +428,153 @@ pub async fn post_message(
         send_user(m, &ev);
     }
     Ok((StatusCode::CREATED, Json(msg)))
+}
+
+// ── Dateien ──────────────────────────────────────────────────────────────────
+
+/// Größte Datei im Chat
+pub const MAX_FILE: usize = 50 * 1024 * 1024;
+
+fn clean_name(n: &str) -> String {
+    let n: String = n
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control() && !matches!(c, '"' | '<' | '>' | ':' | '|' | '?' | '*'))
+        .collect();
+    let n = n.trim().trim_start_matches('.').to_string();
+    if n.is_empty() {
+        "datei".into()
+    } else {
+        n.chars().take(200).collect()
+    }
+}
+
+/// Datei hochladen (multipart: `file`, optional `text` als Begleittext) → Nachricht vom Typ `file`
+pub async fn upload(
+    State(s): State<AppState>,
+    user: User,
+    Path(room): Path<Uuid>,
+    mut mp: axum::extract::Multipart,
+) -> ApiResult<(StatusCode, Json<MessageOut>)> {
+    require_member(&s.db, room, user.id).await?;
+    let (mut name, mut mime, mut data, mut text) = (String::new(), String::new(), None, String::new());
+    while let Some(field) = mp.next_field().await.map_err(|e| ApiError::BadRequest(e.to_string()))? {
+        match field.name() {
+            Some("file") => {
+                name = clean_name(field.file_name().unwrap_or("datei"));
+                mime = field.content_type().unwrap_or("application/octet-stream").to_string();
+                data =
+                    Some(field.bytes().await.map_err(|_| ApiError::BadRequest("Datei zu groß (max. 50 MB)".into()))?);
+            }
+            Some("text") => text = field.text().await.unwrap_or_default().trim().chars().take(2000).collect(),
+            _ => {}
+        }
+    }
+    let data = data.filter(|d| !d.is_empty()).ok_or_else(|| ApiError::BadRequest("Datei fehlt".into()))?;
+    if data.len() > MAX_FILE {
+        return Err(ApiError::BadRequest("Datei zu groß (max. 50 MB)".into()));
+    }
+    if crate::mail::guard::dangerous_file(&name, &mime, &data) {
+        return Err(ApiError::BadRequest(format!("{name}: Programme und Makro-Dateien sind aus Sicherheitsgründen gesperrt (bitte als ZIP mit Passwort oder über die Fernwartung)")));
+    }
+    let hash = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&data))
+    };
+    let fid = Uuid::now_v7();
+    let mut tx = s.db.begin().await?;
+    sqlx::query("INSERT INTO chat_files (id, room_id, uploader_id, name, mime, size, sha256, data) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)")
+        .bind(fid)
+        .bind(room)
+        .bind(user.id)
+        .bind(&name)
+        .bind(&mime)
+        .bind(data.len() as i64)
+        .bind(&hash)
+        .bind(crate::mail::guard::seal(&data))
+        .execute(&mut *tx)
+        .await?;
+    let msg: MessageOut = sqlx::query_as(&format!(
+        "WITH ins AS (INSERT INTO chat_messages (id, room_id, sender_id, kind, body, file_id) VALUES ($1, $2, $3, 'file', $4, $5) RETURNING *)
+         SELECT ins.id, ins.room_id, ins.sender_id, u.display_name AS sender_name, ins.kind, ins.body, ins.created_at, {FILE_JSON}
+           FROM ins LEFT JOIN users u ON u.id = ins.sender_id LEFT JOIN chat_files f ON f.id = ins.file_id"
+    ))
+    .bind(Uuid::now_v7())
+    .bind(room)
+    .bind(user.id)
+    .bind(if text.is_empty() { name.clone() } else { text })
+    .bind(fid)
+    .fetch_one(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE chat_members SET last_read_at = now() WHERE room_id = $1 AND user_id = $2")
+        .bind(room)
+        .bind(user.id)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    let ev = json!({ "type": "message", "message": msg }).to_string();
+    for m in members(&s.db, room).await? {
+        send_user(m, &ev);
+    }
+    Ok((StatusCode::CREATED, Json(msg)))
+}
+
+#[derive(Deserialize)]
+pub struct FileQuery {
+    /// Bilder im Chat anzeigen statt herunterladen
+    #[serde(default)]
+    pub inline: bool,
+}
+
+/// Datei laden – nur für Mitglieder des Raums
+pub async fn download(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Query(q): Query<FileQuery>,
+) -> ApiResult<axum::response::Response> {
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    let row: Option<(Uuid, String, String, Vec<u8>)> =
+        sqlx::query_as("SELECT room_id, name, mime, data FROM chat_files WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.db)
+            .await?;
+    let (room, name, mime, data) = row.ok_or(ApiError::NotFound)?;
+    require_member(&s.db, room, user.id).await.map_err(|_| ApiError::NotFound)?;
+    let data = crate::mail::guard::open(data);
+    // Nur echte Rasterbilder inline; alles andere (HTML, SVG, PDF …) immer als Download
+    let image = matches!(mime.as_str(), "image/png" | "image/jpeg" | "image/gif" | "image/webp");
+    let ct = if q.inline && image { mime } else { "application/octet-stream".into() };
+    let ascii: String =
+        name.chars().map(|c| if c.is_ascii_alphanumeric() || ".-_ ".contains(c) { c } else { '_' }).collect();
+    let utf8: String = name
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b".-_".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect();
+    let disp = format!(
+        "{}; filename=\"{ascii}\"; filename*=UTF-8''{utf8}",
+        if q.inline && image { "inline" } else { "attachment" }
+    );
+    Ok((
+        [
+            (header::CONTENT_TYPE, ct),
+            (header::CONTENT_DISPOSITION, disp),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
+            (header::CONTENT_SECURITY_POLICY, "default-src 'none'; sandbox".into()),
+            (header::CACHE_CONTROL, "private, max-age=3600".into()),
+        ],
+        data,
+    )
+        .into_response())
 }
 
 pub async fn mark_read(State(s): State<AppState>, user: User, Path(room): Path<Uuid>) -> ApiResult<StatusCode> {

@@ -177,6 +177,19 @@ const BLOCKED: &[&str] = &[
     "one",
 ];
 
+/// Einzelne Datei (Chat-Upload): gesperrte Endung, Programm-Typ oder Windows-Programm (MZ)?
+pub fn dangerous_file(name: &str, mime: &str, data: &[u8]) -> bool {
+    let name = name.trim().trim_end_matches('.').to_lowercase();
+    let ext = name.rsplit_once('.').map(|(_, e)| e).unwrap_or("");
+    let ct = mime.to_lowercase();
+    BLOCKED.contains(&ext)
+        || ct.contains("x-msdownload")
+        || ct.contains("x-msdos-program")
+        || ct.contains("x-executable")
+        || ct.contains("x-ms-installer")
+        || data.starts_with(b"MZ")
+}
+
 /// Name des ersten gesperrten Anhangs (auch „rechnung.pdf.exe“ oder ohne Endung als Programm deklariert)
 pub fn dangerous_attachment(raw: &[u8]) -> Option<String> {
     let m = mail_parser::MessageParser::default().parse(raw)?;

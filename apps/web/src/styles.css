@@ -980,3 +980,8 @@ table.tickets tr.overdue td { background: #fef2f2; }
 .cal-lv.lv-requested { background: #fef9c3; color: #854d0e; }
 .att-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px; max-height: 180px; overflow: auto; }
 @media (max-width: 700px) { .cal-d { min-height: 64px; } .cal-ev, .cal-lv { font-size: .62em; } }
+
+/* Dateien im Chat */
+.chat-file { display: flex; flex-direction: column; gap: 4px; }
+.chat-file img { max-width: min(320px, 60vw); max-height: 260px; border-radius: 8px; cursor: pointer; object-fit: cover; }
+.chat-file .att { background: rgba(255,255,255,.6); }
