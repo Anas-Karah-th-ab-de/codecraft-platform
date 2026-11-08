@@ -293,7 +293,7 @@ async fn insert_items(conn: &mut PgConnection, invoice_id: Uuid, items: &[Item])
 
 /// Nächste lückenlose Nummer. Die Zeile bleibt bis zum Commit gesperrt;
 /// bei Rollback wird auch der Zähler zurückgesetzt → keine Lücken.
-async fn next_number(conn: &mut PgConnection, series: Series, year: i32) -> ApiResult<String> {
+pub(crate) async fn next_number(conn: &mut PgConnection, series: Series, year: i32) -> ApiResult<String> {
     let (seq,): (i64,) = sqlx::query_as(
         "INSERT INTO number_sequences (series, year, last_value) VALUES ($1, $2, 1)
          ON CONFLICT (series, year) DO UPDATE SET last_value = number_sequences.last_value + 1
@@ -380,6 +380,53 @@ pub async fn create_draft(
     let d = detail(&mut tx, id).await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(d)))
+}
+
+/// Rechnungsentwurf mit freien Positionen (z. B. aus einem Angebot)
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn draft_with_lines(
+    conn: &mut PgConnection,
+    actor: &str,
+    organization_id: Uuid,
+    project_id: Option<Uuid>,
+    currency: &str,
+    tax_mode: &str,
+    lines: Vec<(String, i64, Unit, i64, u32)>,
+    notes: &str,
+) -> ApiResult<Uuid> {
+    let (locale,): (String,) = sqlx::query_as("SELECT locale FROM organizations WHERE id = $1")
+        .bind(organization_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Organisation existiert nicht".into()))?;
+    let inputs = lines
+        .into_iter()
+        .map(|(description, quantity_milli, unit, price, vat)| ItemInput {
+            price_id: None,
+            description: Some(description),
+            quantity_milli,
+            unit: Some(unit),
+            unit_price: Some(Cents(price)),
+            vat_rate_bp: vat,
+        })
+        .collect();
+    let items = resolve(conn, &locale, currency, inputs).await?;
+    let id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes, project_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
+    )
+    .bind(id)
+    .bind(organization_id)
+    .bind(currency)
+    .bind(tax_mode)
+    .bind(&locale)
+    .bind(notes)
+    .bind(project_id)
+    .execute(&mut *conn)
+    .await?;
+    insert_items(conn, id, &items).await?;
+    super::audit(conn, actor, "create_draft", "invoice", id, json!({ "source": "quote" })).await?;
+    Ok(id)
 }
 
 /// Rechnungsentwurf aus Katalogpreisen (z. B. aus einer Shop-Bestellung): `(price_id, Menge)`.

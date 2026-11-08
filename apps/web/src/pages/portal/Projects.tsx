@@ -4,6 +4,7 @@ import { api, can, openPdf, useApi, useAuth } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
 import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
 import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
+import QuoteEditor from "./QuoteEditor";
 
 type InvRow = {
   id: string; number: string | null; status: string; kind: string; currency: string; gross_cents: number | null;
@@ -92,6 +93,7 @@ type QuoteRow = {
 type QuoteDetail = QuoteRow & {
   description: string; notes: string; tax_note: string | null; project_start: string | null; project_end: string | null;
   hourly_rate_cents: number | null; discounted_rate_cents: number | null; total_hours_milli: number | null; advance_percent: number | null;
+  customer_response: string | null; responded_at: string | null;
   items: { block_nr: number | null; block_title: string | null; position_nr: string | null; description: string; quantity_milli: number; unit: string; unit_price_cents: number; total_cents: number }[];
   milestones: { label: string; title: string; blocks: string | null; goal: string | null }[];
   payments: { label: string; due_date: string | null; amount_cents: number; currency: string; description: string | null; paid_at: string | null }[];
@@ -112,6 +114,8 @@ export function Quotes() {
   return (
     <Routes>
       <Route index element={<QuoteList />} />
+      <Route path="neu" element={<QuoteEditor />} />
+      <Route path=":id/bearbeiten" element={<QuoteEditor />} />
       <Route path=":id" element={<QuoteView />} />
     </Routes>
   );
@@ -217,14 +221,67 @@ function QuoteTable({ rows, showCustomer }: { rows: QuoteRow[]; showCustomer?: b
   );
 }
 
+const QA = {
+  de: { new: "Neues Angebot", edit: "Bearbeiten", send: "An Kunden senden", sendQ: "Angebot jetzt an den Kunden senden? Danach ist es nicht mehr änderbar.",
+    del: "Löschen", copy: "Als neue Revision kopieren", accept: "Angebot annehmen", reject: "Ablehnen", comment: "Kommentar (optional)",
+    invFull: "Rechnung (komplett)", invAdv: "Anzahlungsrechnung", invPay: "Rechnung Rate", response: "Antwort des Kunden", acceptQ: "Angebot verbindlich annehmen?" },
+  en: { new: "New quote", edit: "Edit", send: "Send to customer", sendQ: "Send this quote to the customer now? It can't be changed afterwards.",
+    del: "Delete", copy: "Copy as new revision", accept: "Accept quote", reject: "Decline", comment: "Comment (optional)",
+    invFull: "Invoice (full)", invAdv: "Advance invoice", invPay: "Invoice instalment", response: "Customer response", acceptQ: "Accept this quote bindingly?" },
+  ar: { new: "عرض جديد", edit: "تعديل", send: "إرسال إلى العميل", sendQ: "إرسال العرض للعميل الآن؟ لا يمكن تعديله بعد ذلك.",
+    del: "حذف", copy: "نسخ كمراجعة جديدة", accept: "قبول العرض", reject: "رفض", comment: "تعليق (اختياري)",
+    invFull: "فاتورة (كاملة)", invAdv: "فاتورة الدفعة المقدمة", invPay: "فاتورة دفعة", response: "رد العميل", acceptQ: "هل تقبل هذا العرض بشكل ملزم؟" },
+};
+
+function QuoteActions({ q, reload }: { q: QuoteDetail; reload: () => void }) {
+  const { locale } = useI18n();
+  const T = QA[locale];
+  const { me } = useAuth();
+  const nav = useNavigate();
+  const [comment, setComment] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+  const run = (p: Promise<unknown>, after?: (r: any) => void) => p.then((r) => { after ? after(r) : reload(); }).catch((e) => setErr(e.message));
+  const staff = !!me?.is_employee && can(me, "invoice_write");
+  return (
+    <div className="card" style={{ margin: "12px 0" }}>
+      <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+        {staff && q.status === "draft" && <>
+          <Link className="btn small" to={`/portal/angebote/${q.id}/bearbeiten`}>✎ {T.edit}</Link>
+          <button className="btn small" onClick={() => confirm(T.sendQ) && run(api(`/api/v1/quotes/${q.id}/send`, { method: "POST" }))}>✉ {T.send}</button>
+          <button className="btn small danger" onClick={() => confirm(T.del + "?") && run(api(`/api/v1/quotes/${q.id}`, { method: "DELETE" }), () => nav("/portal/angebote"))}>{T.del}</button>
+        </>}
+        {staff && <button className="btn small ghost" onClick={() => run(api<{ id: string }>(`/api/v1/quotes/${q.id}/duplicate`, { method: "POST" }), (r) => nav(`/portal/angebote/${r.id}/bearbeiten`))}>⧉ {T.copy}</button>}
+        {staff && q.status === "accepted" && <>
+          {q.advance_percent ? <button className="btn small" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "advance" } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invAdv} ({q.advance_percent} %)</button> : null}
+          {q.payments.map((p, i) => (
+            <button key={i} className="btn small ghost" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "payment", payment: i + 1 } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invPay} {i + 1}</button>
+          ))}
+          <button className="btn small ghost" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "full" } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invFull}</button>
+        </>}
+        {!me?.is_employee && q.status === "sent" && <>
+          <input style={{ flex: 1, minWidth: 200 }} placeholder={T.comment} value={comment} onChange={(e) => setComment(e.target.value)} />
+          <button className="btn" onClick={() => confirm(T.acceptQ) && run(api(`/api/v1/quotes/${q.id}/respond`, { body: { accept: true, comment } }))}>✓ {T.accept}</button>
+          <button className="btn danger" onClick={() => run(api(`/api/v1/quotes/${q.id}/respond`, { body: { accept: false, comment } }))}>{T.reject}</button>
+        </>}
+      </div>
+      {q.customer_response && <p className="muted" style={{ marginTop: 8 }}>{T.response}: „{q.customer_response}“</p>}
+      {err && <div className="alert">{err}</div>}
+    </div>
+  );
+}
+
 function QuoteList() {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const { me } = useAuth();
   const { data, error } = useApi<QuoteRow[]>("/api/v1/quotes");
   const [status, setStatus] = useState("");
   const rows = (data ?? []).filter((q) => !status || q.status === status);
   return (
     <>
-      <h1>{t("p.quotes")}</h1>
+      <div className="row between">
+        <h1>{t("p.quotes")}</h1>
+        {me?.is_employee && can(me, "invoice_write") && <Link className="btn" to="/portal/angebote/neu">+ {QA[locale].new}</Link>}
+      </div>
       <div className="tabs" style={{ marginBottom: 12 }}>
         {["", "draft", "sent", "accepted", "rejected"].map((s) => (
           <button key={s} className={status === s ? "on" : ""} onClick={() => setStatus(s)}>{s ? t(`st.${s}` as Key) : "∑"}</button>
@@ -238,7 +295,7 @@ function QuoteList() {
 function QuoteView() {
   const { id } = useParams();
   const { t, locale } = useI18n();
-  const { data: q, error } = useApi<QuoteDetail>(`/api/v1/quotes/${id}`, [id]);
+  const { data: q, error, reload } = useApi<QuoteDetail>(`/api/v1/quotes/${id}`, [id]);
   if (!q) return <Loading error={error} />;
   const m = (c: number) => money(c, locale, q.currency);
   // Positionen nach Block gruppieren
@@ -261,6 +318,7 @@ function QuoteView() {
         </span>
       </div>
       <h2 dir={dir} style={{ fontSize: "1.15em" }}>{q.title}</h2>
+      <QuoteActions q={q} reload={reload} />
       <div className="grid2" style={{ margin: "16px 0" }}>
         <div className="card"><div className="muted">{t("p.customer")}</div><b dir="auto">{q.organization_name}</b>
           {q.project_id && <div><Link to={`/portal/projekte/${q.project_id}`}>{q.project_name}</Link></div>}</div>

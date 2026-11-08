@@ -985,3 +985,7 @@ table.tickets tr.overdue td { background: #fef2f2; }
 .chat-file { display: flex; flex-direction: column; gap: 4px; }
 .chat-file img { max-width: min(320px, 60vw); max-height: 260px; border-radius: 8px; cursor: pointer; object-fit: cover; }
 .chat-file .att { background: rgba(255,255,255,.6); }
+
+/* Angebots-Editor */
+.qe-items td { vertical-align: top; padding: 4px; } .qe-items input, .qe-items textarea { width: 100%; min-width: 0; }
+.qe-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; } .qe-row input { min-width: 0; }

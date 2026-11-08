@@ -10,6 +10,7 @@ pub mod mail;
 pub mod media;
 mod organizations;
 mod projects;
+mod quotes;
 pub mod remote;
 mod requests;
 mod shop;
@@ -84,8 +85,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/dev-requests/{id}", get(requests::get).patch(requests::patch))
         .route("/api/v1/dev-requests/{id}/messages", post(requests::reply))
         .route("/api/v1/dev-requests/{id}/project", post(requests::to_project))
-        .route("/api/v1/quotes", get(projects::list_quotes))
-        .route("/api/v1/quotes/{id}", get(projects::get_quote))
+        .route("/api/v1/quotes", get(projects::list_quotes).post(quotes::create))
+        .route("/api/v1/quotes/{id}", get(projects::get_quote).put(quotes::update).delete(quotes::delete))
+        .route("/api/v1/quotes/{id}/send", post(quotes::send))
+        .route("/api/v1/quotes/{id}/respond", post(quotes::respond))
+        .route("/api/v1/quotes/{id}/invoice", post(quotes::invoice))
+        .route("/api/v1/quotes/{id}/duplicate", post(quotes::duplicate))
         .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
         // Kommunikation: Chat, Anrufe (WebRTC-Signalisierung), Echtzeit
         .route("/api/v1/ws", get(chat::ws))

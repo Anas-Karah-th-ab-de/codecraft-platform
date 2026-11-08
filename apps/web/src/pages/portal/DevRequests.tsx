@@ -138,15 +138,18 @@ function View() {
       <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
         {r.quote_id && <Link className="btn small ghost" to={`/portal/angebote/${r.quote_id}`}>{T.quote}: {r.quote_number}</Link>}
         {r.project_id && <Link className="btn small ghost" to={`/portal/projekte/${r.project_id}`}>{T.openProject}</Link>}
-        {!staff && r.status === "quoted" && <>
-          <button className="btn small" onClick={() => patch({ status: "accepted" })}>{T.accept}</button>
-          <button className="btn small danger" onClick={() => patch({ status: "rejected" })}>{T.reject}</button>
-        </>}
+        {!staff && r.status === "quoted" && (r.quote_id
+          ? <Link className="btn small" to={`/portal/angebote/${r.quote_id}`}>{T.accept} / {T.reject}</Link>
+          : <>
+            <button className="btn small" onClick={() => patch({ status: "accepted" })}>{T.accept}</button>
+            <button className="btn small danger" onClick={() => patch({ status: "rejected" })}>{T.reject}</button>
+          </>)}
         {staff && (
           <select value={r.status} style={{ width: "auto" }} onChange={(e) => patch({ status: e.target.value })}>
             {Object.entries(T.s).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </select>
         )}
+        {staff && !r.quote_id && <Link className="btn small" to={`/portal/angebote/neu?org=${r.organization_id}&request=${r.id}${r.project_id ? `&project=${r.project_id}` : ""}`}>+ {T.quote}</Link>}
         {staff && !r.project_id && <button className="btn small" onClick={() => api(`/api/v1/dev-requests/${id}/project`, { method: "POST" }).then(load).catch((e) => setErr(e.message))}>{T.toProject}</button>}
       </div>
       {r.project_progress != null && <div style={{ margin: "12px 0" }}><div className="muted">{T.progress}</div><ProgressBar value={r.project_progress} /></div>}

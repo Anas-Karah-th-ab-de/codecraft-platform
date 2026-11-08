@@ -253,6 +253,8 @@ pub struct QuoteExtra {
     pub discounted_rate_cents: Option<i64>,
     pub total_hours_milli: Option<i64>,
     pub advance_percent: Option<i32>,
+    pub customer_response: Option<String>,
+    pub responded_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize)]
@@ -278,7 +280,7 @@ pub async fn get_quote(State(s): State<AppState>, user: User, Path(id): Path<Uui
     }
     let extra = sqlx::query_as(
         "SELECT description, notes, tax_note, tax_rate_bp, project_start, project_end, hourly_rate_cents,
-                discounted_rate_cents, total_hours_milli, advance_percent FROM quotes WHERE id = $1",
+                discounted_rate_cents, total_hours_milli, advance_percent, customer_response, responded_at FROM quotes WHERE id = $1",
     )
     .bind(id)
     .fetch_one(&s.db)
@@ -328,9 +330,12 @@ pub async fn quote_pdf(
     if org.is_some() && (Some(qorg) != org || status == "draft") {
         return Err(ApiError::NotFound);
     }
-    let data = snapshot
-        .ok_or_else(|| ApiError::BadRequest("Für diesen Kostenvoranschlag liegen keine Druckdaten vor".into()))?;
     let mut conn = s.db.acquire().await?;
+    // gesendete/übernommene Angebote: eingefrorene Druckdaten; Entwürfe: aktueller Stand
+    let data = match snapshot {
+        Some(d) => d,
+        None => super::quotes::pdf_data(&mut conn, id).await?,
+    };
     let template = crate::legacy_pdf::template(&mut conn).await;
     let locale = q.locale.unwrap_or(locale);
     let bytes = crate::legacy_pdf::render("proposal", &locale, template, data)
