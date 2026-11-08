@@ -12,6 +12,9 @@ const ST = {
     vsTitle: "Anrufe und Mitteilungen in VS Code", vs1: "Erweiterung herunterladen", vs2: "In VS Code: Erweiterungen → „…“ → „Aus VSIX installieren…“",
     vs3: "Befehl „KM Portal: Anmelden“ ausführen und Portal-Adresse sowie Schlüssel einfügen.", vs4: "Eingehende Anrufe klingeln dann auch in VS Code – „Annehmen“ öffnet das Portal.",
     copy: "Kopieren", copied: "Kopiert",
+    appTitle: "KM Portal als App", appIntro: "Benachrichtigungen und Anrufe auf Handy und PC – auch wenn der Browser zu ist. Fernzugriff durch den Support nur nach Ihrer Zustimmung.",
+    android: "Android (APK)", linux: "Linux (.deb)", app1: "Android: Datei öffnen und „Unbekannte Apps installieren“ für den Browser erlauben.",
+    app2: "Nach dem Start mit Ihrem Portal-Konto anmelden und Benachrichtigungen erlauben.",
   },
   en: {
     title: "Signed-in devices & keys", intro: "End sessions you don't recognise. Keys connect extensions like VS Code to the portal (calls, notifications).",
@@ -20,6 +23,9 @@ const ST = {
     vsTitle: "Calls and notifications in VS Code", vs1: "Download extension", vs2: "In VS Code: Extensions → “…” → “Install from VSIX…”",
     vs3: "Run “KM Portal: Sign in” and paste the portal address and the key.", vs4: "Incoming calls then ring in VS Code too – “Accept” opens the portal.",
     copy: "Copy", copied: "Copied",
+    appTitle: "KM Portal app", appIntro: "Notifications and calls on phone and PC – even with the browser closed. Remote access by support only with your consent.",
+    android: "Android (APK)", linux: "Linux (.deb)", app1: "Android: open the file and allow “Install unknown apps” for your browser.",
+    app2: "After launch, sign in with your portal account and allow notifications.",
   },
   ar: {
     title: "الأجهزة المسجلة والمفاتيح", intro: "أنهِ الجلسات التي لا تعرفها. المفاتيح تربط إضافات مثل VS Code بالبوابة (المكالمات والإشعارات).",
@@ -28,6 +34,9 @@ const ST = {
     vsTitle: "المكالمات والإشعارات في VS Code", vs1: "تنزيل الإضافة", vs2: "في VS Code: الإضافات ← «…» ← «التثبيت من VSIX…»",
     vs3: "نفّذ الأمر «KM Portal: Sign in» والصق عنوان البوابة والمفتاح.", vs4: "عندها ترنّ المكالمات الواردة في VS Code أيضاً – «قبول» يفتح البوابة.",
     copy: "نسخ", copied: "تم النسخ",
+    appTitle: "تطبيق KM Portal", appIntro: "الإشعارات والمكالمات على الهاتف والحاسوب – حتى عند إغلاق المتصفح. الوصول عن بُعد من الدعم فقط بموافقتك.",
+    android: "أندرويد (APK)", linux: "لينكس (.deb)", app1: "أندرويد: افتح الملف واسمح بـ«تثبيت التطبيقات غير المعروفة» للمتصفح.",
+    app2: "بعد التشغيل سجّل الدخول بحساب البوابة واسمح بالإشعارات.",
   },
 };
 
@@ -88,6 +97,18 @@ export function Sessions() {
           <li>{T.vs2}</li>
           <li>{T.vs3} <code dir="ltr">{location.origin}</code></li>
           <li>{T.vs4}</li>
+        </ol>
+      </div>
+      <div className="card">
+        <h3><Icon name="phone" /> {T.appTitle}</h3>
+        <p className="muted">{T.appIntro}</p>
+        <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+          <a className="btn small" href="/downloads/km-portal.apk" download><Icon name="download" size={16} /> {T.android}</a>
+          <a className="btn small ghost" href="/downloads/km-portal_amd64.deb" download><Icon name="monitor" size={16} /> {T.linux}</a>
+        </div>
+        <ol className="olist" style={{ marginTop: 12 }}>
+          <li>{T.app1}</li>
+          <li>{T.app2}</li>
         </ol>
       </div>
     </div>
