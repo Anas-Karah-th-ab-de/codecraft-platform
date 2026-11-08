@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api, can, useApi, useAuth } from "../../api";
 import { fmtDate, useI18n, type Key, type Locale } from "../../i18n";
-import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
+import { Badge, Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 import { I18nInput } from "./Products";
 import type { Product } from "./Invoices";
 import { RedeemCode, ResetPassword, useMustChangeLabel } from "./Access";
@@ -21,6 +21,10 @@ export function Customers() {
   const [open, setOpen] = useState(false);
   const [f, setF] = useState({ name: "", address: "", vat_id: "", email: "", locale: "de" });
   const [q, setQ] = useState("");
+  const [sla, setSla] = useState("");
+  const [pm, setPm] = useState("");
+  const rows = (data ?? []).filter((o) => (!sla || o.sla === sla) && (!pm || (o.payment_method_id ?? "-") === pm)
+    && matches(q, o.name, o.address, o.vat_id, o.email));
   const s = useSubmit();
   return (
     <>
@@ -28,13 +32,16 @@ export function Customers() {
         <h1>{t("p.customers")}</h1>
         {can(me, "invoice_issue") && <button className="btn" onClick={() => setOpen(true)}>+ {t("p.new")}</button>}
       </div>
-      <input placeholder={t("p.search")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 12 }} />
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label="SLA" value={sla} onChange={setSla} options={[["basic", "Basis"], ["business", "Business"], ["premium", "Premium"]]} />
+        <Filter label={PT[locale].method} value={pm} onChange={setPm} options={[["-", PT[locale].auto], ...(methods.data ?? []).map((m) => [m.id, m.name] as [string, string])]} />
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
+        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : rows.length === 0 ? <NoHits /> : (
           <table>
             <thead><tr><th>{t("p.customer")}</th><th>{t("p.address")}</th><th>{t("p.vat_id")}</th><th>{t("p.email")}</th><th>{t("p.language")}</th><th>SLA</th><th>{PT[locale].method}</th></tr></thead>
             <tbody>
-              {data.filter((o) => !q || o.name.toLowerCase().includes(q.toLowerCase())).map((o) => (
+              {rows.map((o) => (
                 <tr key={o.id}><td><b>{o.name}</b></td><td style={{ whiteSpace: "pre-line" }}>{o.address}</td><td>{o.vat_id ?? "–"}</td><td>{o.email ?? "–"}</td><td>{o.locale.toUpperCase()}</td>
                   <td>{me && ["admin", "lead"].includes(me.role) ? (
                     <select value={o.sla} onChange={(e) => api(`/api/v1/organizations/${o.id}/sla`, { method: "PUT", body: { sla: e.target.value } }).then(reload)}>
@@ -88,6 +95,11 @@ export function Jobs() {
   const apps = useApi<Application[]>("/api/v1/applications");
   const depts = useApi<Dept[]>("/api/v1/departments");
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [qa, setQa] = useState("");
+  const [job, setJob] = useState("");
+  const jobs = (data ?? []).filter((j) => matches(q, ...Object.values(j.title), j.department_code, j.location, j.status));
+  const applications = (apps.data ?? []).filter((a) => (!job || a.job_slug === job) && matches(qa, a.name, a.email, a.phone, a.message, a.job_slug));
   const s = useSubmit();
   const setStatus = (id: string, status: string) => s.run(async () => { await api(`/api/v1/jobs/${id}/status`, { method: "PUT", body: { status } }); reload(); });
   return (
@@ -97,12 +109,13 @@ export function Jobs() {
         <button className="btn" onClick={() => setOpen(true)}>+ {t("p.new_job")}</button>
       </div>
       {s.error && <div className="alert">{s.error}</div>}
+      <ListTools q={q} setQ={setQ} shown={jobs.length} total={data?.length ?? 0} />
       <div className="card" style={{ padding: 0, marginBottom: 20 }}>
         {!data ? <Loading error={error} /> : (
           <table>
             <thead><tr><th>Titel</th><th>{t("p.department")}</th><th>{t("p.location")}</th><th>{t("p.status")}</th><th className="n">{t("p.applications")}</th><th className="n">{t("p.actions")}</th></tr></thead>
             <tbody>
-              {data.map((j) => (
+              {jobs.map((j) => (
                 <tr key={j.id}>
                   <td><a href={`/karriere/${j.slug}`} target="_blank" rel="noreferrer">{j.title[locale as Locale]}</a></td>
                   <td>{j.department_code}</td>
@@ -120,12 +133,15 @@ export function Jobs() {
         )}
       </div>
       <h2>{t("p.applications")}</h2>
+      <ListTools q={qa} setQ={setQa} shown={applications.length} total={apps.data?.length ?? 0}>
+        <Filter label={t("p.jobs")} value={job} onChange={setJob} options={[...new Set((apps.data ?? []).map((a) => a.job_slug))].map((s) => [s, s])} />
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!apps.data ? <Loading error={apps.error} /> : apps.data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
+        {!apps.data ? <Loading error={apps.error} /> : apps.data.length === 0 ? <p className="spin">{t("p.empty")}</p> : applications.length === 0 ? <NoHits /> : (
           <table>
             <thead><tr><th>{t("p.date")}</th><th>{t("form.name")}</th><th>{t("p.email")}</th><th>{t("p.jobs")}</th><th>{t("form.message")}</th></tr></thead>
             <tbody>
-              {apps.data.map((a) => (
+              {applications.map((a) => (
                 <tr key={a.id}>
                   <td>{fmtDate(a.created_at, locale)}</td><td>{a.name}</td>
                   <td><a href={`mailto:${a.email}`}>{a.email}</a>{a.phone && <div className="muted">{a.phone}</div>}</td>
@@ -189,15 +205,21 @@ type Req = { id: string; name: string; email: string; phone: string | null; subj
 export function Requests() {
   const { t, locale } = useI18n();
   const { data, error } = useApi<Req[]>("/api/v1/contact-requests");
+  const [q, setQ] = useState("");
+  const [prod, setProd] = useState("");
+  const rows = (data ?? []).filter((r) => (!prod || (r.product_sku ?? "-") === prod) && matches(q, r.name, r.email, r.phone, r.subject, r.message));
   return (
     <>
       <h1>{t("p.requests")}</h1>
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label={t("p.product")} value={prod} onChange={setProd} options={[...new Set((data ?? []).map((r) => r.product_sku ?? "-"))].map((s) => [s, s === "-" ? "–" : s])} />
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
+        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : rows.length === 0 ? <NoHits /> : (
           <table>
             <thead><tr><th>{t("p.date")}</th><th>{t("form.name")}</th><th>{t("form.subject")}</th><th>{t("p.product")}</th><th>{t("form.message")}</th></tr></thead>
             <tbody>
-              {data.map((r) => (
+              {rows.map((r) => (
                 <tr key={r.id}>
                   <td>{fmtDate(r.created_at, locale)}<div className="muted">{r.locale.toUpperCase()}</div></td>
                   <td>{r.name}<div><a href={`mailto:${r.email}?subject=${encodeURIComponent("Re: " + r.subject)}`}>{r.email}</a></div>{r.phone && <div className="muted">{r.phone}</div>}</td>
@@ -226,6 +248,11 @@ export function Devices() {
   const [f, setF] = useState({ kind: "agent", name: "", product_id: "", organization_id: "" });
   const orgName = (id: string | null) => (id ? orgs.data?.find((o) => o.id === id)?.name ?? "…" : "KM Code Craft");
   const [token, setToken] = useState<string | null>(null);
+  const [q, setQ] = useState("");
+  const [state, setState] = useState("");
+  const [owner, setOwner] = useState("");
+  const rows = (data ?? []).filter((d) => (!state || (d.online ? "on" : "off") === state) && (!owner || (d.organization_id ?? "-") === owner)
+    && matches(q, d.name, d.kind, d.version, orgName(d.organization_id)));
   const s = useSubmit();
   const matching = products.data?.filter((p) => p.device_kind === f.kind) ?? [];
   return (
@@ -235,12 +262,16 @@ export function Devices() {
         <button className="btn" onClick={() => { setOpen(true); setToken(null); }}>+ {t("p.register_device")}</button>
       </div>
       <div style={{ marginBottom: 16 }}><RedeemCode /></div>
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label={t("p.status")} value={state} onChange={setState} options={[["on", t("p.online")], ["off", t("p.offline")]]} />
+        <Filter label={t("p.customer")} value={owner} onChange={setOwner} options={[["-", "KM Code Craft"], ...(orgs.data ?? []).filter((o) => data?.some((d) => d.organization_id === o.id)).map((o) => [o.id, o.name] as [string, string])]} />
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
+        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : rows.length === 0 ? <NoHits /> : (
           <table>
             <thead><tr><th>Name</th><th>{t("p.customer")}</th><th>{t("p.device")}</th><th>{t("p.version")}</th><th>{t("p.last_seen")}</th><th>{t("p.status")}</th></tr></thead>
             <tbody>
-              {data.map((d) => (
+              {rows.map((d) => (
                 <tr key={d.id}><td><a href={`/portal/geraete/${d.id}`} onClick={(e) => { e.preventDefault(); history.pushState({}, "", `/portal/geraete/${d.id}`); dispatchEvent(new PopStateEvent("popstate")); }}>{d.name}</a></td>
                   <td>{orgName(d.organization_id)}{d.organization_id && <span title="Zugriff" style={{ marginInlineStart: 6 }}>{d.access_policy === "code" ? "🔐" : "🔓"}</span>}</td>
                   <td>{d.kind}</td><td>{d.version ?? "–"}</td><td>{fmtDate(d.last_seen_at, locale)}</td>
@@ -294,7 +325,7 @@ export function Devices() {
 }
 
 // ── Benutzer ────────────────────────────────────────────────────────────────
-type UserRow = { id: string; email: string; display_name: string; role: string; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null; must_change_password: boolean };
+type UserRow = { id: string; email: string; display_name: string; role: string; organization_id: string | null; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null; must_change_password: boolean };
 
 export function Users() {
   const { t, locale } = useI18n();
@@ -306,25 +337,70 @@ export function Users() {
   const [open, setOpen] = useState(false);
   const [access, setAccess] = useState<UserRow | null>(null);
   const [f, setF] = useState({ email: "", display_name: "", role: "staff", password: "", organization_id: "", departments: [] as string[] });
+  const [view, setView] = useState<"staff" | "customers">("staff");
+  const [q, setQ] = useState("");
+  const [role, setRole] = useState("");
+  const [dept, setDept] = useState("");
+  const [org, setOrg] = useState("");
+  const [active, setActive] = useState("1");
+  const U = UT[locale];
+  const staff = (data ?? []).filter((u) => u.role !== "customer" && u.role !== "device");
+  const customers = (data ?? []).filter((u) => u.role === "customer");
+  const base = view === "staff" ? staff : customers;
+  const orgName = (id: string | null) => orgs.data?.find((o) => o.id === id)?.name ?? "–";
+  const rows = base.filter((u) => (!active || (u.is_active ? "1" : "0") === active) && (view !== "staff" || ((!role || u.role === role) && (!dept || u.departments.includes(dept))))
+    && (view !== "customers" || !org || u.organization_id === org)
+    && matches(q, u.display_name, u.email, u.mailbox, u.role, ...u.departments, view === "customers" ? orgName(u.organization_id) : ""));
   const s = useSubmit();
+  const twofa = (u: UserRow) => (u.two_factor ? "✅" : "—");
+  const status = (u: UserRow) => (<>
+    {u.must_change_password && <div className="muted" style={{ fontSize: ".8em" }}>⏳ {mustChange}</div>}
+    {!u.is_active && <span className="badge closed" style={{ marginInlineStart: 4 }}>{U.inactive}</span>}
+  </>);
   return (
     <>
       <div className="row between">
         <h1>{t("p.users")}</h1>
-        <button className="btn" onClick={() => setOpen(true)}>+ {t("p.new_user")}</button>
+        <button className="btn" onClick={() => { setF({ ...f, role: view === "customers" ? "customer" : "staff" }); setOpen(true); }}>
+          + {view === "customers" ? U.newCustomer : U.newStaff}</button>
       </div>
+      <div className="seg" role="tablist">
+        <button role="tab" aria-selected={view === "staff"} className={view === "staff" ? "on" : ""} onClick={() => { setView("staff"); setQ(""); }}>{U.staff} ({staff.length})</button>
+        <button role="tab" aria-selected={view === "customers"} className={view === "customers" ? "on" : ""} onClick={() => { setView("customers"); setQ(""); }}>{U.customers} ({customers.length})</button>
+      </div>
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={base.length}>
+        <Filter label={t("p.status")} value={active} onChange={setActive} options={[["1", t("p.active")], ["0", U.inactive]]} />
+        {view === "staff" ? <>
+          <Filter label={t("p.role")} value={role} onChange={setRole} options={["admin", "lead", "manager", "staff", "trainee"].map((r) => [r, r])} />
+          <Filter label={t("p.department")} value={dept} onChange={setDept} options={(depts.data ?? []).map((d) => [d.code, d.name[locale as Locale]])} />
+        </> : (
+          <Filter label={U.company} value={org} onChange={setOrg} options={(orgs.data ?? []).filter((o) => customers.some((u) => u.organization_id === o.id)).map((o) => [o.id, o.name])} />
+        )}
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!data ? <Loading error={error} /> : (
+        {!data ? <Loading error={error} /> : rows.length === 0 ? <NoHits /> : view === "staff" ? (
           <table>
             <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{t("p.mailbox")}</th><th>{t("p.role")}</th><th>{t("p.department")}</th><th>2FA</th><th>{t("p.last_seen")}</th><th /></tr></thead>
             <tbody>
-              {data.map((u) => (
-                <tr key={u.id}><td>{u.display_name}{u.must_change_password && <div className="muted" style={{ fontSize: ".8em" }}>⏳ {mustChange}</div>}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td><td>{u.departments.join(", ") || "–"}</td>
-                  <td>{u.two_factor ? "✅" : "—"}</td><td>{fmtDate(u.last_login_at, locale)}</td>
-                  <td className="row" style={{ gap: 4 }}>
-                    {u.role !== "customer" && u.role !== "device" && <button className="btn small ghost" onClick={() => setAccess(u)}>{RT[locale].rights}</button>}
+              {rows.map((u) => (
+                <tr key={u.id}><td>{u.display_name}{status(u)}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td>
+                  <td>{u.departments.join(", ") || <span className="badge warn">{U.noDept}</span>}</td>
+                  <td>{twofa(u)}</td><td>{fmtDate(u.last_login_at, locale)}</td>
+                  <td><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
+                    <button className="btn small ghost" onClick={() => setAccess(u)}>{RT[locale].rights}</button>
                     {u.id !== me?.id && <ResetPassword userId={u.id} />}
-                  </td></tr>
+                  </div></td></tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <table>
+            <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{U.company}</th><th>2FA</th><th>{t("p.last_seen")}</th><th /></tr></thead>
+            <tbody>
+              {rows.map((u) => (
+                <tr key={u.id}><td>{u.display_name}{status(u)}</td><td>{u.email}</td><td>{orgName(u.organization_id)}</td>
+                  <td>{twofa(u)}</td><td>{fmtDate(u.last_login_at, locale)}</td>
+                  <td><ResetPassword userId={u.id} /></td></tr>
               ))}
             </tbody>
           </table>
@@ -378,6 +454,12 @@ export function Users() {
     </>
   );
 }
+
+const UT = {
+  de: { staff: "Mitarbeiter", customers: "Kunden", company: "Firma", inactive: "deaktiviert", newStaff: "Mitarbeiter anlegen", newCustomer: "Kundenzugang anlegen", noDept: "keine Abteilung – sieht nichts" },
+  en: { staff: "Employees", customers: "Customers", company: "Company", inactive: "disabled", newStaff: "Add employee", newCustomer: "Add customer login", noDept: "no department – sees nothing" },
+  ar: { staff: "الموظفون", customers: "العملاء", company: "الشركة", inactive: "معطّل", newStaff: "إضافة موظف", newCustomer: "إضافة دخول عميل", noDept: "بدون قسم – لا يرى شيئاً" },
+};
 
 const RT = {
   de: { rights: "Rechte", title: "Rolle & Abteilungen", save: "Speichern", help: "Wer sieht was?",

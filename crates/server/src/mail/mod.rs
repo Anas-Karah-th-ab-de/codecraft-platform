@@ -407,6 +407,44 @@ pub async fn submit(
     Ok(sent_id)
 }
 
+/// Systemnachricht (Einladungen, Erinnerungen) vom Absender `SYSTEM_MAIL_FROM` bzw. `noreply@…`.
+/// Gibt `false` zurück, wenn kein Systempostfach eingerichtet ist (dann nur Portal-Benachrichtigung).
+pub async fn system_send(db: &PgPool, to: &str, subject: &str, text: &str, ics: Option<String>) -> bool {
+    let wanted = std::env::var("SYSTEM_MAIL_FROM").ok();
+    let row: Option<(Uuid, Uuid, String)> = sqlx::query_as(
+        "SELECT id, user_id, address FROM mailboxes WHERE is_active AND ($1::text IS NULL AND address LIKE 'noreply@%' OR address = $1)
+          ORDER BY address LIMIT 1",
+    )
+    .bind(&wanted)
+    .fetch_optional(db)
+    .await
+    .ok()
+    .flatten();
+    let Some((mailbox_id, user_id, address)) = row else {
+        tracing::warn!("Kein Systempostfach (noreply@…) – E-Mail an {to} nicht versendet");
+        return false;
+    };
+    let mut b = mail_builder::MessageBuilder::new()
+        .from(("KM Code Craft".to_string(), address.clone()))
+        .to(to.to_string())
+        .subject(subject.to_string())
+        .date(chrono::Utc::now().timestamp())
+        .message_id(format!("{}@{}", Uuid::now_v7(), domain_of(&address)))
+        .text_body(text.to_string());
+    if let Some(ics) = ics {
+        b = b.attachment("text/calendar; method=REQUEST", "termin.ics", ics.into_bytes());
+    }
+    let raw = b.write_to_vec().unwrap_or_default();
+    let sender = MailUser { user_id, mailbox_id, address };
+    match submit(db, &sender, &[to.to_string()], &raw, false).await {
+        Ok(_) => true,
+        Err(e) => {
+            tracing::warn!("Systemmail an {to} fehlgeschlagen: {e}");
+            false
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

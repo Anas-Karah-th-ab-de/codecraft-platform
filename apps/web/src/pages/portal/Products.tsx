@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { api, can, invalidate, upload, useApi, useAuth } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
-import { Field, Loading, Modal, toCents, useSubmit } from "../../ui";
+import { Field, Loading, Modal, toCents, useSubmit, ListTools, matches, NoHits } from "../../ui";
 import type { Price, Product } from "./Invoices";
 
 type I18n = { de: string; en: string; ar: string };
@@ -36,6 +36,7 @@ export default function ProductsAdmin() {
   const depts = useApi<Dept[]>("/api/v1/departments");
   const [creating, setCreating] = useState(false);
   const [dept, setDept] = useState("");
+  const [q, setQ] = useState("");
   const edit = can(me, "catalog_write");
   const s = useSubmit();
 
@@ -54,9 +55,10 @@ export default function ProductsAdmin() {
         ))}
       </div>
       {s.error && <div className="alert">{s.error}</div>}
-      {!data ? <Loading error={error} /> : (
+      {data && <ListTools q={q} setQ={setQ} shown={data.filter((p) => (!dept || p.department_code === dept) && matches(q, p.sku, ...Object.values(p.name), ...p.prices.map((x) => x.code))).length} total={data.length} />}
+      {!data ? <Loading error={error} /> : data.filter((p) => (!dept || p.department_code === dept) && matches(q, p.sku, ...Object.values(p.name), ...p.prices.map((x) => x.code))).length === 0 ? <NoHits /> : (
         <div style={{ display: "grid", gap: 14 }}>
-          {data.filter((p) => !dept || p.department_code === dept).map((p) => (
+          {data.filter((p) => (!dept || p.department_code === dept) && matches(q, p.sku, ...Object.values(p.name), ...p.prices.map((x) => x.code))).map((p) => (
             <div key={p.id} className="card" style={{ opacity: p.is_active ? 1 : 0.55 }}>
               <div className="row between">
                 <div>

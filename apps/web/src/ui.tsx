@@ -77,3 +77,53 @@ export function useSubmit() {
 
 /** Eingabe in Euro → Cent */
 export const toCents = (v: string) => Math.round(parseFloat(v.replace(",", ".")) * 100);
+
+// ── Suche & Filter für Listen ───────────────────────────────────────────────
+
+const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[إأآ]/g, "ا").replace(/ة/g, "ه").replace(/ى/g, "ي");
+
+/** Trifft die Suche? Alle Wörter müssen irgendwo vorkommen (Groß/Klein, Akzente, arabische Schreibvarianten egal) */
+export function matches(q: string, ...fields: unknown[]): boolean {
+  const words = fold(q).trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return true;
+  const hay = fold(fields.filter((f) => f != null && f !== "").join(" "));
+  return words.every((w) => hay.includes(w));
+}
+
+const ALL = { de: "Alle", en: "All", ar: "الكل" };
+const OF = { de: "von", en: "of", ar: "من" };
+
+/** Suchfeld + Filter + Trefferzahl über einer Liste */
+export function ListTools({ q, setQ, shown, total, children, placeholder }: {
+  q: string; setQ: (v: string) => void; shown?: number; total?: number; children?: ReactNode; placeholder?: string;
+}) {
+  const { t, locale } = useI18n();
+  return (
+    <div className="list-tools" role="search">
+      <input type="search" value={q} placeholder={placeholder ?? t("p.search")} aria-label={placeholder ?? t("p.search")} onChange={(e) => setQ(e.target.value)} />
+      {children}
+      {total != null && shown != null && total > 0 && (
+        <span className="list-count" aria-live="polite">{shown === total ? total : `${shown} ${OF[locale]} ${total}`}</span>
+      )}
+    </div>
+  );
+}
+
+/** Auswahlfilter mit „Alle“ */
+export function Filter({ value, onChange, options, label }: {
+  value: string; onChange: (v: string) => void; options: [string, string][]; label: string;
+}) {
+  const { locale } = useI18n();
+  return (
+    <select className="list-filter" value={value} aria-label={label} title={label} onChange={(e) => onChange(e.target.value)}>
+      <option value="">{label}: {ALL[locale]}</option>
+      {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+    </select>
+  );
+}
+
+/** Leere Trefferliste nach Suche */
+export function NoHits() {
+  const { locale } = useI18n();
+  return <p className="spin">{{ de: "Keine Treffer – Suche oder Filter anpassen.", en: "No matches – change the search or filters.", ar: "لا نتائج – غيّر البحث أو عوامل التصفية." }[locale]}</p>;
+}

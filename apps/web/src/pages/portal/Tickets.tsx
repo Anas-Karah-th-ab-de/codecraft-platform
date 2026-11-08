@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api, useApi, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
-import { Field, Loading, Modal, useSubmit } from "../../ui";
+import { Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 import { useComm } from "./Comm";
 
 const TT = {
@@ -79,8 +79,13 @@ function TicketList() {
   const { data, error, reload } = useApi<Ticket[]>(path, [path]);
   const stats = useApi<{ open: number; overdue: number; unassigned: number; mine: number }>(staff ? "/api/v1/tickets/stats" : null);
   const [creating, setCreating] = useState(false);
+  const [q, setQ] = useState("");
+  const [prio, setPrio] = useState("");
+  const [cat, setCat] = useState("");
   const comm = useComm();
   useEffect(() => comm.subscribe((e) => { if (e.type === "ticket") { reload(); stats.reload(); } }), [comm, reload, stats.reload]);
+  const rows = (data ?? []).filter((t) => (!prio || String(t.priority) === prio) && (!cat || t.category === cat)
+    && matches(q, t.number, t.subject, t.customer, t.assignee, t.device, t.project, T.c[t.category], T.s[t.status]));
   return (
     <>
       <div className="row between">
@@ -101,12 +106,16 @@ function TicketList() {
         </div>
         {staff && <label className="row" style={{ gap: 6, margin: 0 }}><input type="checkbox" style={{ width: "auto" }} checked={mine} onChange={(e) => setMine(e.target.checked)} />{T.mine}</label>}
       </div>
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label={T.prio} value={prio} onChange={setPrio} options={[1, 2, 3, 4, 5].map((p) => [String(p), `P${p}`])} />
+        <Filter label={T.category} value={cat} onChange={setCat} options={Object.entries(T.c)} />
+      </ListTools>
       <div className="card" style={{ padding: 0 }}>
-        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="muted" style={{ padding: 16 }}>{T.empty}</p> : (
+        {!data ? <Loading error={error} /> : data.length === 0 ? <p className="muted" style={{ padding: 16 }}>{T.empty}</p> : rows.length === 0 ? <NoHits /> : (
           <table className="tickets">
             <thead><tr><th>{T.prio}</th><th>#</th><th>{T.subject}</th>{staff && <th>{T.customer}</th>}<th>{T.status}</th><th>{T.assignee}</th><th>{T.due}</th></tr></thead>
             <tbody>
-              {data.map((t) => (
+              {rows.map((t) => (
                 <tr key={t.id} className={t.overdue ? "overdue" : ""}>
                   <td><span className={`prio p${t.priority}`}>P{t.priority}</span></td>
                   <td className="muted"><Link to={`/portal/support/${t.id}`}>{t.number}</Link></td>

@@ -644,13 +644,35 @@ pub async fn calendar(State(s): State<AppState>, user: User, Query(q): Query<Cal
         may_see(&s.db, &user, t).await?;
         vec![t]
     };
-    type Ev = (Uuid, String, String, String, DateTime<Utc>, DateTime<Utc>, bool, bool, Uuid, String, Value);
+    #[derive(sqlx::FromRow)]
+    struct Ev {
+        id: Uuid,
+        title: String,
+        description: String,
+        location: String,
+        starts_at: DateTime<Utc>,
+        ends_at: DateTime<Utc>,
+        all_day: bool,
+        mandatory: bool,
+        created_by: Uuid,
+        created_by_name: String,
+        attendees: Value,
+        reminders: Vec<i32>,
+        online: bool,
+        guests: Value,
+        meeting_id: Option<Uuid>,
+        lobby: Option<bool>,
+    }
     let events: Vec<Ev> = sqlx::query_as(
         "SELECT e.id, e.title, e.description, e.location, e.starts_at, e.ends_at, e.all_day, e.mandatory, e.created_by,
-                c.display_name,
+                c.display_name AS created_by_name,
                 COALESCE((SELECT jsonb_agg(jsonb_build_object('id', a.user_id, 'name', u.display_name, 'response', a.response) ORDER BY u.display_name)
-                            FROM calendar_attendees a JOIN users u ON u.id = a.user_id WHERE a.event_id = e.id), '[]')
-           FROM calendar_events e JOIN users c ON c.id = e.created_by
+                            FROM calendar_attendees a JOIN users u ON u.id = a.user_id WHERE a.event_id = e.id), '[]') AS attendees,
+                e.reminders, e.online,
+                COALESCE((SELECT jsonb_agg(jsonb_build_object('email', g.email, 'name', g.name, 'invited', g.invited_at IS NOT NULL) ORDER BY g.email)
+                            FROM calendar_guests g WHERE g.event_id = e.id), '[]') AS guests,
+                m.id AS meeting_id, m.lobby
+           FROM calendar_events e JOIN users c ON c.id = e.created_by LEFT JOIN meetings m ON m.event_id = e.id
           WHERE e.starts_at < $3 AND e.ends_at >= $2
             AND (e.created_by = ANY($1) OR EXISTS (SELECT 1 FROM calendar_attendees a WHERE a.event_id = e.id AND a.user_id = ANY($1)))
           ORDER BY e.starts_at",
@@ -671,9 +693,13 @@ pub async fn calendar(State(s): State<AppState>, user: User, Query(q): Query<Cal
     .await?;
     Ok(Json(json!({
         "events": events.iter().map(|e| json!({
-            "id": e.0, "title": e.1, "description": e.2, "location": e.3, "starts_at": e.4, "ends_at": e.5,
-            "all_day": e.6, "mandatory": e.7, "created_by": e.8, "created_by_name": e.9, "attendees": e.10,
-            "can_edit": e.8 == user.id || user.role == Role::Admin,
+            "id": e.id, "title": e.title, "description": e.description, "location": e.location, "starts_at": e.starts_at, "ends_at": e.ends_at,
+            "all_day": e.all_day, "mandatory": e.mandatory, "created_by": e.created_by, "created_by_name": e.created_by_name,
+            "attendees": e.attendees, "reminders": e.reminders, "online": e.online, "lobby": e.lobby.unwrap_or(true),
+            "meeting_id": e.meeting_id,
+            // Gäste (E-Mail-Adressen) nur für Organisator/Admin
+            "guests": if e.created_by == user.id || user.role == Role::Admin { e.guests.clone() } else { json!([]) },
+            "can_edit": e.created_by == user.id || user.role == Role::Admin,
         })).collect::<Vec<_>>(),
         "leaves": leaves,
     })))
@@ -695,6 +721,25 @@ pub struct EventInput {
     /// verbindlich vorgeben (nur Leitung/Admin für eigene Mitarbeiter)
     #[serde(default)]
     pub mandatory: bool,
+    /// Erinnerungen in Minuten vorher (höchstens 3)
+    #[serde(default = "default_reminders")]
+    pub reminders: Vec<i32>,
+    /// Online-Meeting mit Gastlink
+    #[serde(default)]
+    pub online: bool,
+    /// Gäste warten im Vorraum
+    #[serde(default = "yes")]
+    pub lobby: bool,
+    /// externe Gäste (ohne Konto)
+    #[serde(default)]
+    pub guests: Vec<super::meet::GuestIn>,
+}
+
+fn default_reminders() -> Vec<i32> {
+    vec![15]
+}
+fn yes() -> bool {
+    true
 }
 
 async fn check_event(s: &AppState, user: &User, b: &EventInput) -> ApiResult<Vec<Uuid>> {
@@ -705,6 +750,12 @@ async fn check_event(s: &AppState, user: &User, b: &EventInput) -> ApiResult<Vec
         || b.ends_at - b.starts_at > chrono::Duration::days(31)
     {
         return Err(ApiError::BadRequest("Titel und Zeitraum prüfen (höchstens 31 Tage)".into()));
+    }
+    if b.reminders.len() > 3 || b.reminders.iter().any(|m| !super::meet::REMINDER_CHOICES.contains(m)) {
+        return Err(ApiError::BadRequest("Höchstens 3 Erinnerungen aus der Auswahl".into()));
+    }
+    if !b.guests.is_empty() && !b.online && b.location.trim().is_empty() {
+        return Err(ApiError::BadRequest("Für Gäste bitte Ort angeben oder Online-Meeting wählen".into()));
     }
     let mut att: Vec<Uuid> = b.attendees.iter().copied().filter(|a| *a != user.id).collect();
     att.sort();
@@ -767,9 +818,23 @@ pub async fn event_create(
         super::audit(&mut tx, &user.actor(), "event_mandatory", "calendar_event", id, json!({ "attendees": att }))
             .await?;
     }
+    let mut reminders = b.reminders.clone();
+    reminders.sort();
+    reminders.dedup();
+    sqlx::query("UPDATE calendar_events SET reminders = $2, online = $3 WHERE id = $1")
+        .bind(id)
+        .bind(&reminders)
+        .bind(b.online)
+        .execute(&mut *tx)
+        .await?;
+    super::meet::sync_meeting(&mut tx, id, b.online, b.lobby).await?;
+    let fresh = super::meet::sync_guests(&mut tx, id, &b.guests).await?;
     tx.commit().await?;
     notify(&att, "calendar", "new", id, b.title.trim());
-    Ok((StatusCode::CREATED, Json(json!({ "id": id }))))
+    super::meet::invite_guests(s.db.clone(), id, fresh);
+    let meeting: Option<Uuid> =
+        sqlx::query_scalar("SELECT id FROM meetings WHERE event_id = $1").bind(id).fetch_optional(&s.db).await?;
+    Ok((StatusCode::CREATED, Json(json!({ "id": id, "meeting_id": meeting }))))
 }
 
 async fn event_owner(s: &AppState, user: &User, id: Uuid) -> ApiResult<()> {
@@ -795,6 +860,14 @@ pub async fn event_update(
     event_owner(&s, &user, id).await?;
     let att = check_event(&s, &user, &b).await?;
     let mut tx = s.db.begin().await?;
+    // Zeit verschoben → Erinnerungen neu verschicken (vor dem Ändern vergleichen)
+    sqlx::query(
+        "DELETE FROM calendar_reminders_sent WHERE event_id = $1 AND (SELECT starts_at FROM calendar_events WHERE id = $1) <> $2",
+    )
+    .bind(id)
+    .bind(b.starts_at)
+    .execute(&mut *tx)
+    .await?;
     sqlx::query(
         "UPDATE calendar_events SET title=$2, description=$3, location=$4, starts_at=$5, ends_at=$6, all_day=$7, mandatory=$8 WHERE id=$1",
     )
@@ -825,8 +898,20 @@ pub async fn event_update(
         .execute(&mut *tx)
         .await?;
     }
+    let mut reminders = b.reminders.clone();
+    reminders.sort();
+    reminders.dedup();
+    sqlx::query("UPDATE calendar_events SET reminders = $2, online = $3 WHERE id = $1")
+        .bind(id)
+        .bind(&reminders)
+        .bind(b.online)
+        .execute(&mut *tx)
+        .await?;
+    super::meet::sync_meeting(&mut tx, id, b.online, b.lobby).await?;
+    let fresh = super::meet::sync_guests(&mut tx, id, &b.guests).await?;
     tx.commit().await?;
     notify(&att, "calendar", "update", id, b.title.trim());
+    super::meet::invite_guests(s.db.clone(), id, fresh);
     Ok(StatusCode::NO_CONTENT)
 }
 

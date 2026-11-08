@@ -588,6 +588,13 @@ pub async fn mark_read(State(s): State<AppState>, user: User, Path(room): Path<U
 
 /// ICE-Server für WebRTC: eigener STUN-Server (gleicher Host, UDP 3478)
 pub async fn ice(headers: HeaderMap, user: User) -> Json<Value> {
+    let mut v = ice_servers(&headers, user.id);
+    v["online"] = json!(online_users());
+    Json(v)
+}
+
+/// STUN/TURN-Zugang (TURN-Zugangsdaten zeitlich begrenzt, an eine ID gebunden)
+pub(crate) fn ice_servers(headers: &HeaderMap, id: Uuid) -> Value {
     let host = std::env::var("PUBLIC_HOST").ok().unwrap_or_else(|| {
         headers
             .get("host")
@@ -598,10 +605,10 @@ pub async fn ice(headers: HeaderMap, user: User) -> Json<Value> {
     let port = std::env::var("STUN_PORT").unwrap_or_else(|_| "3478".into());
     let mut servers = vec![json!({ "urls": format!("stun:{host}:{port}") })];
     if crate::turn::enabled() {
-        let (username, credential) = crate::turn::credentials(user.id);
+        let (username, credential) = crate::turn::credentials(id);
         servers.push(json!({ "urls": format!("turn:{host}:{port}?transport=udp"), "username": username, "credential": credential }));
     }
-    Json(json!({ "iceServers": servers, "online": online_users() }))
+    json!({ "iceServers": servers })
 }
 
 // ── WebSocket ────────────────────────────────────────────────────────────────

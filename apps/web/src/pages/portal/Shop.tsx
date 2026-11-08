@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { api, useApi, useAuth } from "../../api";
 import { money, useI18n } from "../../i18n";
-import { Field, Loading, useSubmit } from "../../ui";
+import { Field, Loading, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 
 const ST = {
   de: { shop: "Shop", orders: "Bestellungen", cart: "Warenkorb", add: "In den Warenkorb", empty: "Der Warenkorb ist leer.", order: "Verbindlich bestellen (auf Rechnung)",
@@ -57,6 +57,7 @@ function Catalog({ onOrdered }: { onOrdered: () => void }) {
   const cat = useApi<{ products: Product[] }>(`/api/v1/public/catalog?locale=${locale}`, [locale]);
   const [cart, setCart] = useState<Record<string, { price: Price; product: string; qty: number }>>({});
   const [note, setNote] = useState("");
+  const [q, setQ] = useState("");
   const s = useSubmit();
   const lines = Object.values(cart);
   const total = lines.reduce((a, l) => a + (l.price.amount_cents ?? 0) * l.qty, 0);
@@ -64,8 +65,10 @@ function Catalog({ onOrdered }: { onOrdered: () => void }) {
   if (!cat.data) return <Loading error={cat.error} />;
   return (
     <div className="shop">
+      <div>
+      <ListTools q={q} setQ={setQ} shown={cat.data.products.filter((p) => matches(q, p.name, p.description)).length} total={cat.data.products.length} />
       <div className="grid">
-        {cat.data.products.map((p) => (
+        {cat.data.products.filter((p) => matches(q, p.name, p.description, ...p.prices.map((x) => x.name))).map((p) => (
           <div key={p.id} className="card shop-item">
             {p.images[0] && <img src={p.images[0].url} alt="" loading="lazy" />}
             <h3>{p.name}</h3>
@@ -82,6 +85,7 @@ function Catalog({ onOrdered }: { onOrdered: () => void }) {
             ))}
           </div>
         ))}
+      </div>
       </div>
       <aside className="card cart">
         <h3>🛒 {T.cart}</h3>
@@ -125,15 +129,23 @@ function Orders() {
   const [err, setErr] = useState<string | null>(null);
   const act = (p: Promise<unknown>) => p.then(reload).catch((e) => setErr(e.message));
   const setStatus = (id: string, status: string) => act(api(`/api/v1/orders/${id}`, { method: "PATCH", body: { status } }));
+  const [q, setQ] = useState("");
+  const [st, setSt] = useState("");
   if (!data) return <Loading error={error} />;
   if (data.length === 0) return <div className="card"><p className="muted">{T.none}</p></div>;
+  const rows = data.filter((o) => (!st || o.status === st) && matches(q, o.number, o.customer, o.note, o.invoice_number, ...o.items.map((i) => i.name)));
   return (
+    <>
+    <ListTools q={q} setQ={setQ} shown={rows.length} total={data.length}>
+      <Filter label={T.status} value={st} onChange={setSt} options={Object.entries(T.s)} />
+    </ListTools>
+    {rows.length === 0 ? <NoHits /> : (
     <div className="card" style={{ padding: 0 }}>
       {err && <div className="alert">{err}</div>}
       <table>
         <thead><tr><th>#</th>{staff && <th>{T.customer}</th>}<th>{T.items}</th><th className="n">{T.total}</th><th>{T.status}</th><th /></tr></thead>
         <tbody>
-          {data.map((o) => (
+          {rows.map((o) => (
             <tr key={o.id}>
               <td><b>{o.number}</b><div className="muted" style={{ fontSize: ".8em" }}>{new Date(o.created_at).toLocaleDateString(locale)}</div></td>
               {staff && <td>{o.customer}</td>}
@@ -152,5 +164,7 @@ function Orders() {
         </tbody>
       </table>
     </div>
+    )}
+    </>
   );
 }

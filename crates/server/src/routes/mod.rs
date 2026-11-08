@@ -8,6 +8,7 @@ mod invoices;
 mod jobs;
 pub mod mail;
 pub mod media;
+pub mod meet;
 mod organizations;
 mod payments;
 mod projects;
@@ -101,6 +102,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
         // Kommunikation: Chat, Anrufe (WebRTC-Signalisierung), Echtzeit
         .route("/api/v1/ws", get(chat::ws))
+        .route("/api/v1/meet/info", get(meet::public_info))
+        .route("/api/v1/meet/ws", get(meet::ws))
+        .route("/api/v1/meetings/{id}", get(meet::member_info))
         .route("/api/v1/chat/contacts", get(chat::contacts))
         .route("/api/v1/chat/ice", get(chat::ice))
         .route("/api/v1/chat/rooms", get(chat::rooms).post(chat::create_room))

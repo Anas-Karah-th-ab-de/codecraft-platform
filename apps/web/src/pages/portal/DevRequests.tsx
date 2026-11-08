@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api, useApi, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
-import { Field, Loading, Modal, useSubmit } from "../../ui";
+import { Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 import { useComm } from "./Comm";
 import { ProgressBar } from "./Progress";
 
@@ -53,17 +53,27 @@ function List() {
   const staff = !!me?.is_employee;
   const { data, error, reload } = useApi<Req[]>("/api/v1/dev-requests");
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [st, setSt] = useState("");
+  const [kind, setKind] = useState("");
   const comm = useComm();
   useEffect(() => comm.subscribe((e) => { if (e.type === "request" || e.type === "project") reload(); }), [comm, reload]);
+  const rows = (data ?? []).filter((r) => (!st || r.status === st) && (!kind || r.kind === kind) && matches(q, r.number, r.title, r.customer, r.description, r.project, T.k[r.kind]));
   return (
     <>
       <div className="row between">
         <h1>{T.title}</h1>
         {!staff && <button className="btn" onClick={() => setOpen(true)}>+ {T.new}</button>}
       </div>
-      {!data ? <Loading error={error} /> : data.length === 0 ? <div className="card"><p className="muted">{T.empty}</p></div> : (
+      {data && data.length > 0 && (
+        <ListTools q={q} setQ={setQ} shown={rows.length} total={data.length}>
+          <Filter label={T.status} value={st} onChange={setSt} options={Object.entries(T.s)} />
+          <Filter label={T.kind} value={kind} onChange={setKind} options={Object.entries(T.k)} />
+        </ListTools>
+      )}
+      {!data ? <Loading error={error} /> : data.length === 0 ? <div className="card"><p className="muted">{T.empty}</p></div> : rows.length === 0 ? <NoHits /> : (
         <div className="grid">
-          {data.map((r) => (
+          {rows.map((r) => (
             <Link key={r.id} to={`/portal/anfragen-entwicklung/${r.id}`} className="card proj">
               <div className="row between"><span className={`badge req-${r.status}`}>{T.s[r.status]}</span><code className="muted">{r.number}</code></div>
               <h3>{r.title}</h3>

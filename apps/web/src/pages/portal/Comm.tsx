@@ -2,6 +2,7 @@
 // Signale laufen über den WebSocket des Portals; der Server reicht sie nur zwischen Raummitgliedern weiter.
 // Paar-Regel: Bei jedem Teilnehmerpaar erstellt die kleinere Benutzer-ID das Angebot (offer).
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Link } from "react-router-dom";
 import { api, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
 
@@ -15,7 +16,7 @@ export const TX = {
     hangup: "Auflegen", mute: "Stumm", unmute: "Ton an", camOff: "Kamera aus", camOn: "Kamera an",
     callAudio: "Anruf", callVideo: "Videoanruf", missed: "Verpasster Anruf", declined: "Anruf abgelehnt", busy: "Besetzt",
     noMedia: "Kein Zugriff auf Mikrofon/Kamera. Bitte im Browser erlauben.", conn: "Verbindung wird hergestellt …",
-    mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden",
+    mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", remind: "Erinnerung", startsIn: (m: number) => (m <= 0 ? "beginnt jetzt" : m < 60 ? `beginnt in ${m} Minuten` : m < 1440 ? `beginnt in ${Math.round(m / 60)} Std.` : "beginnt morgen"), joinNow: "Meeting beitreten", ok: "OK", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden",
   },
   en: {
     title: "Messages", newChat: "New chat", search: "Search …", empty: "Pick a chat on the left or start a new one.",
@@ -26,7 +27,7 @@ export const TX = {
     hangup: "Hang up", mute: "Mute", unmute: "Unmute", camOff: "Camera off", camOn: "Camera on",
     callAudio: "Call", callVideo: "Video call", missed: "Missed call", declined: "Call declined", busy: "Busy",
     noMedia: "No access to microphone/camera. Please allow it in your browser.", conn: "Connecting …",
-    mailbox: "Mailbox", you: "You", groupCall: "Group call", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing",
+    mailbox: "Mailbox", you: "You", groupCall: "Group call", remind: "Reminder", startsIn: (m: number) => (m <= 0 ? "starts now" : m < 60 ? `starts in ${m} minutes` : m < 1440 ? `starts in ${Math.round(m / 60)} h` : "starts tomorrow"), joinNow: "Join meeting", ok: "OK", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing",
   },
   ar: {
     title: "الرسائل", newChat: "محادثة جديدة", search: "بحث …", empty: "اختر محادثة أو ابدأ محادثة جديدة.",
@@ -37,7 +38,7 @@ export const TX = {
     hangup: "إنهاء", mute: "كتم", unmute: "إلغاء الكتم", camOff: "إيقاف الكاميرا", camOn: "تشغيل الكاميرا",
     callAudio: "مكالمة", callVideo: "مكالمة فيديو", missed: "مكالمة فائتة", declined: "تم رفض المكالمة", busy: "مشغول",
     noMedia: "لا يوجد وصول إلى الميكروفون/الكاميرا. يرجى السماح بذلك في المتصفح.", conn: "جارٍ الاتصال …",
-    mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة",
+    mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", remind: "تذكير", startsIn: (m: number) => (m <= 0 ? "يبدأ الآن" : m < 60 ? `يبدأ خلال ${m} دقيقة` : m < 1440 ? `يبدأ خلال ${Math.round(m / 60)} ساعة` : "يبدأ غداً"), joinNow: "الانضمام إلى الاجتماع", ok: "حسناً", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة",
   },
 };
 
@@ -93,6 +94,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const [camOff, setCamOff] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [reminder, setReminder] = useState<{ id: string; title: string; starts_at: string; meeting: string | null } | null>(null);
   const ringTimer = useRef<number | null>(null);
   const myId = me?.id ?? "";
 
@@ -122,6 +124,10 @@ export function CommProvider({ children }: { children: ReactNode }) {
         if (e.type === "presence") setOnline((s) => { const n = new Set(s); e.online ? n.add(e.user) : n.delete(e.user); return n; });
         if (e.type === "message" && e.message.sender_id !== me.id) setBump((b) => b + 1);
         if (e.type === "call") onSignal(e);
+        if (e.type === "calendar" && e.event === "reminder") {
+          setReminder({ id: e.id, title: e.title, starts_at: e.starts_at, meeting: e.meeting ?? null });
+          if ("Notification" in window && Notification.permission === "granted") new Notification(e.title, { body: TX[locale].startsIn(Math.round((new Date(e.starts_at).getTime() - Date.now()) / 60000)) });
+        }
         subs.current.forEach((fn) => fn(e));
       };
     };
@@ -320,6 +326,17 @@ export function CommProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       {notice && <div className="toast" role="status" onClick={() => setNotice(null)}>{notice}</div>}
+      {reminder && (
+        <div className="reminder" role="alert">
+          <small>⏰ {T.remind}</small>
+          <b>{reminder.title}</b>
+          <span>{T.startsIn(Math.round((new Date(reminder.starts_at).getTime() - Date.now()) / 60000))} · {new Date(reminder.starts_at).toLocaleTimeString(locale, { timeStyle: "short" })}</span>
+          <div className="row">
+            {reminder.meeting && <Link className="btn small primary" to={`/portal/meeting/${reminder.meeting}`} onClick={() => setReminder(null)}>🎥 {T.joinNow}</Link>}
+            <button className="btn small ghost" onClick={() => setReminder(null)}>{T.ok}</button>
+          </div>
+        </div>
+      )}
       {call && (
         <CallView call={call} T={T} local={localStream} remotes={remotes} muted={muted} camOff={camOff} sharing={sharing}
           onAccept={accept} onDecline={() => end(true)} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} onScreen={toggleScreen} />

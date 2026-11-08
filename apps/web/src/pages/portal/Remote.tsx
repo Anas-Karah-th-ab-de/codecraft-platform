@@ -1,6 +1,7 @@
 // Fernwartung eines Geräts: Übersicht, Bildschirm (sehen + steuern), Befehle, Dateien.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { matches } from "../../ui";
 import { api, getToken } from "../../api";
 import { useI18n } from "../../i18n";
 import { RedeemCode } from "./Access";
@@ -243,6 +244,7 @@ function Files({ id, T, os }: { id: string; T: TT; os: string }) {
   const [path, setPath] = useState(win ? "" : "/");
   const [entries, setEntries] = useState<{ name: string; dir: boolean; size: number; modified: number | null }[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [q, setQ] = useState("");
   const sep = win ? "\\" : "/";
   const join = (a: string, b: string) => (a === "" ? b : a.endsWith(sep) ? a + b : a + sep + b);
   const open = async (p: string) => {
@@ -277,8 +279,9 @@ function Files({ id, T, os }: { id: string; T: TT; os: string }) {
         <label className="btn small ghost">⬆ {T.upload}<input type="file" hidden onChange={(e) => e.target.files?.[0] && upload(e.target.files[0])} /></label>
       </form>
       {err && <p className="error">{err}</p>}
+      {entries.length > 8 && <input type="search" className="chat-search" style={{ margin: "10px 0 0", maxWidth: 320 }} placeholder="🔎 …" value={q} onChange={(e) => setQ(e.target.value)} />}
       <table style={{ marginTop: 10 }}><tbody>
-        {entries.map((e) => (
+        {entries.filter((e) => matches(q, e.name)).map((e) => (
           <tr key={e.name}>
             <td>{e.dir ? <a href="#" onClick={(x) => { x.preventDefault(); open(join(path, e.name)); }}>📁 {e.name}</a> : <>📄 {e.name}</>}</td>
             <td className="n muted">{e.dir ? "" : e.size > 1048576 ? `${(e.size / 1048576).toFixed(1)} MB` : `${Math.ceil(e.size / 1024)} KB`}</td>

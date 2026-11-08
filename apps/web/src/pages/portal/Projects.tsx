@@ -2,7 +2,7 @@ import { Fragment, useState } from "react";
 import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api, can, openPdf, useApi, useAuth } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
-import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
+import { Badge, Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
 import QuoteEditor from "./QuoteEditor";
 import { PaymentBox, usePaymentMethods } from "./Payment";
@@ -132,7 +132,10 @@ function ProjectList() {
   const [creating, setCreating] = useState(false);
   const { data, error } = useApi<Project[]>("/api/v1/projects");
   const [q, setQ] = useState("");
-  const rows = (data ?? []).filter((p) => !q || `${p.name} ${p.code ?? ""} ${p.organization_name ?? ""}`.toLowerCase().includes(q.toLowerCase()));
+  const [st, setSt] = useState("");
+  const [kind, setKind] = useState("");
+  const rows = (data ?? []).filter((p) => (!st || p.status === st) && (!kind || p.kind === kind) && matches(q, p.name, p.code, p.organization_name, p.license));
+  const statuses = [...new Set((data ?? []).map((p) => p.status))];
   return (
     <>
       <div className="row between">
@@ -140,8 +143,11 @@ function ProjectList() {
         {me?.is_employee && can(me, "project_write") && <button className="btn" onClick={() => setCreating(true)}>+ {PK[locale].new}</button>}
       </div>
       {creating && <NewProject onClose={() => setCreating(false)} />}
-      <input placeholder={t("p.search")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 12 }} />
-      {!data ? <Loading error={error} /> : rows.length === 0 ? <div className="card"><p className="spin">{t("p.empty")}</p></div> : (
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label={t("p.status")} value={st} onChange={setSt} options={statuses.map((s) => [s, t(`st.${s}` as Key)])} />
+        {me?.is_employee && <Filter label={PK[locale].kind} value={kind} onChange={setKind} options={(["customer", "internal", "opensource"] as const).map((k) => [k, PK[locale][k]])} />}
+      </ListTools>
+      {!data ? <Loading error={error} /> : data.length === 0 ? <div className="card"><p className="spin">{t("p.empty")}</p></div> : rows.length === 0 ? <NoHits /> : (
         <div className="grid">
           {rows.map((p) => (
             <Link key={p.id} to={`/portal/projekte/${p.id}`} className="card proj">
@@ -308,7 +314,10 @@ function QuoteList() {
   const { me } = useAuth();
   const { data, error } = useApi<QuoteRow[]>("/api/v1/quotes");
   const [status, setStatus] = useState("");
-  const rows = (data ?? []).filter((q) => !status || q.status === status);
+  const [q, setQ] = useState("");
+  const [kind, setKind] = useState("");
+  const rows = (data ?? []).filter((x) => (!status || x.status === status) && (!kind || x.doc_kind === kind)
+    && matches(q, x.number, x.title, x.organization_name, x.project_name, x.revision));
   return (
     <>
       <div className="row between">
@@ -323,7 +332,10 @@ function QuoteList() {
           <button key={s} className={status === s ? "on" : ""} onClick={() => setStatus(s)}>{s ? t(`st.${s}` as Key) : "∑"}</button>
         ))}
       </div>
-      {!data ? <Loading error={error} /> : <QuoteTable rows={rows} showCustomer />}
+      <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
+        <Filter label={PK[locale].kind} value={kind} onChange={setKind} options={[["quote", t("p.quotes")], ["contract", QA[locale].contract]]} />
+      </ListTools>
+      {!data ? <Loading error={error} /> : data.length > 0 && rows.length === 0 ? <NoHits /> : <QuoteTable rows={rows} showCustomer />}
     </>
   );
 }

@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { api, useApi } from "../../api";
 import { useI18n } from "../../i18n";
-import { Field, Loading, Modal } from "../../ui";
+import { Field, ListTools, Loading, Modal, matches } from "../../ui";
 
 export type PaymentMethod = {
   id: string; kind: "shamcash" | "bank" | "cash" | "paypal" | "other"; name: string; is_default: boolean; is_active: boolean; sort: number;
@@ -69,14 +69,16 @@ export function PaymentMethodsAdmin() {
   const T = PT[locale];
   const { data, error, reload } = usePaymentMethods();
   const [edit, setEdit] = useState<PaymentMethod | "new" | null>(null);
+  const [q, setQ] = useState("");
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <div className="row between"><h2 style={{ margin: 0 }}>{T.title}</h2><button className="btn small" onClick={() => setEdit("new")}>{T.new}</button></div>
       <p className="muted" style={{ fontSize: ".9em" }}>{T.hint}</p>
+      {data && data.length > 4 && <ListTools q={q} setQ={setQ} shown={data.filter((m) => matches(q, m.name, T.kinds[m.kind], m.details.account, m.details.payee)).length} total={data.length} />}
       {!data ? <Loading error={error} /> : (
         <table>
           <thead><tr><th>{T.name}</th><th>{T.kind}</th><th>{T.account}</th><th /></tr></thead>
-          <tbody>{data.map((m) => (
+          <tbody>{data.filter((m) => matches(q, m.name, T.kinds[m.kind], m.details.account, m.details.payee)).map((m) => (
             <tr key={m.id} style={{ opacity: m.is_active ? 1 : 0.5 }}>
               <td><b>{m.name}</b>{m.is_default && <span className="badge" style={{ marginInlineStart: 6 }}>{T.standard}</span>}{!m.is_active && <span className="muted"> · {T.inactive}</span>}</td>
               <td>{T.kinds[m.kind]}</td>

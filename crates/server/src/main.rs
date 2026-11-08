@@ -227,6 +227,7 @@ fn start_mail(db: &sqlx::PgPool) {
         });
     }
     tokio::spawn(mail::outbound::worker(db.clone()));
+    tokio::spawn(codecraft_server::routes::meet::reminder_worker(db.clone()));
     let smtp = env("SMTP_BIND", "0.0.0.0:25");
     if on(&smtp) {
         tokio::spawn(mail::smtp::serve(db.clone(), smtp, Mode::Mx));

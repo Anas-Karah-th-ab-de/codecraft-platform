@@ -22,6 +22,7 @@ import "./styles.css";
 
 // Portal wird erst beim Aufruf geladen → Webseite bleibt schlank und schnell
 const Portal = lazy(() => import("./pages/portal/Portal"));
+const Meeting = lazy(() => import("./pages/Meeting"));
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
@@ -39,6 +40,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="kontakt" element={<Contact />} />
                 <Route path="*" element={<NotFound />} />
               </Route>
+              <Route path="meet/:token" element={<Meeting />} />
               <Route path="portal/*" element={<Portal />} />
             </Routes>
           </Suspense>

@@ -86,7 +86,7 @@ const de = {
   "p.2fa_disable": "2FA deaktivieren", "p.change_pw": "Passwort ändern", "p.current_pw": "Aktuelles Passwort", "p.new_pw": "Neues Passwort",
   "p.saved": "Gespeichert.", "p.register_device": "Gerät registrieren", "p.token_once": "Token nur jetzt sichtbar – auf dem Gerät speichern:",
   "p.online": "online", "p.offline": "offline", "p.version": "Version", "p.last_seen": "Zuletzt gesehen", "p.product": "Produkt",
-  "p.empty": "Noch keine Einträge.", "p.loading": "Lädt…", "p.error": "Fehler", "p.search": "Suchen…",
+  "p.empty": "Noch keine Einträge.", "p.loading": "Lädt…", "p.error": "Fehler", "p.search": "Suchen…", "p.help": "Hilfe",
 };
 
 type Dict = Record<keyof typeof de, string>;
@@ -173,7 +173,7 @@ const en: Dict = {
   "p.2fa_disable": "Disable 2FA", "p.change_pw": "Change password", "p.current_pw": "Current password", "p.new_pw": "New password",
   "p.saved": "Saved.", "p.register_device": "Register device", "p.token_once": "Token shown only once – store it on the device:",
   "p.online": "online", "p.offline": "offline", "p.version": "Version", "p.last_seen": "Last seen", "p.product": "Product",
-  "p.empty": "No entries yet.", "p.loading": "Loading…", "p.error": "Error", "p.search": "Search…",
+  "p.empty": "No entries yet.", "p.loading": "Loading…", "p.error": "Error", "p.search": "Search…", "p.help": "Help",
 };
 
 const ar: Dict = {
@@ -258,7 +258,7 @@ const ar: Dict = {
   "p.2fa_disable": "إيقاف التحقق بخطوتين", "p.change_pw": "تغيير كلمة المرور", "p.current_pw": "كلمة المرور الحالية", "p.new_pw": "كلمة المرور الجديدة",
   "p.saved": "تم الحفظ.", "p.register_device": "تسجيل جهاز", "p.token_once": "الرمز يظهر مرة واحدة فقط – احفظه على الجهاز:",
   "p.online": "متصل", "p.offline": "غير متصل", "p.version": "الإصدار", "p.last_seen": "آخر ظهور", "p.product": "المنتج",
-  "p.empty": "لا توجد إدخالات بعد.", "p.loading": "جارٍ التحميل…", "p.error": "خطأ", "p.search": "بحث…",
+  "p.empty": "لا توجد إدخالات بعد.", "p.loading": "جارٍ التحميل…", "p.error": "خطأ", "p.search": "بحث…", "p.help": "المساعدة",
 };
 
 const DICTS: Record<Locale, Dict> = { de, en, ar };

@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, useApi, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
-import { Field, LangSwitch, Loading, useSubmit } from "../../ui";
+import { Field, LangSwitch, Loading, useSubmit, ListTools, matches } from "../../ui";
 
 const AT = {
   de: {
@@ -97,6 +97,7 @@ export function CustomerAccess() {
   const devs = useApi<Dev[]>("/api/v1/devices");
   const grants = useApi<Grant[]>("/api/v1/access-codes");
   const [sel, setSel] = useState<string[]>([]);
+  const [q, setQ] = useState("");
   const [minutes, setMinutes] = useState(60);
   const [code, setCode] = useState<{ code: string; until: number } | null>(null);
   const s = useSubmit();
@@ -117,7 +118,8 @@ export function CustomerAccess() {
               setSel([]);
               grants.reload();
             })}>
-              {devs.data.map((d) => (
+              {devs.data.length > 5 && <ListTools q={q} setQ={setQ} shown={devs.data.filter((d) => matches(q, d.name, d.kind)).length} total={devs.data.length} />}
+              {devs.data.filter((d) => matches(q, d.name, d.kind) || sel.includes(d.id)).map((d) => (
                 <div key={d.id} className="row between access-dev">
                   <label className="row" style={{ gap: 8, margin: 0 }}>
                     <input type="checkbox" style={{ width: "auto" }} disabled={d.access_policy === "staff"} checked={sel.includes(d.id)}
@@ -164,12 +166,16 @@ export function CustomerAccess() {
 function GrantTable({ grants, customer, onChange }: { grants: Grant[]; customer?: boolean; onChange: () => void }) {
   const T = useAT();
   const { locale } = useI18n();
+  const [q, setQ] = useState("");
   if (grants.length === 0) return <p className="muted" style={{ padding: 16 }}>–</p>;
+  const rows = grants.filter((g) => matches(q, g.technician, g.customer, T[g.state], ...g.devices.map((d) => d.name)));
   return (
+    <>
+    {grants.length > 5 && <div style={{ padding: "12px 12px 0" }}><ListTools q={q} setQ={setQ} shown={rows.length} total={grants.length} /></div>}
     <table>
       <thead><tr><th>{T.devices}</th><th>{customer ? T.technician : T.customer}</th><th>{T.until}</th><th>{T.state}</th><th /></tr></thead>
       <tbody>
-        {grants.map((g) => (
+        {rows.map((g) => (
           <tr key={g.id}>
             <td>{g.devices.map((d, i) => (
               <span key={d.id}>{i > 0 && ", "}{customer ? d.name : <Link to={`/portal/geraete/${d.id}`}>{d.name}</Link>}</span>
@@ -184,6 +190,7 @@ function GrantTable({ grants, customer, onChange }: { grants: Grant[]; customer?
         ))}
       </tbody>
     </table>
+    </>
   );
 }
 

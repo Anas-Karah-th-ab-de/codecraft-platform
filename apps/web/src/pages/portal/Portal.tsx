@@ -17,6 +17,8 @@ import Shop from "./Shop";
 import DevRequests from "./DevRequests";
 import Work from "./Work";
 import { BrokenTrace } from "../site/Board";
+import Meeting from "../Meeting";
+import Help, { PageHelp } from "./Help";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -39,8 +41,9 @@ export default function Portal() {
   const T = PT[locale];
   const { pathname } = useLocation();
   const [menu, setMenu] = useState(false);
+  const [help, setHelp] = useState(false);
   const seg = pathname.replace(/^\/portal\/?/, "").split("/")[0];
-  useEffect(() => { setMenu(false); window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }); }, [pathname]);
+  useEffect(() => { setMenu(false); setHelp(false); window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }); }, [pathname]);
   const items: NavItem[] = !me ? [] : [
     ["", "p.dashboard", true, 0],
     ["nachrichten", "p.messages", true, 0],
@@ -60,6 +63,7 @@ export default function Portal() {
     ["anfragen", "p.requests", can(me, "jobs"), 3],
     ["benutzer", "p.users", can(me, "users"), 4],
     ["konto", "p.account", true, 4],
+    ["hilfe", "p.help", true, 4],
   ];
   const current = items.find((l) => l[0] === seg);
   const title = current ? t(current[1]) : "404";
@@ -71,6 +75,8 @@ export default function Portal() {
   const visible = items.filter((l) => l[2]);
   const groups = T.groups.map((name, g) => ({ name, links: visible.filter((l) => l[3] === g) })).filter((g) => g.links.length > 0);
   const initials = me.display_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  // Meeting im Vollbild, ohne Portal-Rahmen
+  if (seg === "meeting") return <Routes><Route path="meeting/:id" element={<Meeting member />} /></Routes>;
 
   return (
     <CommProvider>
@@ -96,6 +102,7 @@ export default function Portal() {
         </div>
       </aside>
       <div className="scrim" onClick={() => setMenu(false)} />
+      {help && <PageHelp seg={seg} onClose={() => setHelp(false)} />}
       <div className="portal-body">
         <header className="topbar">
           <button className="burger" aria-label={T.menu} aria-controls="portal-menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><span /><span /><span /></button>
@@ -104,6 +111,7 @@ export default function Portal() {
             <b>{title}</b>
           </nav>
           <div className="topbar-right">
+            <button className="help-btn" onClick={() => setHelp(true)} aria-label={t("p.help")} title={t("p.help")}>?</button>
             <span className="hide-sm"><LangSwitch /></span>
             <div className="user-chip">
               <div className="who"><b>{me.display_name}</b><small>{me.role}{me.departments.length > 0 && ` · ${me.departments.join(", ")}`}</small></div>
@@ -133,6 +141,7 @@ export default function Portal() {
             <Route path="fernzugriff" element={<CustomerAccess />} />
             <Route path="benutzer" element={<Users />} />
             <Route path="konto" element={<Account />} />
+            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe"].includes(l[0])).map((l) => t(l[1]))} />} />
             <Route path="*" element={
               <div className="notfound" style={{ minHeight: "50vh" }}>
                 <div><BrokenTrace /><h1>404</h1><p>{T.nf}</p><Link className="btn" to="/portal">{T.back}</Link></div>
