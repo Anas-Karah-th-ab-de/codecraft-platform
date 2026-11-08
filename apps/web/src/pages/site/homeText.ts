@@ -12,6 +12,15 @@ const de = {
   ctaTill: "Unsere Kasse ausprobieren ↓",
   made: "Made in Syria mit deutscher Qualität / Al-Debet, Idlib",
   nav: { till: "Kasse", ai: "KI-Server", services: "Leistungen", story: "Geschichte", products: "Produkte", careers: "Karriere", contact: "Kontakt" },
+  board: [
+    { t: "Software", d: "Web, Mobile, Desktop, APIs", to: "/#leistungen" },
+    { t: "Elektronik", d: "Platinen, ESP32, Server & Netzwerke", to: "/#leistungen" },
+    { t: "KI-Server", d: "Im eigenen Haus, ohne Cloud", to: "/#ki" },
+    { t: "Kassensysteme", d: "Läuft auch ohne Internet", to: "/#kasse" },
+  ],
+  boardAria: "Leiterplatte: der KM-Chip ist mit vier Bereichen verbunden",
+  nf: { h: "Diese Leitung endet hier.", p: "Die Seite gibt es nicht oder nicht mehr. Über die Startseite finden Sie alles Wichtige wieder.", home: "Zur Startseite", contact: "Kontakt aufnehmen" },
+  foot: { about: "Software und Hardware nach Maß, entwickelt, gebaut und betreut von einem Team.", company: "Unternehmen", offer: "Angebot", reach: "Erreichbar", portal: "Zum Portal" },
   craft: "Seit 2014 bauen wir Software und Hardware, mit der Unternehmen digitalisieren, automatisieren und für das Kommende bereit sind. Gegründet in Deutschland, seit April 2026 in Idlib zu Hause, mit derselben deutschen Qualität.",
   quote: "„Jede Zeile Code wird mit Sorgfalt geschrieben. Wir liefern nicht schnell, wir liefern richtig.“",
   facts: [
@@ -126,6 +135,15 @@ const en: T = {
   ctaTill: "Try our till ↓",
   made: "Made in Syria with German quality / Al-Debet, Idlib",
   nav: { till: "The till", ai: "AI server", services: "Services", story: "Story", products: "Products", careers: "Careers", contact: "Contact" },
+  board: [
+    { t: "Software", d: "Web, mobile, desktop, APIs", to: "/#leistungen" },
+    { t: "Electronics", d: "PCBs, ESP32, servers & networks", to: "/#leistungen" },
+    { t: "AI servers", d: "On your premises, no cloud", to: "/#ki" },
+    { t: "POS systems", d: "Keeps selling without internet", to: "/#kasse" },
+  ],
+  boardAria: "Circuit board: the KM chip connects to four areas",
+  nf: { h: "This trace ends here.", p: "The page doesn't exist or has moved. Everything important is one click away on the home page.", home: "Go to home page", contact: "Contact us" },
+  foot: { about: "Custom software and hardware, designed, built and supported by one team.", company: "Company", offer: "What we offer", reach: "Reach us", portal: "Open portal" },
   craft: "Since 2014 we have built software and hardware that help businesses digitise, automate and stay ready for what comes next. Founded in Germany, at home in Idlib since April 2026, with the same German quality.",
   quote: "“Every line of code is written with care. We don't deliver fast, we deliver right.”",
   facts: [
@@ -240,6 +258,15 @@ const ar: T = {
   ctaTill: "جرّب نظام الكاشير ↓",
   made: "صُنع في سوريا بجودة ألمانية / الدبيط، إدلب",
   nav: { till: "الكاشير", ai: "خادم الذكاء الاصطناعي", services: "الخدمات", story: "قصتنا", products: "المنتجات", careers: "الوظائف", contact: "تواصل" },
+  board: [
+    { t: "البرمجيات", d: "ويب، جوال، سطح المكتب، واجهات API", to: "/#leistungen" },
+    { t: "الإلكترونيات", d: "لوحات إلكترونية، ESP32، خوادم وشبكات", to: "/#leistungen" },
+    { t: "خوادم الذكاء الاصطناعي", d: "داخل منشأتك، بدون سحابة", to: "/#ki" },
+    { t: "أنظمة الكاشير", d: "تعمل حتى دون إنترنت", to: "/#kasse" },
+  ],
+  boardAria: "لوحة إلكترونية: شريحة KM متصلة بأربعة مجالات",
+  nf: { h: "هذا المسار ينتهي هنا.", p: "الصفحة غير موجودة أو نُقلت. تجد كل ما يهمك من الصفحة الرئيسية.", home: "إلى الصفحة الرئيسية", contact: "تواصل معنا" },
+  foot: { about: "برمجيات وأجهزة حسب الطلب، يصممها ويبنيها ويدعمها فريق واحد.", company: "الشركة", offer: "ما نقدمه", reach: "التواصل", portal: "فتح البوابة" },
   craft: "منذ 2014 نبني برمجيات وأجهزة تساعد الشركات على الرقمنة والأتمتة والاستعداد لما هو قادم. تأسسنا في ألمانيا، ومقرنا في إدلب منذ نيسان 2026، بالجودة الألمانية نفسها.",
   quote: "«كل سطر برمجي يُكتب بعناية. لا نسلّم بسرعة، بل نسلّم بإتقان.»",
   facts: [

@@ -3,7 +3,8 @@ import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "
 import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
 import { Field, LangSwitch, useSubmit } from "../../ui";
-import { HOME } from "./homeText";
+import { CONTACT, HOME } from "./homeText";
+import { BrokenTrace } from "./Board";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type Img = { id: string; card: string; full: string; width: number; height: number };
@@ -34,38 +35,42 @@ function useTitle(title?: string) {
 
 /** Bei Seitenwechsel nach oben springen – außer bei Zurück/Vor (Browser stellt Position wieder her) */
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, hash } = useLocation();
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
-  }, [pathname]);
+    // Sprungmarken (/#kasse) scrollt die Startseite selbst
+    if (!hash) window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [pathname]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
 
 export function SiteLayout() {
   const { t, locale } = useI18n();
+  const H = HOME[locale];
   const [menu, setMenu] = useState(false);
-  const { pathname } = useLocation();
-  useEffect(() => setMenu(false), [pathname]);
+  const { pathname, hash } = useLocation();
+  useEffect(() => setMenu(false), [pathname, hash]);
   useEffect(() => prefetch(catalogPath(locale)), [locale]); // Katalog früh laden → Produktseite sofort da
+  const skip = locale === "ar" ? "انتقل إلى المحتوى" : locale === "en" ? "Skip to content" : "Zum Inhalt";
   return (
     <div className="site">
       <ScrollToTop />
-      <a href="#inhalt" className="skip">{locale === "ar" ? "انتقل إلى المحتوى" : locale === "en" ? "Skip to content" : "Zum Inhalt"}</a>
+      <a href="#inhalt" className="skip">{skip}</a>
       <header className="site-header">
         <div className="container">
-          <Link to="/" className="logo" aria-label="KM Code Craft – Start"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
-          <nav className={`nav ${menu ? "open" : ""}`} aria-label="Hauptmenü">
-            <Link to="/#kasse">{HOME[locale].nav.till}</Link>
-            <Link to="/#ki">{HOME[locale].nav.ai}</Link>
-            <Link to="/#leistungen">{HOME[locale].nav.services}</Link>
+          <Link to="/" className="logo" aria-label="KM Code Craft"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
+          <nav id="hauptmenue" className={`nav ${menu ? "open" : ""}`} aria-label={t("nav.products")}>
             <NavLink to="/produkte">{t("nav.products")}</NavLink>
+            <Link to="/#leistungen">{H.nav.services}</Link>
+            <Link to="/#kasse">{H.nav.till}</Link>
+            <Link to="/#ki">{H.nav.ai}</Link>
             <NavLink to="/karriere" onMouseEnter={() => prefetch(`/api/v1/public/jobs?locale=${locale}`)}>{t("nav.careers")}</NavLink>
             <NavLink to="/kontakt">{t("nav.contact")}</NavLink>
+            <Link to="/portal" className="portal-link"><i aria-hidden="true" />{t("nav.portal")}</Link>
           </nav>
-          <div className="row" style={{ gap: 8 }}>
+          <div className="head-actions">
             <LangSwitch />
-            <Link to="/portal" className="btn small hide-sm">{t("nav.portal")}</Link>
-            <button className="burger" aria-label="Menü" aria-expanded={menu} onClick={() => setMenu(!menu)}>
+            <Link to="/portal" className="portal-link hide-sm"><i aria-hidden="true" />{t("nav.portal")}</Link>
+            <button className="burger" aria-label="Menü" aria-controls="hauptmenue" aria-expanded={menu} onClick={() => setMenu(!menu)}>
               <span /><span /><span />
             </button>
           </div>
@@ -76,28 +81,57 @@ export function SiteLayout() {
       </main>
       <footer className="site-footer">
         <div className="container footer-grid">
-          <div>
-            <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
-            <p className="muted">{t("hero.sub")}</p>
-            <p className="muted" style={{ fontSize: ".9em" }}>{t("footer.made")}</p>
+          <div className="footer-brand">
+            <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" loading="lazy" /></Link>
+            <p>{H.foot.about}</p>
           </div>
           <div>
-            <b>{t("nav.products")}</b>
+            <b>{H.foot.offer}</b>
             <Link to="/produkte">{t("products.all")}</Link>
-            <Link to="/karriere">{t("nav.careers")}</Link>
+            <Link to="/#kasse">{H.nav.till}</Link>
+            <Link to="/#ki">{H.nav.ai}</Link>
+            <Link to="/#leistungen">{H.nav.services}</Link>
           </div>
           <div>
-            <b>{t("nav.contact")}</b>
-            <a href="mailto:ak@code-craft.tech" dir="ltr">ak@code-craft.tech</a>
+            <b>{H.foot.company}</b>
+            <Link to="/#geschichte">{H.nav.story}</Link>
+            <Link to="/karriere">{t("nav.careers")}</Link>
+            <Link to="/portal">{H.foot.portal}</Link>
+          </div>
+          <div>
+            <b>{H.foot.reach}</b>
+            <a href={`mailto:${CONTACT.email}`} dir="ltr">{CONTACT.email}</a>
+            <a href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp</a>
             <a href="https://linkedin.com/company/code-craft-tech" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-            <Link to="/portal">{t("nav.portal")}</Link>
+            <Link to="/kontakt">{t("nav.contact")}</Link>
           </div>
         </div>
-        <div className="container muted" style={{ marginTop: 18, fontSize: ".85em" }}>
-          © {new Date().getFullYear()} KM Code Craft · Mohamad Anas Kara Mohamad · {t("footer.rights")}
+        <div className="container footer-base">
+          <span>© {new Date().getFullYear()} KM Code Craft, Mohamad Anas Kara Mohamad. {t("footer.rights")}</span>
+          <span>{t("footer.made")}</span>
         </div>
       </footer>
     </div>
+  );
+}
+
+/** 404 innerhalb der Webseite */
+export function NotFound() {
+  const { locale } = useI18n();
+  const T = HOME[locale].nf;
+  useTitle("404");
+  return (
+    <section className="notfound">
+      <div>
+        <BrokenTrace />
+        <h1>{T.h}</h1>
+        <p>{T.p}</p>
+        <div className="row" style={{ justifyContent: "center", marginTop: 24 }}>
+          <Link className="btn primary" to="/">{T.home}</Link>
+          <Link className="btn ghost" to="/kontakt">{T.contact}</Link>
+        </div>
+      </div>
+    </section>
   );
 }
 

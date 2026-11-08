@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useApi } from "../../api";
 import { useI18n } from "../../i18n";
 import { CONTACT, HOME, STACK } from "./homeText";
+import { Board } from "./Board";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type ProductDetail = { slug: string; name: string; prices: Price[] };
@@ -41,13 +42,13 @@ export function Home() {
       <section className="hx-stack">
         <div className="hx-wrap">
           <p className="hx-eyebrow">{T.stack.eyebrow}</p>
-          <p className="hx-stack-list" dir="ltr">{STACK.join(" · ")}</p>
+          <p className="hx-stack-list" dir="ltr">{STACK.map((s) => <span key={s}>{s}</span>)}</p>
         </div>
       </section>
       <Story />
       <section className="hx-work">
         <div className="hx-wrap">
-          <p className="hx-eyebrow">{T.work.eyebrow}</p>
+          <h2 className="hx-h2-small" style={{ marginTop: 0 }}>{T.work.eyebrow}</h2>
           <ul>
             {T.work.list.map(([name, desc, url]) => (
               <li key={name}>
@@ -66,38 +67,20 @@ export function Home() {
 function Hero() {
   const { locale } = useI18n();
   const T = HOME[locale];
-  const ref = useRef<HTMLVideoElement>(null);
-  const lang = locale === "ar" ? "ar" : "de";
-  const [src, setSrc] = useState<string | null>(null);
-  useEffect(() => {
-    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const save = (navigator as any).connection?.saveData;
-    const small = matchMedia("(max-width: 1023px)").matches;
-    setSrc(reduce || save ? null : `/brand/hero-${lang}-${small ? 720 : 1080}.mp4`);
-  }, [lang]);
-  useEffect(() => {
-    const v = ref.current;
-    if (!v || !src) return;
-    v.muted = true;
-    const io = new IntersectionObserver(([e]) => (e.isIntersecting ? v.play().catch(() => {}) : v.pause()));
-    io.observe(v);
-    return () => io.disconnect();
-  }, [src]);
   return (
     <section className="hx-hero" id="top">
-      <video ref={ref} key={src ?? lang} poster={`/brand/hero-${lang}.jpg`} src={src ?? undefined}
-        autoPlay muted loop playsInline preload="metadata" aria-hidden="true" />
-      <div className="hx-hero-shade" />
-      <div className="hx-wrap hx-hero-body">
-        <p className="hx-eyebrow">{T.eyebrow}</p>
-        <h1 dir="ltr"><span>{T.h1a}</span><span className="red">{T.h1b}</span></h1>
-        <p className="hx-hero-sub">{T.sub}</p>
-        <div className="hx-actions">
-          <Link to="/kontakt" className="hx-btn">{T.ctaStart}</Link>
-          <a href="#kasse" className="hx-link">{T.ctaTill}</a>
+      <div className="hx-wrap hx-hero-grid">
+        <div className="hx-hero-body">
+          <h1 dir="ltr"><span>{T.h1a}</span><span>{T.h1b}</span></h1>
+          <p className="hx-hero-sub">{T.sub}</p>
+          <div className="hx-actions">
+            <Link to="/kontakt" className="hx-btn">{T.ctaStart}</Link>
+            <a href="#kasse" className="hx-link">{T.ctaTill.replace(/\s*[↓↑]\s*$/, "")}</a>
+          </div>
+          <p className="hx-made">{T.made}</p>
         </div>
+        <Board items={T.board} label={T.boardAria} />
       </div>
-      <p className="hx-made">{T.made}</p>
     </section>
   );
 }
@@ -274,7 +257,6 @@ function Services() {
   return (
     <section className="hx-services" id="leistungen">
       <div className="hx-wrap">
-        <p className="hx-eyebrow">{T.eyebrow}</p>
         <h2>{T.h2}</h2>
         <ul className="acc">
           {T.list.map((s, i) => (

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link, NavLink, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, NavLink, Route, Routes, useLocation } from "react-router-dom";
 import { api, can, useApi, useAuth } from "../../api";
 import { money, useI18n, type Key } from "../../i18n";
 import { Field, LangSwitch, Loading, useSubmit } from "../../ui";
@@ -16,84 +16,153 @@ import Tickets from "./Tickets";
 import Shop from "./Shop";
 import DevRequests from "./DevRequests";
 import Work from "./Work";
+import { BrokenTrace } from "../site/Board";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
 const MailBadge = () => <Badge n={useMailUnread()} />;
 
+const PT = {
+  de: { groups: ["Übersicht", "Kunden & Aufträge", "Finanzen", "Team", "Verwaltung"], menu: "Menü", nf: "Diese Seite gibt es im Portal nicht.", back: "Zur Übersicht",
+    artH: "Ein Zugang für Team und Kunden.", artP: "Projekte, Tickets, Rechnungen, Nachrichten und Fernwartung an einem Ort." },
+  en: { groups: ["Overview", "Customers & work", "Finance", "Team", "Administration"], menu: "Menu", nf: "This page doesn't exist in the portal.", back: "Back to overview",
+    artH: "One login for team and customers.", artP: "Projects, tickets, invoices, messages and remote support in one place." },
+  ar: { groups: ["نظرة عامة", "العملاء والأعمال", "المالية", "الفريق", "الإدارة"], menu: "القائمة", nf: "هذه الصفحة غير موجودة في البوابة.", back: "العودة إلى النظرة العامة",
+    artH: "دخول واحد للفريق والعملاء.", artP: "المشاريع والتذاكر والفواتير والرسائل والدعم عن بُعد في مكان واحد." },
+};
+
+type NavItem = [to: string, key: Key, show: boolean, group: number];
+
 export default function Portal() {
   const { me, ready, logout } = useAuth();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
+  const T = PT[locale];
+  const { pathname } = useLocation();
+  const [menu, setMenu] = useState(false);
+  const seg = pathname.replace(/^\/portal\/?/, "").split("/")[0];
+  useEffect(() => { setMenu(false); window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }); }, [pathname]);
+  const items: NavItem[] = !me ? [] : [
+    ["", "p.dashboard", true, 0],
+    ["nachrichten", "p.messages", true, 0],
+    ["mail", "p.mail", me.is_employee, 0],
+    ["support", "p.support", !me.is_employee || can(me, "tickets"), 1],
+    ["anfragen-entwicklung", "p.dev", can(me, "project_read"), 1],
+    ["projekte", "p.projects", can(me, "project_read"), 1],
+    ["shop", "p.shop", !me.is_employee || can(me, "invoice_read"), 1],
+    ["kunden", "p.customers", me.is_employee && can(me, "customer_read"), 1],
+    ["produkte", "p.products", me.is_employee && can(me, "catalog_read"), 1],
+    ["geraete", "p.devices", can(me, "devices"), 1],
+    ["fernzugriff", "p.access", me.role === "customer", 1],
+    ["angebote", "p.quotes", can(me, "invoice_read"), 2],
+    ["rechnungen", "p.invoices", can(me, "invoice_read"), 2],
+    ["arbeit", "p.work", me.is_employee, 3],
+    ["stellen", "p.jobs", can(me, "jobs"), 3],
+    ["anfragen", "p.requests", can(me, "jobs"), 3],
+    ["benutzer", "p.users", can(me, "users"), 4],
+    ["konto", "p.account", true, 4],
+  ];
+  const current = items.find((l) => l[0] === seg);
+  const title = current ? t(current[1]) : "404";
+  useEffect(() => { if (me) document.title = `${title} · KM Code Craft`; }, [title, me]);
   if (!ready) return <Loading />;
   if (!me) return <Login />;
   if (me.must_change_password) return <ForcePassword />;
 
-  const links: [string, Key, boolean][] = [
-    ["", "p.dashboard", true],
-    ["nachrichten", "p.messages", true],
-    ["support", "p.support", !me.is_employee || can(me, "tickets")],
-    ["shop", "p.shop", !me.is_employee || can(me, "invoice_read")],
-    ["anfragen-entwicklung", "p.dev", can(me, "project_read")],
-    ["mail", "p.mail", me.is_employee],
-    ["arbeit", "p.work", me.is_employee],
-    ["projekte", "p.projects", can(me, "project_read")],
-    ["angebote", "p.quotes", can(me, "invoice_read")],
-    ["rechnungen", "p.invoices", can(me, "invoice_read")],
-    ["kunden", "p.customers", me.is_employee && can(me, "customer_read")],
-    ["produkte", "p.products", me.is_employee && can(me, "catalog_read")],
-    ["stellen", "p.jobs", can(me, "jobs")],
-    ["anfragen", "p.requests", can(me, "jobs")],
-    ["geraete", "p.devices", can(me, "devices")],
-    ["fernzugriff", "p.access", me.role === "customer"],
-    ["benutzer", "p.users", can(me, "users")],
-    ["konto", "p.account", true],
-  ];
+  const visible = items.filter((l) => l[2]);
+  const groups = T.groups.map((name, g) => ({ name, links: visible.filter((l) => l[3] === g) })).filter((g) => g.links.length > 0);
+  const initials = me.display_name.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
   return (
     <CommProvider>
-    <div className="portal">
-      <aside className="side">
-        <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
-        {links.filter((l) => l[2]).map(([to, key]) => (
-          <NavLink key={to} to={`/portal/${to}`} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}{to === "mail" && <MailBadge />}</NavLink>
-        ))}
-        <div className="me">
-          <div style={{ color: "#fff", fontWeight: 600 }}>{me.display_name}</div>
-          <div>{me.role} {me.departments.length > 0 && `· ${me.departments.join(", ")}`}</div>
-          <div className="row" style={{ marginTop: 8 }}>
+    <div className={`portal ${menu ? "menu-open" : ""}`}>
+      <aside className="side" id="portal-menu">
+        <Link to="/" className="logo logo-home"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
+        <nav aria-label={T.menu}>
+          {groups.map((g) => (
+            <div key={g.name} className="side-group">
+              {me.is_employee && <span>{g.name}</span>}
+              {g.links.map(([to, key]) => (
+                <NavLink key={to} to={to ? `/portal/${to}` : "/portal"} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}{to === "mail" && <MailBadge />}</NavLink>
+              ))}
+            </div>
+          ))}
+        </nav>
+        <div className="side-foot">
+          <div className="side-mobile row">
             <LangSwitch />
-            <button className="btn small ghost" style={{ color: "#cbd5e1", borderColor: "#334155" }} onClick={logout}>
-              {t("login.logout")}
-            </button>
+            <button className="btn small ghost" onClick={logout}>{t("login.logout")}</button>
           </div>
+          <span>KM Code Craft Portal</span>
         </div>
       </aside>
-      <section className="main">
-        <Routes>
-          <Route index element={<Dashboard />} />
-          <Route path="nachrichten" element={<Chat />} />
-          <Route path="support/*" element={<Tickets />} />
-          <Route path="shop" element={<Shop />} />
-          <Route path="anfragen-entwicklung/*" element={<DevRequests />} />
-          <Route path="mail" element={<Mail />} />
-          <Route path="arbeit" element={<Work />} />
-          <Route path="projekte/*" element={<Projects />} />
-          <Route path="angebote/*" element={<Quotes />} />
-          <Route path="rechnungen/*" element={<Invoices />} />
-          <Route path="kunden" element={<Customers />} />
-          <Route path="produkte" element={<ProductsAdmin />} />
-          <Route path="stellen" element={<Jobs />} />
-          <Route path="anfragen" element={<Requests />} />
-          <Route path="geraete" element={<Devices />} />
-          <Route path="geraete/:id" element={<Remote />} />
-          <Route path="fernzugriff" element={<CustomerAccess />} />
-          <Route path="benutzer" element={<Users />} />
-          <Route path="konto" element={<Account />} />
-          <Route path="*" element={<Navigate to="/portal" replace />} />
-        </Routes>
-      </section>
+      <div className="scrim" onClick={() => setMenu(false)} />
+      <div className="portal-body">
+        <header className="topbar">
+          <button className="burger" aria-label={T.menu} aria-controls="portal-menu" aria-expanded={menu} onClick={() => setMenu(!menu)}><span /><span /><span /></button>
+          <nav className="crumb" aria-label="Breadcrumb">
+            <span>{me.is_employee && current ? T.groups[current[3]] : "Portal"}</span>
+            <b>{title}</b>
+          </nav>
+          <div className="topbar-right">
+            <span className="hide-sm"><LangSwitch /></span>
+            <div className="user-chip">
+              <div className="who"><b>{me.display_name}</b><small>{me.role}{me.departments.length > 0 && ` · ${me.departments.join(", ")}`}</small></div>
+              <span className="av" aria-hidden="true">{initials}</span>
+            </div>
+            <button className="btn small ghost hide-sm" onClick={logout}>{t("login.logout")}</button>
+          </div>
+        </header>
+        <section className="main">
+          <Routes>
+            <Route index element={<Dashboard />} />
+            <Route path="nachrichten" element={<Chat />} />
+            <Route path="support/*" element={<Tickets />} />
+            <Route path="shop" element={<Shop />} />
+            <Route path="anfragen-entwicklung/*" element={<DevRequests />} />
+            <Route path="mail" element={<Mail />} />
+            <Route path="arbeit" element={<Work />} />
+            <Route path="projekte/*" element={<Projects />} />
+            <Route path="angebote/*" element={<Quotes />} />
+            <Route path="rechnungen/*" element={<Invoices />} />
+            <Route path="kunden" element={<Customers />} />
+            <Route path="produkte" element={<ProductsAdmin />} />
+            <Route path="stellen" element={<Jobs />} />
+            <Route path="anfragen" element={<Requests />} />
+            <Route path="geraete" element={<Devices />} />
+            <Route path="geraete/:id" element={<Remote />} />
+            <Route path="fernzugriff" element={<CustomerAccess />} />
+            <Route path="benutzer" element={<Users />} />
+            <Route path="konto" element={<Account />} />
+            <Route path="*" element={
+              <div className="notfound" style={{ minHeight: "50vh" }}>
+                <div><BrokenTrace /><h1>404</h1><p>{T.nf}</p><Link className="btn" to="/portal">{T.back}</Link></div>
+              </div>
+            } />
+          </Routes>
+        </section>
+      </div>
     </div>
     </CommProvider>
+  );
+}
+
+/** Dekoration der Anmeldeseite: Leiterbahnen zum Formular */
+function LoginArt() {
+  const { locale } = useI18n();
+  const T = PT[locale];
+  return (
+    <div className="login-art" aria-hidden="true">
+      <svg viewBox="0 0 600 800" preserveAspectRatio="xMidYMid slice">
+        {["M-10 140 H180 L240 200 H610", "M-10 300 H90 L150 360 H420 L470 310 H610", "M120 -10 V60 L180 120 H360 L400 80 V-10", "M300 810 V640 L340 600 H610"].map((d, i) => (
+          <path key={d} d={d} fill="none" stroke={i === 1 ? "#d9b56c" : "#333940"} strokeWidth={i === 1 ? 2.5 : 2} strokeLinejoin="round" />
+        ))}
+        {[[240, 200], [150, 360], [470, 310], [180, 120], [340, 600]].map(([x, y], i) => (
+          <circle key={i} cx={x} cy={y} r={i === 1 ? 7 : 5} fill="#16191d" stroke={i === 1 || i === 2 ? "#d9b56c" : "#4a5158"} strokeWidth="2" />
+        ))}
+      </svg>
+      <b>{T.artH}</b>
+      <p>{T.artP}</p>
+    </div>
   );
 }
 
@@ -124,7 +193,8 @@ function Login() {
 
   return (
     <div className="login-wrap">
-      <form className="card" onSubmit={submit}>
+      <LoginArt />
+      <form onSubmit={submit}>
         <div className="row between" style={{ marginBottom: 14 }}>
           <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <LangSwitch />
