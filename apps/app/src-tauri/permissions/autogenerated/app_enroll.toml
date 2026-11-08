@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-app-enroll"
+description = "Enables the app_enroll command without any pre-configured scope."
+commands.allow = ["app_enroll"]
+
+[[permission]]
+identifier = "deny-app-enroll"
+description = "Denies the app_enroll command without any pre-configured scope."
+commands.deny = ["app_enroll"]

@@ -236,7 +236,10 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
     if (!me) return;
     // Die App-Brücke kann auf Android erst kurz nach dem Seitenstart da sein → ensureEnrolled wartet selbst
     const take = () => { if (isApp()) native<string | null>("app_pending_url").then((u) => { if (u) nav(u); }).catch(() => {}); };
-    ensureEnrolled(me).then(take).catch(() => {});
+    ensureEnrolled(me).then(take).catch((x) => {
+      // Fehler der Geräte-Anmeldung im Server-Log sichtbar machen (sonst unbemerkt keine Benachrichtigungen)
+      fetch(`/api/v1/app/diag?err=${encodeURIComponent(String((x as Error)?.message ?? x).slice(0, 200))}`).catch(() => {});
+    });
     const vis = () => { if (document.visibilityState === "visible") take(); };
     window.addEventListener("km-app-open", take);
     document.addEventListener("visibilitychange", vis);

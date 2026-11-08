@@ -11,5 +11,17 @@
       "http://10.0.2.2:*/*"
     ]
   },
-  "permissions": ["core:default", "notification:default"]
+  "permissions": [
+    "core:default",
+    "notification:default",
+    "allow-app-info",
+    "allow-app-enroll",
+    "allow-app-set-server",
+    "allow-app-reset",
+    "allow-app-pending-url",
+    "allow-support-start",
+    "allow-support-stop",
+    "allow-support-status",
+    "allow-control-settings"
+  ]
 }

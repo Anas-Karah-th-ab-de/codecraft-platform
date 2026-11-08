@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-support-status"
+description = "Enables the support_status command without any pre-configured scope."
+commands.allow = ["support_status"]
+
+[[permission]]
+identifier = "deny-support-status"
+description = "Denies the support_status command without any pre-configured scope."
+commands.deny = ["support_status"]
