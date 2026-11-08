@@ -1,8 +1,8 @@
 import { Fragment, useState } from "react";
-import { Link, Route, Routes, useParams } from "react-router-dom";
-import { openPdf, useApi } from "../../api";
+import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { api, can, openPdf, useApi, useAuth } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
-import { Badge, Loading } from "../../ui";
+import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
 import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
 
 type InvRow = {
@@ -14,7 +14,76 @@ type Project = {
   description: string; status: string; repo_url: string | null; start_date: string | null; target_date: string | null;
   invoice_count: number; quote_count: number; invoiced_cents: number; open_cents: number;
   progress: number; milestones_total: number; milestones_done: number;
+  kind: "customer" | "internal" | "opensource"; license: string | null; is_public: boolean; budget_hours: number | null; department_code: string | null;
 };
+
+const PK = {
+  de: { new: "Neues Projekt", kind: "Art", customer: "Kundenprojekt", internal: "Intern", opensource: "Open Source", name: "Name", client: "Kunde",
+    dept: "Abteilung", desc: "Beschreibung", start: "Start", end: "Ziel", budget: "Budget (Stunden)", repo: "Repository (https://…)", license: "Lizenz",
+    pub: "Auf der Webseite zeigen", create: "Anlegen", status: "Status" },
+  en: { new: "New project", kind: "Type", customer: "Customer project", internal: "Internal", opensource: "Open source", name: "Name", client: "Customer",
+    dept: "Department", desc: "Description", start: "Start", end: "Target", budget: "Budget (hours)", repo: "Repository (https://…)", license: "License",
+    pub: "Show on the website", create: "Create", status: "Status" },
+  ar: { new: "مشروع جديد", kind: "النوع", customer: "مشروع عميل", internal: "داخلي", opensource: "مفتوح المصدر", name: "الاسم", client: "العميل",
+    dept: "القسم", desc: "الوصف", start: "البداية", end: "الهدف", budget: "الميزانية (ساعات)", repo: "المستودع (https://…)", license: "الترخيص",
+    pub: "عرض على الموقع", create: "إنشاء", status: "الحالة" },
+};
+
+function NewProject({ onClose }: { onClose: () => void }) {
+  const { locale } = useI18n();
+  const T = PK[locale];
+  const nav = useNavigate();
+  const orgs = useApi<{ id: string; name: string }[]>("/api/v1/organizations");
+  const depts = useApi<{ code: string; name: { de: string; en: string; ar: string } }[]>("/api/v1/departments");
+  const [f, setF] = useState({ kind: "internal", name: "", organization_id: "", department: "DEV", description: "", start_date: "", target_date: "",
+    budget_hours: "", repo_url: "", license: "", is_public: false, status: "planning" });
+  const s = useSubmit();
+  return (
+    <Modal title={T.new} onClose={onClose}>
+      <form onSubmit={s.run(async () => {
+        const r = await api<{ id: string }>("/api/v1/projects", { body: {
+          ...f, organization_id: f.kind === "customer" ? f.organization_id : null, start_date: f.start_date || null, target_date: f.target_date || null,
+          budget_hours: f.budget_hours ? +f.budget_hours : null, repo_url: f.repo_url || null, license: f.license || null, is_public: f.kind === "opensource" && f.is_public,
+        } });
+        nav(`/portal/projekte/${r.id}`);
+      })}>
+        <Field label={T.kind}>
+          <div className="seg">
+            {(["customer", "internal", "opensource"] as const).map((k) => <button type="button" key={k} className={f.kind === k ? "on" : ""} onClick={() => setF({ ...f, kind: k })}>{T[k]}</button>)}
+          </div>
+        </Field>
+        <Field label={T.name}><input required maxLength={200} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <div className="grid2">
+          {f.kind === "customer" && (
+            <Field label={T.client}>
+              <select required value={f.organization_id} onChange={(e) => setF({ ...f, organization_id: e.target.value })}>
+                <option value="">—</option>
+                {orgs.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+            </Field>
+          )}
+          <Field label={T.dept}>
+            <select value={f.department} onChange={(e) => setF({ ...f, department: e.target.value })}>
+              {depts.data?.map((d) => <option key={d.code} value={d.code}>{d.name[locale]}</option>)}
+            </select>
+          </Field>
+          <Field label={T.start}><input type="date" value={f.start_date} onChange={(e) => setF({ ...f, start_date: e.target.value })} /></Field>
+          <Field label={T.end}><input type="date" min={f.start_date} value={f.target_date} onChange={(e) => setF({ ...f, target_date: e.target.value })} /></Field>
+          <Field label={T.budget}><input type="number" min={0} value={f.budget_hours} onChange={(e) => setF({ ...f, budget_hours: e.target.value })} /></Field>
+          <Field label={T.repo}><input dir="ltr" type="url" pattern="https://.*" value={f.repo_url} onChange={(e) => setF({ ...f, repo_url: e.target.value })} /></Field>
+          {f.kind === "opensource" && <>
+            <Field label={T.license}><input dir="ltr" list="licenses" maxLength={60} value={f.license} onChange={(e) => setF({ ...f, license: e.target.value })} /></Field>
+            <datalist id="licenses">{["MIT", "Apache-2.0", "GPL-3.0", "AGPL-3.0", "MPL-2.0", "BSD-3-Clause"].map((l) => <option key={l} value={l} />)}</datalist>
+            <label className="row" style={{ gap: 6, alignSelf: "end" }}><input type="checkbox" style={{ width: "auto" }} checked={f.is_public} onChange={(e) => setF({ ...f, is_public: e.target.checked })} />{T.pub}</label>
+          </>}
+        </div>
+        <Field label={T.desc}><textarea rows={4} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
+        {s.error && <div className="alert">{s.error}</div>}
+        <button className="btn" disabled={s.busy}>{T.create}</button>
+      </form>
+    </Modal>
+  );
+}
 type QuoteRow = {
   id: string; organization_id: string; organization_name: string; project_id: string | null; project_name: string | null;
   number: string; title: string; revision: string | null; status: string; currency: string; tax_mode: string; locale: string;
@@ -50,12 +119,18 @@ export function Quotes() {
 
 function ProjectList() {
   const { t, locale } = useI18n();
+  const { me } = useAuth();
+  const [creating, setCreating] = useState(false);
   const { data, error } = useApi<Project[]>("/api/v1/projects");
   const [q, setQ] = useState("");
   const rows = (data ?? []).filter((p) => !q || `${p.name} ${p.code ?? ""} ${p.organization_name ?? ""}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
-      <h1>{t("p.projects")}</h1>
+      <div className="row between">
+        <h1>{t("p.projects")}</h1>
+        {me?.is_employee && can(me, "invoice_write") && <button className="btn" onClick={() => setCreating(true)}>+ {PK[locale].new}</button>}
+      </div>
+      {creating && <NewProject onClose={() => setCreating(false)} />}
       <input placeholder={t("p.search")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 12 }} />
       {!data ? <Loading error={error} /> : rows.length === 0 ? <div className="card"><p className="spin">{t("p.empty")}</p></div> : (
         <div className="grid">
@@ -63,7 +138,7 @@ function ProjectList() {
             <Link key={p.id} to={`/portal/projekte/${p.id}`} className="card proj">
               <div className="row between"><Badge s={p.status} />{p.code && <code className="muted">{p.code}</code>}</div>
               <h3>{p.name}</h3>
-              <div className="muted">{p.organization_name ?? t("p.internal")}</div>
+              <div className="muted">{p.organization_name ?? PK[locale][p.kind]}{p.kind === "opensource" && ` · ${p.license ?? "OSS"}${p.is_public ? " · 🌐" : ""}`}</div>
               {(p.milestones_total > 0 || p.progress > 0) && <div style={{ margin: "8px 0" }}><ProgressBar value={p.progress} /></div>}
               <div className="row between proj-num">
                 <span>{p.invoice_count} {t("p.invoices")} · {p.quote_count} {t("p.quotes")}</span>

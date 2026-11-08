@@ -278,7 +278,7 @@ pub async fn patch(
     Ok(StatusCode::NO_CONTENT)
 }
 
-fn slug(title: &str) -> String {
+pub(crate) fn slug(title: &str) -> String {
     let mut out = String::new();
     for c in title.to_lowercase().chars() {
         let c = match c {
@@ -318,8 +318,8 @@ pub async fn to_project(
     let slug = format!("{}-{}", if base.is_empty() { "projekt" } else { &base }, &pid.simple().to_string()[24..]);
     let mut tx = s.db.begin().await?;
     sqlx::query(
-        "INSERT INTO projects (id, organization_id, department_id, name, slug, code, description, status, start_date, target_date)
-         VALUES ($1, $2, (SELECT id FROM departments WHERE code = 'DEV'), $3, $4, $5, $6, 'active', CURRENT_DATE, $7)",
+        "INSERT INTO projects (id, organization_id, department_id, name, slug, code, description, status, start_date, target_date, kind)
+         VALUES ($1, $2, (SELECT id FROM departments WHERE code = 'DEV'), $3, $4, $5, $6, 'active', CURRENT_DATE, $7, 'customer')",
     )
     .bind(pid)
     .bind(org)

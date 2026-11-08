@@ -70,7 +70,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/invoices/{id}/cancel", post(invoices::cancel))
         .route("/api/v1/invoices/{id}/pdf", get(invoices::pdf))
         // Projekte & Kostenvoranschläge
-        .route("/api/v1/projects", get(projects::list))
+        .route("/api/v1/projects", get(projects::list).post(projects::create))
+        .route("/api/v1/public/projects", get(projects::public_list))
         .route("/api/v1/projects/{id}", get(projects::get).patch(projects::patch))
         .route("/api/v1/projects/{id}/milestones", post(projects::add_milestone))
         .route("/api/v1/projects/{id}/updates", post(projects::add_update))

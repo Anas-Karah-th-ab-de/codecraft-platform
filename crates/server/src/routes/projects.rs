@@ -53,6 +53,12 @@ pub struct ProjectRow {
     pub progress: i32,
     pub milestones_total: i64,
     pub milestones_done: i64,
+    /// customer | internal | opensource
+    pub kind: String,
+    pub license: Option<String>,
+    pub is_public: bool,
+    pub budget_hours: Option<i32>,
+    pub department_code: Option<String>,
 }
 
 const PROJECT_SELECT: &str = "
@@ -70,7 +76,9 @@ const PROJECT_SELECT: &str = "
                         ELSE (100 * count(*) FILTER (WHERE m.status = 'done') / count(*))::int END
               FROM project_milestones m WHERE m.project_id = p.id) AS progress,
            (SELECT count(*) FROM project_milestones m WHERE m.project_id = p.id) AS milestones_total,
-           (SELECT count(*) FROM project_milestones m WHERE m.project_id = p.id AND m.status = 'done') AS milestones_done
+           (SELECT count(*) FROM project_milestones m WHERE m.project_id = p.id AND m.status = 'done') AS milestones_done,
+           p.kind, p.license, p.is_public, p.budget_hours,
+           (SELECT code FROM departments d WHERE d.id = p.department_id) AS department_code
       FROM projects p LEFT JOIN organizations o ON o.id = p.organization_id";
 
 pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<ProjectRow>>> {
@@ -362,6 +370,13 @@ pub struct ProjectPatch {
     pub status: Option<String>,
     pub progress: Option<i16>,
     pub target_date: Option<NaiveDate>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub repo_url: Option<String>,
+    pub license: Option<String>,
+    pub is_public: Option<bool>,
+    pub budget_hours: Option<i32>,
+    pub start_date: Option<NaiveDate>,
 }
 
 pub async fn patch(
@@ -376,17 +391,35 @@ pub async fn patch(
     {
         return Err(ApiError::BadRequest("Status oder Fortschritt ungültig".into()));
     }
+    if let Some(r) = &b.repo_url {
+        check_repo(r)?;
+    }
+    if b.name.as_deref().is_some_and(|n| n.trim().is_empty() || n.chars().count() > 200) {
+        return Err(ApiError::BadRequest("Name 1–200 Zeichen".into()));
+    }
     let mut tx = s.db.begin().await?;
     sqlx::query(
         "UPDATE projects SET status = COALESCE($2, status), progress = COALESCE($3, progress),
                 target_date = COALESCE($4, target_date),
-                completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
+                completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END,
+                name = COALESCE($5, name), description = COALESCE($6, description),
+                repo_url = CASE WHEN $7::text IS NULL THEN repo_url ELSE NULLIF($7, '') END,
+                license = CASE WHEN $8::text IS NULL THEN license ELSE NULLIF($8, '') END,
+                is_public = COALESCE($9, is_public), budget_hours = COALESCE($10, budget_hours),
+                start_date = COALESCE($11, start_date)
           WHERE id = $1",
     )
     .bind(id)
     .bind(&b.status)
     .bind(b.progress)
     .bind(b.target_date)
+    .bind(b.name.as_deref().map(str::trim))
+    .bind(b.description.as_deref().map(str::trim))
+    .bind(b.repo_url.as_deref().map(str::trim))
+    .bind(b.license.as_deref().map(str::trim))
+    .bind(b.is_public)
+    .bind(b.budget_hours)
+    .bind(b.start_date)
     .execute(&mut *tx)
     .await?;
     super::audit(
@@ -524,4 +557,123 @@ pub async fn add_update(
         tell_customer(&s, org, id, &name).await;
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+fn check_repo(r: &str) -> ApiResult<()> {
+    let r = r.trim();
+    if !r.is_empty() && !(r.starts_with("https://") && r.len() <= 300 && !r.contains(char::is_whitespace)) {
+        return Err(ApiError::BadRequest("Repository muss eine https-Adresse sein".into()));
+    }
+    Ok(())
+}
+
+#[derive(Deserialize)]
+pub struct NewProject {
+    pub name: String,
+    /// customer (Standard, braucht organization_id) | internal | opensource
+    pub kind: Option<String>,
+    pub organization_id: Option<Uuid>,
+    /// Abteilungscode, Standard DEV
+    pub department: Option<String>,
+    #[serde(default)]
+    pub description: String,
+    pub start_date: Option<NaiveDate>,
+    pub target_date: Option<NaiveDate>,
+    pub budget_hours: Option<i32>,
+    pub repo_url: Option<String>,
+    pub license: Option<String>,
+    #[serde(default)]
+    pub is_public: bool,
+    pub status: Option<String>,
+}
+
+/// Team: Projekt anlegen – für einen Kunden, intern oder als Open Source (optional öffentlich)
+pub async fn create(
+    State(s): State<AppState>,
+    user: User,
+    Json(b): Json<NewProject>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    user.require(Permission::CustomerWrite, None)?;
+    let kind =
+        b.kind.unwrap_or_else(|| if b.organization_id.is_some() { "customer".into() } else { "internal".into() });
+    let org = match kind.as_str() {
+        "customer" => Some(b.organization_id.ok_or_else(|| ApiError::BadRequest("Kunde fehlt".into()))?),
+        "internal" | "opensource" => None,
+        _ => return Err(ApiError::BadRequest("Art: customer, internal oder opensource".into())),
+    };
+    let name = b.name.trim();
+    if name.is_empty() || name.chars().count() > 200 {
+        return Err(ApiError::BadRequest("Name 1–200 Zeichen".into()));
+    }
+    let status = b.status.unwrap_or_else(|| "planning".into());
+    if !PROJECT_STATUSES.contains(&status.as_str()) {
+        return Err(ApiError::BadRequest("Status ungültig".into()));
+    }
+    if b.is_public && kind != "opensource" {
+        return Err(ApiError::BadRequest("Öffentlich nur für Open-Source-Projekte".into()));
+    }
+    if b.budget_hours.is_some_and(|h| !(0..=100_000).contains(&h)) {
+        return Err(ApiError::BadRequest("Budget-Stunden ungültig".into()));
+    }
+    if let (Some(a), Some(z)) = (b.start_date, b.target_date) {
+        if z < a {
+            return Err(ApiError::BadRequest("Ende liegt vor dem Start".into()));
+        }
+    }
+    if let Some(r) = &b.repo_url {
+        check_repo(r)?;
+    }
+    let dept = b.department.unwrap_or_else(|| "DEV".into());
+    let dept_id: Uuid = sqlx::query_scalar("SELECT id FROM departments WHERE code = $1 AND is_active")
+        .bind(&dept)
+        .fetch_optional(&s.db)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Abteilung unbekannt".into()))?;
+    let id = Uuid::now_v7();
+    let base = super::requests::slug(name);
+    let slug = format!("{}-{}", if base.is_empty() { "projekt" } else { &base }, &id.simple().to_string()[24..]);
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "INSERT INTO projects (id, organization_id, department_id, name, slug, description, status, start_date, target_date,
+                               budget_hours, repo_url, kind, license, is_public)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)",
+    )
+    .bind(id)
+    .bind(org)
+    .bind(dept_id)
+    .bind(name)
+    .bind(&slug)
+    .bind(b.description.trim())
+    .bind(&status)
+    .bind(b.start_date)
+    .bind(b.target_date)
+    .bind(b.budget_hours)
+    .bind(b.repo_url.as_deref().map(str::trim).filter(|r| !r.is_empty()))
+    .bind(&kind)
+    .bind(b.license.as_deref().map(str::trim).filter(|l| !l.is_empty()))
+    .bind(b.is_public)
+    .execute(&mut *tx)
+    .await?;
+    super::audit(&mut tx, &user.actor(), "create", "project", id, json!({ "name": name, "kind": kind })).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(json!({ "id": id, "slug": slug }))))
+}
+
+/// Webseite: öffentliche Open-Source-Projekte
+pub async fn public_list(State(s): State<AppState>) -> ApiResult<Json<serde_json::Value>> {
+    type Row = (String, String, String, Option<String>, Option<String>, String, i32);
+    let rows: Vec<Row> = sqlx::query_as(
+        "SELECT p.name, p.slug, p.description, p.repo_url, p.license, p.status,
+                (SELECT CASE WHEN count(*) = 0 THEN p.progress::int
+                             ELSE (100 * count(*) FILTER (WHERE m.status = 'done') / count(*))::int END
+                   FROM project_milestones m WHERE m.project_id = p.id)
+           FROM projects p WHERE p.kind = 'opensource' AND p.is_public AND p.status <> 'archived'
+          ORDER BY p.created_at DESC",
+    )
+    .fetch_all(&s.db)
+    .await?;
+    Ok(Json(json!(rows
+        .iter()
+        .map(|r| json!({ "name": r.0, "slug": r.1, "description": r.2, "repo_url": r.3, "license": r.4, "status": r.5, "progress": r.6 }))
+        .collect::<Vec<_>>())))
 }
