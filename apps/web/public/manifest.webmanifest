@@ -1,0 +1,14 @@
+{
+  "name": "KM Code Craft Portal",
+  "short_name": "KM Portal",
+  "description": "Portal für Team und Kunden: Nachrichten, Anrufe, Tickets, Projekte, E-Mail.",
+  "start_url": "/portal",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#16191d",
+  "theme_color": "#16191d",
+  "lang": "de",
+  "icons": [
+    { "src": "/brand/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

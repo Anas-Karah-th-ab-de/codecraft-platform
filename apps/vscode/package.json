@@ -1,0 +1,28 @@
+{
+  "name": "km-portal",
+  "displayName": "KM Code Craft Portal",
+  "description": "Anrufe, Mitteilungen und Chat-Nachrichten aus dem KM Code Craft Portal direkt in VS Code.",
+  "version": "0.1.0",
+  "publisher": "kmcodecraft",
+  "license": "UNLICENSED",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "extensionKind": ["ui"],
+  "main": "./extension.js",
+  "activationEvents": ["onStartupFinished"],
+  "contributes": {
+    "commands": [
+      { "command": "kmPortal.signIn", "title": "KM Portal: Anmelden / Sign in" },
+      { "command": "kmPortal.signOut", "title": "KM Portal: Abmelden / Sign out" },
+      { "command": "kmPortal.open", "title": "KM Portal: Mitteilungen öffnen / Open notifications" }
+    ],
+    "configuration": {
+      "title": "KM Code Craft Portal",
+      "properties": {
+        "kmPortal.url": { "type": "string", "default": "https://code-craft.tech", "description": "Adresse des Portals" },
+        "kmPortal.chatMessages": { "type": "boolean", "default": true, "description": "Neue Chat-Nachrichten anzeigen" },
+        "kmPortal.notifications": { "type": "boolean", "default": true, "description": "Mitteilungen (Tickets, Termine, Ankündigungen …) anzeigen" }
+      }
+    }
+  }
+}

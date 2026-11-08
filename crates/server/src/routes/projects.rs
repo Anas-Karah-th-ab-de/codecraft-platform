@@ -381,7 +381,16 @@ async fn project_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<(Option<U
 
 async fn tell_customer(s: &AppState, org: Option<Uuid>, project: Uuid, name: &str) {
     if let Some(o) = org {
-        super::shop::notify(&super::shop::org_users(s, o).await, "project", "update", project, "", name);
+        super::shop::notify(
+            &s.db,
+            Uuid::nil(),
+            &super::shop::org_users(s, o).await,
+            "project",
+            "update",
+            project,
+            "",
+            name,
+        );
     }
 }
 

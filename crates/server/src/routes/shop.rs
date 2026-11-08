@@ -18,11 +18,24 @@ use uuid::Uuid;
 
 const STATUSES: [&str; 5] = ["requested", "confirmed", "invoiced", "delivered", "cancelled"];
 
-pub(crate) fn notify(users: &[Uuid], kind: &str, event: &str, id: Uuid, number: &str, title: &str) {
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn notify(
+    db: &sqlx::PgPool,
+    actor: Uuid,
+    users: &[Uuid],
+    kind: &str,
+    event: &str,
+    id: Uuid,
+    number: &str,
+    title: &str,
+) {
     let msg = json!({ "type": kind, "event": event, "id": id, "number": number, "title": title }).to_string();
     for u in users {
         super::chat::send_user(*u, &msg);
     }
+    let to: Vec<Uuid> = users.iter().copied().filter(|u| *u != actor).collect();
+    let text = if number.is_empty() || number == title { title.to_owned() } else { format!("{number} · {title}") };
+    super::notify::emit(db, &to, super::notify::Note::new(kind, event, Some(id), &text));
 }
 
 /// Vertrieb + Leitung (für neue Bestellungen/Anfragen)
@@ -160,7 +173,7 @@ pub async fn create(
     super::audit(&mut tx, &user.actor(), "create", "order", id, json!({ "number": number, "net_cents": total }))
         .await?;
     tx.commit().await?;
-    notify(&team(&s, "SAL").await, "order", "new", id, &number, &number);
+    notify(&s.db, user.id, &team(&s, "SAL").await, "order", "new", id, &number, &number);
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "number": number, "net_cents": total }))))
 }
 
@@ -249,7 +262,7 @@ pub async fn patch(
     tx.commit().await?;
     let mut to = org_users(&s, org).await;
     to.retain(|u| *u != user.id);
-    notify(&to, "order", "update", id, &number, &number);
+    notify(&s.db, user.id, &to, "order", "update", id, &number, &number);
     Ok(StatusCode::NO_CONTENT)
 }
 

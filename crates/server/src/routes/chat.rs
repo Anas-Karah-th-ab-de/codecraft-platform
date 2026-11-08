@@ -20,22 +20,91 @@ use serde_json::{json, Value};
 use sqlx::PgConnection;
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use tokio::sync::mpsc::{unbounded_channel, UnboundedSender};
+use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
 use uuid::Uuid;
 
 // ── Verbindungen (im Speicher) ───────────────────────────────────────────────
 
-type Conns = HashMap<Uuid, Vec<(u64, UnboundedSender<String>)>>;
+/// Verbindung: (laufende Nr., Token, Sender). Token, damit gesperrte Sitzungen sofort getrennt werden.
+type Conns = HashMap<Uuid, Vec<(u64, Uuid, UnboundedSender<String>)>>;
 static HUB: LazyLock<Mutex<Conns>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
+/// Interne Nachricht: Verbindung schließen (Sperre, Abmeldung, widerrufener Schlüssel)
+pub const KICK: &str = "\u{0}kick";
+
 pub fn send_user(user: Uuid, msg: &str) {
     if let Some(list) = HUB.lock().unwrap().get(&user) {
-        for (_, tx) in list {
+        for (_, _, tx) in list {
             let _ = tx.send(msg.to_owned());
         }
     }
 }
+
+/// Alle Verbindungen eines Benutzers trennen
+pub fn kick_user(user: Uuid) {
+    send_user(user, KICK);
+}
+
+/// Verbindungen einer Sitzung/eines Schlüssels trennen
+pub fn kick_token(token: Uuid) {
+    for list in HUB.lock().unwrap().values() {
+        for (_, t, tx) in list {
+            if *t == token {
+                let _ = tx.send(KICK.to_owned());
+            }
+        }
+    }
+}
+
+/// Live-Verbindung (WebSocket oder Ereignis-Stream); meldet sich beim Fallenlassen ab
+pub struct Registration {
+    pub user: Uuid,
+    pub cid: u64,
+    pub rx: UnboundedReceiver<String>,
+}
+
+impl Registration {
+    pub fn new(user: Uuid, token: Uuid) -> Self {
+        let (tx, rx) = unbounded_channel::<String>();
+        let cid = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let first = {
+            let mut hub = HUB.lock().unwrap();
+            let e = hub.entry(user).or_default();
+            e.push((cid, token, tx));
+            e.len() == 1
+        };
+        if first {
+            broadcast_all(&json!({ "type": "presence", "user": user, "online": true }).to_string());
+        }
+        Registration { user, cid, rx }
+    }
+}
+
+impl Drop for Registration {
+    fn drop(&mut self) {
+        let last = {
+            let mut hub = HUB.lock().unwrap();
+            match hub.get_mut(&self.user) {
+                Some(list) => {
+                    list.retain(|(id, ..)| *id != self.cid);
+                    let empty = list.is_empty();
+                    if empty {
+                        hub.remove(&self.user);
+                    }
+                    empty
+                }
+                None => false,
+            }
+        };
+        if last {
+            broadcast_all(&json!({ "type": "presence", "user": self.user, "online": false }).to_string());
+        }
+    }
+}
+
+/// Offene Anrufe (Raum, Angerufene/r) → Anrufer/in; für „Verpasster Anruf“
+static RINGS: LazyLock<Mutex<HashMap<(Uuid, Uuid), Uuid>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn online_users() -> Vec<Uuid> {
     HUB.lock().unwrap().keys().copied().collect()
@@ -43,7 +112,7 @@ pub fn online_users() -> Vec<Uuid> {
 
 fn broadcast_all(msg: &str) {
     for list in HUB.lock().unwrap().values() {
-        for (_, tx) in list {
+        for (_, _, tx) in list {
             let _ = tx.send(msg.to_owned());
         }
     }
@@ -424,9 +493,11 @@ pub async fn post_message(
         .execute(&s.db)
         .await?;
     let ev = json!({ "type": "message", "message": msg }).to_string();
-    for m in members(&s.db, room).await? {
-        send_user(m, &ev);
+    let ms = members(&s.db, room).await?;
+    for m in &ms {
+        send_user(*m, &ev);
     }
+    push_offline(&s.db, &ms, user.id, room, msg.sender_name.as_deref().unwrap_or(""), &msg.body);
     Ok((StatusCode::CREATED, Json(msg)))
 }
 
@@ -515,9 +586,11 @@ pub async fn upload(
         .await?;
     tx.commit().await?;
     let ev = json!({ "type": "message", "message": msg }).to_string();
-    for m in members(&s.db, room).await? {
-        send_user(m, &ev);
+    let ms = members(&s.db, room).await?;
+    for m in &ms {
+        send_user(*m, &ev);
     }
+    push_offline(&s.db, &ms, user.id, room, msg.sender_name.as_deref().unwrap_or(""), &msg.body);
     Ok((StatusCode::CREATED, Json(msg)))
 }
 
@@ -611,6 +684,30 @@ pub(crate) fn ice_servers(headers: &HeaderMap, id: Uuid) -> Value {
     json!({ "iceServers": servers })
 }
 
+/// Mitglieder, die gerade nirgends verbunden sind, per Push benachrichtigen
+fn push_offline(db: &sqlx::PgPool, members: &[Uuid], sender: Uuid, room: Uuid, name: &str, body: &str) {
+    let online = online_users();
+    let targets: Vec<Uuid> = members.iter().copied().filter(|m| *m != sender && !online.contains(m)).collect();
+    if targets.is_empty() {
+        return;
+    }
+    let (db, text) = (db.clone(), format!("{name}: {}", body.chars().take(140).collect::<String>()));
+    tokio::spawn(async move {
+        for t in targets {
+            super::notify::push_only(
+                &db,
+                t,
+                "message",
+                "new",
+                &text,
+                &format!("/portal/nachrichten?room={room}"),
+                json!({}),
+            )
+            .await;
+        }
+    });
+}
+
 // ── WebSocket ────────────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
@@ -620,87 +717,177 @@ pub struct WsQuery {
 
 pub async fn ws(State(s): State<AppState>, Query(q): Query<WsQuery>, up: WebSocketUpgrade) -> ApiResult<Response> {
     // Browser können beim WebSocket keine Header setzen → Token als Parameter
-    let row: Option<(Uuid, String)> = sqlx::query_as(
-        "SELECT u.id, u.display_name FROM api_tokens t JOIN users u ON u.id = t.user_id
+    let row: Option<(Uuid, Uuid, String)> = sqlx::query_as(
+        "SELECT u.id, t.id, u.display_name FROM api_tokens t JOIN users u ON u.id = t.user_id
           WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active AND NOT u.must_change_password
             AND (t.expires_at IS NULL OR t.expires_at > now())",
     )
     .bind(hash_token(&q.token))
     .fetch_optional(&s.db)
     .await?;
-    let (user, name) = row.ok_or(ApiError::Unauthorized)?;
-    Ok(up.max_message_size(256 * 1024).on_upgrade(move |socket| session(s, user, name, socket)))
+    let (user, token, name) = row.ok_or(ApiError::Unauthorized)?;
+    Ok(up.max_message_size(256 * 1024).on_upgrade(move |socket| session(s, user, token, name, socket)))
 }
 
-async fn session(s: AppState, user: Uuid, name: String, socket: WebSocket) {
+async fn session(s: AppState, user: Uuid, token: Uuid, name: String, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
-    let (tx, mut rx) = unbounded_channel::<String>();
-    let cid = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let first = {
-        let mut hub = HUB.lock().unwrap();
-        let e = hub.entry(user).or_default();
-        e.push((cid, tx));
-        e.len() == 1
-    };
-    if first {
-        broadcast_all(&json!({ "type": "presence", "user": user, "online": true }).to_string());
-    }
-    let writer = tokio::spawn(async move {
-        while let Some(m) = rx.recv().await {
-            if sink.send(Message::Text(m.into())).await.is_err() {
-                break;
+    let mut reg = Registration::new(user, token);
+    loop {
+        tokio::select! {
+            out = reg.rx.recv() => match out {
+                Some(m) if m == KICK => {
+                    let _ = sink.send(Message::Close(None)).await;
+                    break;
+                }
+                Some(m) => {
+                    if sink.send(Message::Text(m.into())).await.is_err() {
+                        break;
+                    }
+                }
+                None => break,
+            },
+            inc = stream.next() => {
+                let Some(Ok(msg)) = inc else { break };
+                if let Message::Text(text) = msg {
+                    handle(&s, user, &name, &text).await;
+                }
             }
         }
-    });
-    while let Some(Ok(msg)) = stream.next().await {
-        let Message::Text(text) = msg else { continue };
-        let Ok(v) = serde_json::from_str::<Value>(&text) else { continue };
-        let room = v.get("room").and_then(|r| r.as_str()).and_then(|r| r.parse::<Uuid>().ok());
-        match v.get("type").and_then(|t| t.as_str()) {
-            Some("typing") => {
-                if let Some(room) = room {
-                    if let Ok(ms) = members(&s.db, room).await {
-                        if ms.contains(&user) {
-                            let ev = json!({ "type": "typing", "room": room, "user": user, "name": name }).to_string();
-                            ms.iter().filter(|m| **m != user).for_each(|m| send_user(*m, &ev));
-                        }
+    }
+}
+
+async fn handle(s: &AppState, user: Uuid, name: &str, text: &str) {
+    let Ok(v) = serde_json::from_str::<Value>(text) else { return };
+    let room = v.get("room").and_then(|r| r.as_str()).and_then(|r| r.parse::<Uuid>().ok());
+    match v.get("type").and_then(|t| t.as_str()) {
+        Some("typing") => {
+            if let Some(room) = room {
+                if let Ok(ms) = members(&s.db, room).await {
+                    if ms.contains(&user) {
+                        let ev = json!({ "type": "typing", "room": room, "user": user, "name": name }).to_string();
+                        ms.iter().filter(|m| **m != user).for_each(|m| send_user(*m, &ev));
                     }
                 }
             }
-            // Anruf-Signale nur an Mitglieder desselben Raums weiterreichen
-            Some("call") => {
-                let to = v.get("to").and_then(|t| t.as_str()).and_then(|t| t.parse::<Uuid>().ok());
-                if let (Some(room), Some(to)) = (room, to) {
-                    if let Ok(ms) = members(&s.db, room).await {
-                        if ms.contains(&user) && ms.contains(&to) {
-                            let ev = json!({ "type": "call", "room": room, "from": user, "name": name,
-                                             "data": v.get("data").cloned().unwrap_or(Value::Null) });
-                            send_user(to, &ev.to_string());
-                        }
-                    }
-                }
-            }
-            _ => {}
         }
+        // Anruf-Signale nur an Mitglieder desselben Raums weiterreichen
+        Some("call") => {
+            let to = v.get("to").and_then(|t| t.as_str()).and_then(|t| t.parse::<Uuid>().ok());
+            if let (Some(room), Some(to)) = (room, to) {
+                let data = v.get("data").cloned().unwrap_or(Value::Null);
+                let _ = relay(s, room, user, name, to, data).await;
+            }
+        }
+        _ => {}
     }
-    writer.abort();
-    let last = {
-        let mut hub = HUB.lock().unwrap();
-        if let Some(list) = hub.get_mut(&user) {
-            list.retain(|(id, _)| *id != cid);
-            if list.is_empty() {
-                hub.remove(&user);
-                true
+}
+
+/// Anruf-Signal weiterleiten; Klingeln zusätzlich per Push (Handy/PC), verpasste Anrufe merken
+pub async fn relay(
+    s: &AppState,
+    room: Uuid,
+    user: Uuid,
+    name: &str,
+    to: Uuid,
+    data: Value,
+) -> Result<bool, sqlx::Error> {
+    let ms = members(&s.db, room).await?;
+    if !ms.contains(&user) || !ms.contains(&to) {
+        return Ok(false);
+    }
+    let kind = data.get("kind").and_then(|k| k.as_str()).unwrap_or_default().to_owned();
+    let ev = json!({ "type": "call", "room": room, "from": user, "name": name, "data": data });
+    send_user(to, &ev.to_string());
+    match kind.as_str() {
+        "ring" => {
+            RINGS.lock().unwrap().insert((room, to), user);
+            let media = if data.get("media").and_then(|m| m.as_str()) == Some("video") { "video" } else { "audio" };
+            let url = format!(
+                "/portal/nachrichten?ring={room}&from={user}&media={media}&t={}&name={}",
+                chrono::Utc::now().timestamp_millis(),
+                urlencode(name)
+            );
+            let title = data.get("title").and_then(|t| t.as_str()).filter(|_| data.get("group") == Some(&json!(true)));
+            let text = match title {
+                Some(g) => format!("{name} · {g}"),
+                None => name.to_owned(),
+            };
+            let db = s.db.clone();
+            tokio::spawn(async move {
+                super::notify::push_only(
+                    &db,
+                    to,
+                    "call",
+                    "ring",
+                    &text,
+                    &url,
+                    json!({ "call": true, "room": room, "from": user, "media": media, "requireInteraction": true }),
+                )
+                .await;
+            });
+        }
+        // Angerufene/r hat reagiert → andere eigene Geräte hören auf zu klingeln
+        "accept" | "decline" | "busy" => {
+            RINGS.lock().unwrap().remove(&(room, user));
+            send_user(user, &json!({ "type": "call-handled", "room": room }).to_string());
+        }
+        "hangup" => {
+            let missed = {
+                let mut r = RINGS.lock().unwrap();
+                match r.get(&(room, to)) {
+                    Some(from) if *from == user => r.remove(&(room, to)).is_some(),
+                    _ => false,
+                }
+            };
+            if missed {
+                super::notify::emit(
+                    &s.db,
+                    &[to],
+                    super::notify::Note::new("call", "missed", Some(room), name).actor(name).priority(2),
+                );
+                send_user(to, &json!({ "type": "call-handled", "room": room }).to_string());
+            }
+        }
+        _ => {}
+    }
+    Ok(true)
+}
+
+fn urlencode(s: &str) -> String {
+    s.bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
+                (b as char).to_string()
             } else {
-                false
+                format!("%{b:02X}")
             }
-        } else {
-            false
-        }
-    };
-    if last {
-        broadcast_all(&json!({ "type": "presence", "user": user, "online": false }).to_string());
+        })
+        .collect()
+}
+
+#[derive(Deserialize)]
+pub struct SignalIn {
+    pub to: Uuid,
+    pub data: Value,
+}
+
+/// Anruf-Signal per REST (z. B. „Ablehnen“ aus VS Code oder der Push-Benachrichtigung)
+pub async fn signal(
+    State(s): State<AppState>,
+    user: User,
+    Path(room): Path<Uuid>,
+    Json(b): Json<SignalIn>,
+) -> ApiResult<StatusCode> {
+    let kind = b.data.get("kind").and_then(|k| k.as_str()).unwrap_or_default();
+    if !["decline", "busy"].contains(&kind) {
+        return Err(ApiError::BadRequest("Nur Ablehnen per REST".into()));
     }
+    let name: String =
+        sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1").bind(user.id).fetch_one(&s.db).await?;
+    if !relay(&s, room, user.id, &name, b.to, b.data).await? {
+        return Err(ApiError::NotFound);
+    }
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[cfg(test)]

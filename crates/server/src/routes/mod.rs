@@ -1,5 +1,6 @@
 pub mod access;
 pub mod account;
+pub mod announce;
 mod catalog;
 pub mod chat;
 mod devices;
@@ -9,6 +10,8 @@ mod jobs;
 pub mod mail;
 pub mod media;
 pub mod meet;
+pub mod notify;
+mod offboard;
 mod organizations;
 mod payments;
 mod projects;
@@ -45,6 +48,30 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/users", get(account::list_users).post(account::create_user))
         .route("/api/v1/users/{id}/reset-password", post(account::reset_password))
         .route("/api/v1/users/{id}/access", put(account::set_access))
+        .route("/api/v1/users/{id}/handover", get(offboard::handover_info))
+        .route("/api/v1/users/{id}/deactivate", post(offboard::deactivate))
+        .route("/api/v1/users/{id}/reactivate", post(offboard::reactivate))
+        // Benachrichtigungen, Push, Ereignis-Stream, Schlüssel
+        .route("/api/v1/notifications", get(notify::list).delete(notify::clear))
+        .route("/api/v1/notifications/read", post(notify::mark))
+        .route("/api/v1/notifications/test", post(notify::test))
+        .route("/api/v1/notifications/prefs", get(notify::get_prefs).put(notify::put_prefs))
+        .route("/api/v1/notifications/{id}", delete(notify::remove))
+        .route("/api/v1/push/key", get(notify::push_key))
+        .route("/api/v1/push/subscribe", post(notify::subscribe))
+        .route("/api/v1/push/unsubscribe", post(notify::unsubscribe))
+        .route("/api/v1/push/devices", get(notify::devices))
+        .route("/api/v1/push/devices/{id}", delete(notify::delete_device))
+        .route("/api/v1/events", get(notify::events))
+        .route("/api/v1/me/locale", put(notify::set_locale))
+        .route("/api/v1/account/tokens", get(notify::tokens).post(notify::create_token))
+        .route("/api/v1/account/tokens/{id}", delete(notify::revoke_token))
+        // Ankündigungen
+        .route("/api/v1/announcements", get(announce::list).post(announce::create))
+        .route("/api/v1/announcements/pending", get(announce::pending))
+        .route("/api/v1/announcements/{id}", put(announce::update).delete(announce::remove))
+        .route("/api/v1/announcements/{id}/read", post(announce::read))
+        .route("/api/v1/announcements/{id}/readers", get(announce::readers))
         // Katalog
         .route("/api/v1/departments", get(catalog::departments))
         .route("/api/v1/products", get(catalog::products).post(catalog::create_product))
@@ -110,6 +137,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/chat/rooms", get(chat::rooms).post(chat::create_room))
         .route("/api/v1/chat/rooms/{id}/messages", get(chat::messages).post(chat::post_message))
         .route("/api/v1/chat/rooms/{id}/read", post(chat::mark_read))
+        .route("/api/v1/chat/rooms/{id}/signal", post(chat::signal))
         .route(
             "/api/v1/chat/rooms/{id}/files",
             post(chat::upload).layer(DefaultBodyLimit::max(chat::MAX_FILE + 1024 * 1024)),
@@ -122,6 +150,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/mail/messages/{id}", get(mail::get).patch(mail::patch).delete(mail::delete))
         .route("/api/v1/mail/messages/{id}/raw", get(mail::raw))
         .route("/api/v1/mail/messages/{id}/attachments/{n}", get(mail::attachment))
+        .route("/api/v1/mail/bulk", post(mail::bulk))
+        .route("/api/v1/mail/folders/{folder}/empty", post(mail::empty_folder))
+        .route("/api/v1/mail/folders/{folder}/read", post(mail::read_folder))
         .route("/api/v1/mail/send", post(mail::send).layer(DefaultBodyLimit::max(40 * 1024 * 1024)))
         .route("/api/v1/mail/admin", get(mail::admin))
         .route("/api/v1/mail/mailboxes", get(mail::mailboxes))

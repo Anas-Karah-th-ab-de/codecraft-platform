@@ -279,6 +279,102 @@ pub async fn delete(State(s): State<AppState>, user: User, Path(id): Path<Uuid>)
 }
 
 #[derive(Deserialize)]
+pub struct Bulk {
+    pub ids: Vec<Uuid>,
+    /// read | unread | flag | unflag | move | delete
+    pub action: String,
+    pub folder: Option<String>,
+}
+
+/// Mehrere Nachrichten auf einmal (Auswahl in der Liste)
+pub async fn bulk(State(s): State<AppState>, user: User, Json(b): Json<Bulk>) -> ApiResult<Json<Value>> {
+    let mb = mailbox(&s, &user).await?;
+    if b.ids.is_empty() || b.ids.len() > 1000 {
+        return Err(ApiError::BadRequest("1 bis 1000 Nachrichten".into()));
+    }
+    let n = match b.action.as_str() {
+        "read" | "unread" | "flag" | "unflag" => {
+            let col = if b.action.ends_with("read") { "seen" } else { "flagged" };
+            let val = !b.action.starts_with("un");
+            sqlx::query(&format!("UPDATE mail_messages SET {col} = $3 WHERE mailbox_id = $1 AND id = ANY($2)"))
+                .bind(mb.mailbox_id)
+                .bind(&b.ids)
+                .bind(val)
+                .execute(&s.db)
+                .await?
+                .rows_affected()
+        }
+        "move" => {
+            let f = b.folder.as_deref().unwrap_or_default();
+            if !FOLDERS.contains(&f) {
+                return Err(ApiError::BadRequest("Unbekannter Ordner".into()));
+            }
+            sqlx::query(
+                "UPDATE mail_messages SET folder = $3, uid = nextval('mail_uid_seq')
+                  WHERE mailbox_id = $1 AND id = ANY($2) AND folder <> $3",
+            )
+            .bind(mb.mailbox_id)
+            .bind(&b.ids)
+            .bind(f)
+            .execute(&s.db)
+            .await?
+            .rows_affected()
+        }
+        // wie einzeln: aus dem Papierkorb endgültig, sonst in den Papierkorb
+        "delete" => {
+            let gone =
+                sqlx::query("DELETE FROM mail_messages WHERE mailbox_id = $1 AND id = ANY($2) AND folder = 'trash'")
+                    .bind(mb.mailbox_id)
+                    .bind(&b.ids)
+                    .execute(&s.db)
+                    .await?
+                    .rows_affected();
+            gone + sqlx::query(
+                "UPDATE mail_messages SET folder = 'trash', uid = nextval('mail_uid_seq')
+                  WHERE mailbox_id = $1 AND id = ANY($2) AND folder <> 'trash'",
+            )
+            .bind(mb.mailbox_id)
+            .bind(&b.ids)
+            .execute(&s.db)
+            .await?
+            .rows_affected()
+        }
+        _ => return Err(ApiError::BadRequest("Unbekannte Aktion".into())),
+    };
+    Ok(Json(json!({ "changed": n })))
+}
+
+/// Papierkorb oder Spam leeren (endgültig)
+pub async fn empty_folder(State(s): State<AppState>, user: User, Path(folder): Path<String>) -> ApiResult<Json<Value>> {
+    let mb = mailbox(&s, &user).await?;
+    if !["trash", "junk"].contains(&folder.as_str()) {
+        return Err(ApiError::BadRequest("Nur Papierkorb und Spam können geleert werden".into()));
+    }
+    let n = sqlx::query("DELETE FROM mail_messages WHERE mailbox_id = $1 AND folder = $2")
+        .bind(mb.mailbox_id)
+        .bind(&folder)
+        .execute(&s.db)
+        .await?
+        .rows_affected();
+    Ok(Json(json!({ "deleted": n })))
+}
+
+/// Ganzen Ordner als gelesen markieren
+pub async fn read_folder(State(s): State<AppState>, user: User, Path(folder): Path<String>) -> ApiResult<Json<Value>> {
+    let mb = mailbox(&s, &user).await?;
+    if !FOLDERS.contains(&folder.as_str()) {
+        return Err(ApiError::BadRequest("Unbekannter Ordner".into()));
+    }
+    let n = sqlx::query("UPDATE mail_messages SET seen = true WHERE mailbox_id = $1 AND folder = $2 AND NOT seen")
+        .bind(mb.mailbox_id)
+        .bind(&folder)
+        .execute(&s.db)
+        .await?
+        .rows_affected();
+    Ok(Json(json!({ "changed": n })))
+}
+
+#[derive(Deserialize)]
 pub struct Attachment {
     pub name: String,
     pub mime: String,

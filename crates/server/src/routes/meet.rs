@@ -308,6 +308,12 @@ pub async fn send_due_reminders(db: &PgPool, now: DateTime<Utc>) -> Result<usize
             let ev = json!({ "type": "calendar", "event": "reminder", "id": event, "title": title, "starts_at": start,
                              "minutes": minutes, "meeting": meeting });
             super::chat::send_user(uid, &ev.to_string());
+            let mut note =
+                super::notify::Note::new("calendar", "reminder", Some(event), &title).body(&when).priority(2);
+            if let Some(m) = meeting {
+                note = note.link(&format!("/portal/meeting/{m}"));
+            }
+            super::notify::emit(db, &[uid], note);
             let mut text = format!("Erinnerung an Ihren Termin:\r\n\r\n{title}\r\n{when}\r\n");
             if !location.is_empty() {
                 text.push_str(&format!("Ort: {location}\r\n"));

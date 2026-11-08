@@ -1,5 +1,6 @@
 // Nachrichten: Räume, Verlauf, Schreiben, Anrufe starten.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, getToken, useAuth } from "../../api";
 import { fmtDate, useI18n } from "../../i18n";
 import { TX, useComm } from "./Comm";
@@ -79,6 +80,9 @@ export default function Chat() {
 
   const loadRooms = useCallback(() => api<Room[]>("/api/v1/chat/rooms").then(setRooms).catch(() => {}), []);
   useEffect(() => { loadRooms(); }, [loadRooms]);
+  // Direkt öffnen: /portal/nachrichten?room=<id> (aus Mitteilung, Push, VS Code)
+  const [params] = useSearchParams();
+  const wanted = params.get("room");
 
   const open = useCallback(async (id: string) => {
     setActive(id);
@@ -89,6 +93,7 @@ export default function Chat() {
     comm.bump();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => { if (wanted && wanted !== activeRef.current) open(wanted).catch(() => {}); }, [wanted, open]);
 
   // Live-Ereignisse
   useEffect(() => comm.subscribe(async (e) => {

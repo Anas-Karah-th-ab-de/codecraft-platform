@@ -19,10 +19,34 @@ import Work from "./Work";
 import { BrokenTrace } from "../site/Board";
 import Meeting from "../Meeting";
 import Help, { PageHelp } from "./Help";
+import { AnnouncementBanner, Announcements, Bell, NotificationsPage, NotifyProvider, useNotify } from "./Notify";
+import { Icon } from "../../icons";
+import { Sessions } from "./Sessions";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
 const MailBadge = () => <Badge n={useMailUnread()} />;
+const NoteBadge = () => <Badge n={useNotify().unread} />;
+const AnnBadge = () => <Badge n={useNotify().annUnread} />;
+
+const NAV_ICON: Record<string, string> = {
+  "": "home", nachrichten: "chat", mail: "mail", mitteilungen: "bell", ankuendigungen: "megaphone", support: "support",
+  "anfragen-entwicklung": "code", projekte: "folder", shop: "cart", kunden: "building", produkte: "box", geraete: "cpu",
+  fernzugriff: "key", angebote: "quote", rechnungen: "receipt", arbeit: "clock", stellen: "briefcase", anfragen: "inbox2",
+  benutzer: "users", konto: "account", hilfe: "help",
+};
+
+/** Seitenmenü eingeklappt? Eigene Wahl wird gemerkt; ohne Wahl klappt E-Mail automatisch ein (mehr Platz). */
+function useCollapsed(seg: string): [boolean, () => void] {
+  const [pref, setPref] = useState<string | null>(() => { try { return localStorage.getItem("cc_side"); } catch { return null; } });
+  const collapsed = pref === "1" || (pref === null && seg === "mail");
+  const toggle = () => {
+    const next = collapsed ? "0" : "1";
+    try { localStorage.setItem("cc_side", next); } catch { /* egal */ }
+    setPref(next);
+  };
+  return [collapsed, toggle];
+}
 
 const PT = {
   de: { groups: ["Übersicht", "Kunden & Aufträge", "Finanzen", "Team", "Verwaltung"], menu: "Menü", nf: "Diese Seite gibt es im Portal nicht.", back: "Zur Übersicht",
@@ -43,11 +67,14 @@ export default function Portal() {
   const [menu, setMenu] = useState(false);
   const [help, setHelp] = useState(false);
   const seg = pathname.replace(/^\/portal\/?/, "").split("/")[0];
+  const [collapsed, toggleSide] = useCollapsed(seg);
   useEffect(() => { setMenu(false); setHelp(false); window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior }); }, [pathname]);
   const items: NavItem[] = !me ? [] : [
     ["", "p.dashboard", true, 0],
     ["nachrichten", "p.messages", true, 0],
     ["mail", "p.mail", me.is_employee, 0],
+    ["mitteilungen", "p.notifications", true, 0],
+    ["ankuendigungen", "p.announcements", true, 0],
     ["support", "p.support", !me.is_employee || can(me, "tickets"), 1],
     ["anfragen-entwicklung", "p.dev", can(me, "project_read"), 1],
     ["projekte", "p.projects", can(me, "project_read"), 1],
@@ -80,15 +107,25 @@ export default function Portal() {
 
   return (
     <CommProvider>
-    <div className={`portal ${menu ? "menu-open" : ""}`}>
+    <NotifyProvider>
+    <div className={`portal ${menu ? "menu-open" : ""} ${collapsed ? "side-mini" : ""}`}>
       <aside className="side" id="portal-menu">
-        <Link to="/" className="logo logo-home"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
+        <div className="side-top">
+          <Link to="/" className="logo logo-home"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
+          <button className="side-toggle" onClick={toggleSide} aria-label={t(collapsed ? "p.expand" : "p.collapse")} title={t(collapsed ? "p.expand" : "p.collapse")}>
+            <Icon name="panel-left" size={18} />
+          </button>
+        </div>
         <nav aria-label={T.menu}>
           {groups.map((g) => (
             <div key={g.name} className="side-group">
               {me.is_employee && <span>{g.name}</span>}
               {g.links.map(([to, key]) => (
-                <NavLink key={to} to={to ? `/portal/${to}` : "/portal"} end={to === ""}>{t(key)}{to === "nachrichten" && <UnreadBadge />}{to === "mail" && <MailBadge />}</NavLink>
+                <NavLink key={to} to={to ? `/portal/${to}` : "/portal"} end={to === ""} title={collapsed ? t(key) : undefined} aria-label={collapsed ? t(key) : undefined}>
+                  <Icon name={NAV_ICON[to] ?? "dot"} size={18} className="nav-ic" />
+                  <span className="nav-t">{t(key)}</span>
+                  {to === "nachrichten" && <UnreadBadge />}{to === "mail" && <MailBadge />}{to === "mitteilungen" && <NoteBadge />}{to === "ankuendigungen" && <AnnBadge />}
+                </NavLink>
               ))}
             </div>
           ))}
@@ -111,6 +148,7 @@ export default function Portal() {
             <b>{title}</b>
           </nav>
           <div className="topbar-right">
+            <Bell />
             <button className="help-btn" onClick={() => setHelp(true)} aria-label={t("p.help")} title={t("p.help")}>?</button>
             <span className="hide-sm"><LangSwitch /></span>
             <div className="user-chip">
@@ -120,7 +158,8 @@ export default function Portal() {
             <button className="btn small ghost hide-sm" onClick={logout}>{t("login.logout")}</button>
           </div>
         </header>
-        <section className="main">
+        <section className={`main ${seg === "mail" ? "wide" : ""}`}>
+          <AnnouncementBanner />
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="nachrichten" element={<Chat />} />
@@ -128,6 +167,8 @@ export default function Portal() {
             <Route path="shop" element={<Shop />} />
             <Route path="anfragen-entwicklung/*" element={<DevRequests />} />
             <Route path="mail" element={<Mail />} />
+            <Route path="mitteilungen" element={<NotificationsPage />} />
+            <Route path="ankuendigungen" element={<Announcements />} />
             <Route path="arbeit" element={<Work />} />
             <Route path="projekte/*" element={<Projects />} />
             <Route path="angebote/*" element={<Quotes />} />
@@ -141,7 +182,7 @@ export default function Portal() {
             <Route path="fernzugriff" element={<CustomerAccess />} />
             <Route path="benutzer" element={<Users />} />
             <Route path="konto" element={<Account />} />
-            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe"].includes(l[0])).map((l) => t(l[1]))} />} />
+            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe", "mitteilungen", "ankuendigungen"].includes(l[0])).map((l) => t(l[1]))} />} />
             <Route path="*" element={
               <div className="notfound" style={{ minHeight: "50vh" }}>
                 <div><BrokenTrace /><h1>404</h1><p>{T.nf}</p><Link className="btn" to="/portal">{T.back}</Link></div>
@@ -151,6 +192,7 @@ export default function Portal() {
         </section>
       </div>
     </div>
+    </NotifyProvider>
     </CommProvider>
   );
 }
@@ -182,6 +224,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"pw" | "2fa">("pw");
+  const [remember, setRemember] = useState(() => matchMedia("(display-mode: standalone)").matches);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -190,7 +233,7 @@ function Login() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await login(email, password, step === "2fa" ? code : undefined);
+      const r = await login(email, password, step === "2fa" ? code : undefined, remember);
       if (r === "2fa") setStep("2fa");
     } catch (e: any) {
       setErr(e.status === 401 ? t("login.failed") : e.message);
@@ -217,6 +260,9 @@ function Login() {
             <Field label={t("login.password")}>
               <input type="password" dir="ltr" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
             </Field>
+            <label className="check-row" style={{ marginBottom: 14 }}>
+              <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> {t("login.remember")}
+            </label>
           </>
         ) : (
           <Field label={t("login.code")}>
@@ -352,6 +398,7 @@ function Account() {
           </form>
         </div>
       </div>
+      <div style={{ marginTop: 16 }}><Sessions /></div>
       {me.is_employee && <div style={{ marginTop: 16 }}><AppPasswords /></div>}
     </>
   );

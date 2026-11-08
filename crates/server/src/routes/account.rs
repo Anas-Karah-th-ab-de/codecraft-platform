@@ -18,6 +18,7 @@ use uuid::Uuid;
 
 /// Sitzungsdauer
 const SESSION_HOURS: i64 = 12;
+const REMEMBER_HOURS: i64 = 30 * 24;
 
 /// Einfaches Rate-Limit gegen Passwort-Raten (pro E-Mail): 5 Fehlversuche / 10 Minuten
 static FAILS: Mutex<Option<HashMap<String, (u32, Instant)>>> = Mutex::new(None);
@@ -52,6 +53,9 @@ pub struct LoginBody {
     pub email: String,
     pub password: String,
     pub code: Option<String>,
+    /// Angemeldet bleiben (z. B. installierte App auf dem Handy)
+    #[serde(default)]
+    pub remember: bool,
 }
 
 type LoginRow = (Uuid, String, String, String, Option<Uuid>, Option<String>, Option<String>, bool);
@@ -90,6 +94,7 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
     }
     clear_fails(&email);
     let token = new_token("cc_s_");
+    let hours = if b.remember { REMEMBER_HOURS } else { SESSION_HOURS };
     let mut tx = s.db.begin().await?;
     sqlx::query(
         "INSERT INTO api_tokens (id, token_hash, user_id, name, expires_at)
@@ -98,7 +103,7 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
     .bind(Uuid::now_v7())
     .bind(hash_token(&token))
     .bind(id)
-    .bind(SESSION_HOURS as i32)
+    .bind(hours as i32)
     .execute(&mut *tx)
     .await?;
     sqlx::query("UPDATE users SET last_login_at = now() WHERE id = $1").bind(id).execute(&mut *tx).await?;
@@ -106,7 +111,7 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
     tx.commit().await?;
     Ok(Json(json!({
         "token": token,
-        "expires_in_s": SESSION_HOURS * 3600,
+        "expires_in_s": hours * 3600,
         "user": { "id": id, "email": email_db, "display_name": name, "role": role, "organization_id": org },
         "must_change_password": must_change,
     })))
@@ -114,14 +119,15 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
 
 pub async fn logout(State(s): State<AppState>, user: User) -> ApiResult<StatusCode> {
     sqlx::query("UPDATE api_tokens SET revoked_at = now() WHERE id = $1").bind(user.token_id).execute(&s.db).await?;
+    super::chat::kick_token(user.token_id);
     Ok(StatusCode::NO_CONTENT)
 }
 
 pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>> {
-    let (name, totp, depts, must_change): (String, bool, Vec<String>, bool) = sqlx::query_as(
+    let (name, totp, depts, must_change, locale): (String, bool, Vec<String>, bool, String) = sqlx::query_as(
         "SELECT u.display_name, u.totp_secret IS NOT NULL,
                 COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}'),
-                u.must_change_password
+                u.must_change_password, u.locale
            FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id
            LEFT JOIN departments d ON d.id = ud.department_id
@@ -133,7 +139,8 @@ pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>>
     Ok(Json(json!({
         "id": user.id, "email": user.email, "display_name": name, "role": user.role,
         "organization_id": user.organization_id, "two_factor": totp, "departments": depts,
-        "is_employee": user.role.is_employee(), "must_change_password": must_change,
+        "is_employee": user.role.is_employee(), "must_change_password": must_change, "locale": locale,
+        "may_announce": super::announce::may_publish(&user),
     })))
 }
 
@@ -238,6 +245,10 @@ pub struct UserRow {
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
     pub mailbox: Option<String>,
     pub must_change_password: bool,
+    pub deactivated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub deactivated_reason: Option<String>,
+    pub removed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub removed_email: Option<String>,
 }
 
 pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<UserRow>>> {
@@ -248,7 +259,7 @@ pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json
                 COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}') AS departments,
                 u.last_login_at,
                 (SELECT address FROM mailboxes mb WHERE mb.user_id = u.id) AS mailbox,
-                u.must_change_password
+                u.must_change_password, u.deactivated_at, u.deactivated_reason, u.removed_at, u.removed_email
            FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id
            LEFT JOIN departments d ON d.id = ud.department_id

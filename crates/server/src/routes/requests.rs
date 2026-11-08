@@ -103,7 +103,7 @@ pub async fn create(
     .await?;
     super::audit(&mut tx, &user.actor(), "create", "dev_request", id, json!({ "number": number })).await?;
     tx.commit().await?;
-    notify(&team(&s, "DEV").await, "request", "new", id, &number, title);
+    notify(&s.db, user.id, &team(&s, "DEV").await, "request", "new", id, &number, title);
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "number": number }))))
 }
 
@@ -200,7 +200,7 @@ pub async fn reply(
         .await?;
     sqlx::query("UPDATE dev_requests SET updated_at = now() WHERE id = $1").bind(id).execute(&s.db).await?;
     let to = if user.role.is_employee() { org_users(&s, org).await } else { team(&s, "DEV").await };
-    notify(&to, "request", "message", id, &number, &title);
+    notify(&s.db, user.id, &to, "request", "message", id, &number, &title);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -274,7 +274,7 @@ pub async fn patch(
     .await?;
     tx.commit().await?;
     let to = if staff { org_users(&s, org).await } else { team(&s, "DEV").await };
-    notify(&to, "request", "update", id, &number, &title);
+    notify(&s.db, user.id, &to, "request", "update", id, &number, &title);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -337,7 +337,7 @@ pub async fn to_project(
         .await?;
     super::audit(&mut tx, &user.actor(), "to_project", "dev_request", id, json!({ "project": pid })).await?;
     tx.commit().await?;
-    notify(&org_users(&s, org).await, "request", "update", id, &number, &title);
+    notify(&s.db, user.id, &org_users(&s, org).await, "request", "update", id, &number, &title);
     Ok((StatusCode::CREATED, Json(json!({ "project_id": pid }))))
 }
 

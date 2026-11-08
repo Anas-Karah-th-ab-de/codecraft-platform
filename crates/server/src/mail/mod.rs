@@ -149,8 +149,25 @@ pub async fn store(
     .fetch_one(db)
     .await?;
     if !seen {
-        let ev = serde_json::json!({ "type": "mail", "folder": folder, "subject": m.subject, "from": m.from_name.unwrap_or(m.from_addr) });
+        let from = m.from_name.unwrap_or(m.from_addr);
+        let ev = serde_json::json!({ "type": "mail", "folder": folder, "subject": m.subject, "from": from });
         send_user(user, &ev.to_string());
+        // Niemand online → Push aufs Handy/PC (nur Posteingang, nicht Spam)
+        if folder == "inbox" && !crate::routes::chat::online_users().contains(&user) {
+            let (db, text) = (db.clone(), format!("{from}: {}", m.subject));
+            tokio::spawn(async move {
+                crate::routes::notify::push_only(
+                    &db,
+                    user,
+                    "mail",
+                    "new",
+                    &text,
+                    "/portal/mail",
+                    serde_json::json!({}),
+                )
+                .await;
+            });
+        }
     }
     Ok(id)
 }

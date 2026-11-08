@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Icon } from "../../icons";
 import { api, can, useApi, useAuth } from "../../api";
 import { fmtDate, useI18n, type Key, type Locale } from "../../i18n";
 import { Badge, Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
@@ -325,7 +326,9 @@ export function Devices() {
 }
 
 // ── Benutzer ────────────────────────────────────────────────────────────────
-type UserRow = { id: string; email: string; display_name: string; role: string; organization_id: string | null; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null; must_change_password: boolean };
+type UserRow = { id: string; email: string; display_name: string; role: string; organization_id: string | null; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null; must_change_password: boolean;
+  deactivated_at: string | null; deactivated_reason: string | null; removed_at: string | null; removed_email: string | null };
+const stateOf = (u: UserRow) => (u.removed_at ? "removed" : u.is_active ? "active" : "locked");
 
 export function Users() {
   const { t, locale } = useI18n();
@@ -336,27 +339,44 @@ export function Users() {
   const orgs = useApi<{ id: string; name: string }[]>("/api/v1/organizations");
   const [open, setOpen] = useState(false);
   const [access, setAccess] = useState<UserRow | null>(null);
+  const [lock, setLock] = useState<UserRow | null>(null);
+  const [unlocked, setUnlocked] = useState<{ name: string; password: string } | null>(null);
   const [f, setF] = useState({ email: "", display_name: "", role: "staff", password: "", organization_id: "", departments: [] as string[] });
   const [view, setView] = useState<"staff" | "customers">("staff");
   const [q, setQ] = useState("");
   const [role, setRole] = useState("");
   const [dept, setDept] = useState("");
   const [org, setOrg] = useState("");
-  const [active, setActive] = useState("1");
+  const [active, setActive] = useState("active");
   const U = UT[locale];
   const staff = (data ?? []).filter((u) => u.role !== "customer" && u.role !== "device");
   const customers = (data ?? []).filter((u) => u.role === "customer");
   const base = view === "staff" ? staff : customers;
   const orgName = (id: string | null) => orgs.data?.find((o) => o.id === id)?.name ?? "–";
-  const rows = base.filter((u) => (!active || (u.is_active ? "1" : "0") === active) && (view !== "staff" || ((!role || u.role === role) && (!dept || u.departments.includes(dept))))
+  const rows = base.filter((u) => (!active || stateOf(u) === active) && (view !== "staff" || ((!role || u.role === role) && (!dept || u.departments.includes(dept))))
     && (view !== "customers" || !org || u.organization_id === org)
     && matches(q, u.display_name, u.email, u.mailbox, u.role, ...u.departments, view === "customers" ? orgName(u.organization_id) : ""));
   const s = useSubmit();
   const twofa = (u: UserRow) => (u.two_factor ? "✅" : "—");
   const status = (u: UserRow) => (<>
-    {u.must_change_password && <div className="muted" style={{ fontSize: ".8em" }}>⏳ {mustChange}</div>}
-    {!u.is_active && <span className="badge closed" style={{ marginInlineStart: 4 }}>{U.inactive}</span>}
+    {u.must_change_password && u.is_active && <div className="muted" style={{ fontSize: ".8em" }}>⏳ {mustChange}</div>}
+    {u.removed_at ? <span className="badge closed" style={{ marginInlineStart: 4 }} title={u.removed_email ?? ""}>{U.removed}</span>
+      : !u.is_active && <span className="badge warn" style={{ marginInlineStart: 4 }} title={u.deactivated_reason ?? ""}><Icon name="lock" size={12} /> {U.locked}</span>}
+    {!u.is_active && (u.deactivated_reason || u.deactivated_at) && <div className="muted" style={{ fontSize: ".78em" }}>{fmtDate(u.deactivated_at, locale)}{u.deactivated_reason && ` · ${u.deactivated_reason}`}</div>}
   </>);
+  const actions = (u: UserRow, employee: boolean) => u.id === me?.id || u.removed_at ? null : u.is_active ? (
+    <>
+      {employee && <button className="btn small ghost" onClick={() => setAccess(u)}>{RT[locale].rights}</button>}
+      <ResetPassword userId={u.id} />
+      <button className="icon-btn sm danger" title={U.lock} onClick={() => setLock(u)}><Icon name="user-x" size={17} /></button>
+    </>
+  ) : (
+    <>
+      <button className="btn small ghost" onClick={() => api<{ password: string }>(`/api/v1/users/${u.id}/reactivate`, { method: "POST" }).then((r) => { setUnlocked({ name: u.display_name, password: r.password }); reload(); })}>
+        <Icon name="unlock" size={15} /> {U.unlock}</button>
+      <button className="icon-btn sm danger" title={U.remove} onClick={() => setLock(u)}><Icon name="trash" size={17} /></button>
+    </>
+  );
   return (
     <>
       <div className="row between">
@@ -369,7 +389,7 @@ export function Users() {
         <button role="tab" aria-selected={view === "customers"} className={view === "customers" ? "on" : ""} onClick={() => { setView("customers"); setQ(""); }}>{U.customers} ({customers.length})</button>
       </div>
       <ListTools q={q} setQ={setQ} shown={rows.length} total={base.length}>
-        <Filter label={t("p.status")} value={active} onChange={setActive} options={[["1", t("p.active")], ["0", U.inactive]]} />
+        <Filter label={t("p.status")} value={active} onChange={setActive} options={[["active", t("p.active")], ["locked", U.locked], ["removed", U.removed]]} />
         {view === "staff" ? <>
           <Filter label={t("p.role")} value={role} onChange={setRole} options={["admin", "lead", "manager", "staff", "trainee"].map((r) => [r, r])} />
           <Filter label={t("p.department")} value={dept} onChange={setDept} options={(depts.data ?? []).map((d) => [d.code, d.name[locale as Locale]])} />
@@ -386,10 +406,7 @@ export function Users() {
                 <tr key={u.id}><td>{u.display_name}{status(u)}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td>
                   <td>{u.departments.join(", ") || <span className="badge warn">{U.noDept}</span>}</td>
                   <td>{twofa(u)}</td><td>{fmtDate(u.last_login_at, locale)}</td>
-                  <td><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>
-                    <button className="btn small ghost" onClick={() => setAccess(u)}>{RT[locale].rights}</button>
-                    {u.id !== me?.id && <ResetPassword userId={u.id} />}
-                  </div></td></tr>
+                  <td><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>{actions(u, true)}</div></td></tr>
               ))}
             </tbody>
           </table>
@@ -400,7 +417,7 @@ export function Users() {
               {rows.map((u) => (
                 <tr key={u.id}><td>{u.display_name}{status(u)}</td><td>{u.email}</td><td>{orgName(u.organization_id)}</td>
                   <td>{twofa(u)}</td><td>{fmtDate(u.last_login_at, locale)}</td>
-                  <td><ResetPassword userId={u.id} /></td></tr>
+                  <td><div className="row" style={{ gap: 4, flexWrap: "nowrap" }}>{actions(u, false)}</div></td></tr>
               ))}
             </tbody>
           </table>
@@ -449,6 +466,13 @@ export function Users() {
         </Modal>
       )}
       {access && <AccessForm u={access} depts={depts.data ?? []} onClose={() => { setAccess(null); reload(); }} />}
+      {lock && <LockDialog u={lock} staff={staff.filter((x) => x.is_active && x.id !== lock.id)} onClose={(changed) => { setLock(null); if (changed) reload(); }} />}
+      {unlocked && (
+        <Modal title={`${U.unlocked}: ${unlocked.name}`} onClose={() => setUnlocked(null)}>
+          <p>{U.unlockedHint}</p>
+          <code className="big-code" dir="ltr">{unlocked.password}</code>
+        </Modal>
+      )}
       <RoleHelp />
       <PaymentMethodsAdmin />
     </>
@@ -456,10 +480,110 @@ export function Users() {
 }
 
 const UT = {
-  de: { staff: "Mitarbeiter", customers: "Kunden", company: "Firma", inactive: "deaktiviert", newStaff: "Mitarbeiter anlegen", newCustomer: "Kundenzugang anlegen", noDept: "keine Abteilung – sieht nichts" },
-  en: { staff: "Employees", customers: "Customers", company: "Company", inactive: "disabled", newStaff: "Add employee", newCustomer: "Add customer login", noDept: "no department – sees nothing" },
-  ar: { staff: "الموظفون", customers: "العملاء", company: "الشركة", inactive: "معطّل", newStaff: "إضافة موظف", newCustomer: "إضافة دخول عميل", noDept: "بدون قسم – لا يرى شيئاً" },
+  de: { staff: "Mitarbeiter", customers: "Kunden", company: "Firma", inactive: "deaktiviert", newStaff: "Mitarbeiter anlegen", newCustomer: "Kundenzugang anlegen", noDept: "keine Abteilung – sieht nichts",
+    locked: "gesperrt", removed: "entfernt", lock: "Sperren / entfernen", unlock: "Entsperren", remove: "Endgültig entfernen", unlocked: "Entsperrt", unlockedHint: "Einmal-Passwort – nur jetzt sichtbar. Beim ersten Login muss ein eigenes Passwort gewählt werden." },
+  en: { staff: "Employees", customers: "Customers", company: "Company", inactive: "disabled", newStaff: "Add employee", newCustomer: "Add customer login", noDept: "no department – sees nothing",
+    locked: "locked", removed: "removed", lock: "Lock / remove", unlock: "Unlock", remove: "Remove permanently", unlocked: "Unlocked", unlockedHint: "One-time password – shown only now. A new password must be chosen at first sign-in." },
+  ar: { staff: "الموظفون", customers: "العملاء", company: "الشركة", inactive: "معطّل", newStaff: "إضافة موظف", newCustomer: "إضافة دخول عميل", noDept: "بدون قسم – لا يرى شيئاً",
+    locked: "موقوف", removed: "محذوف", lock: "إيقاف / إزالة", unlock: "إعادة التفعيل", remove: "إزالة نهائية", unlocked: "تمت إعادة التفعيل", unlockedHint: "كلمة مرور لمرة واحدة – تظهر الآن فقط. يجب اختيار كلمة مرور جديدة عند أول دخول." },
 };
+
+const LT = {
+  de: { title: "Benutzer sperren oder entfernen", what: "Das passiert sofort", s1: "Alle Sitzungen, Schlüssel, App-Passwörter und Push-Geräte werden ungültig.",
+    s2: "Offene Verbindungen (Portal, App, VS Code) werden getrennt, laufende Zeiterfassung beendet.", s3: "Belege, Tickets, Nachrichten und Verlauf bleiben erhalten.",
+    reason: "Grund (intern, optional)", reasonPh: "z. B. Austritt zum 31.10., Vertragsende", handover: "Aufgaben übergeben an", none: "niemand – Tickets zurück in die Warteschlange",
+    forward: "E-Mails an das Postfach der Übernahme-Person weiterleiten (mit Kopie)", remove: "Konto endgültig entfernen", removeHint: "E-Mail-Adresse wird frei, Konto verschwindet aus Listen, Abteilungen werden gelöst, kann nicht wieder freigeschaltet werden.",
+    found: "Offen bei dieser Person", tickets: "Tickets", subs: "Vertretungen", events: "künftige Termine (als Organisator)", sessions: "aktive Sitzungen", devices: "Push-Geräte", rooms: "Gruppen-/Support-Räume", timer: "laufende Zeiterfassung",
+    lockBtn: "Sperren", removeBtn: "Entfernen", cancel: "Abbrechen", confirm: (n: string) => `„${n}“ jetzt sperren?`, confirmRemove: (n: string) => `„${n}“ endgültig entfernen? Das kann nicht rückgängig gemacht werden.`,
+    done: "Erledigt", moved: (t: number, s: number, e: number) => `${t} Tickets, ${s} Vertretungen, ${e} Termine übergeben.` },
+  en: { title: "Lock or remove user", what: "What happens right away", s1: "All sessions, keys, app passwords and push devices become invalid.",
+    s2: "Open connections (portal, app, VS Code) are cut, a running time entry is stopped.", s3: "Documents, tickets, messages and history are kept.",
+    reason: "Reason (internal, optional)", reasonPh: "e.g. leaving on 31 Oct, contract ended", handover: "Hand tasks over to", none: "nobody – tickets go back to the queue",
+    forward: "Forward emails to the mailbox of the person taking over (keep a copy)", remove: "Remove account permanently", removeHint: "Frees the email address, hides the account, removes departments, cannot be unlocked again.",
+    found: "Open with this person", tickets: "Tickets", subs: "Substitutions", events: "upcoming events (organiser)", sessions: "active sessions", devices: "push devices", rooms: "group/support rooms", timer: "running time entry",
+    lockBtn: "Lock", removeBtn: "Remove", cancel: "Cancel", confirm: (n: string) => `Lock “${n}” now?`, confirmRemove: (n: string) => `Remove “${n}” permanently? This cannot be undone.`,
+    done: "Done", moved: (t: number, s: number, e: number) => `${t} tickets, ${s} substitutions, ${e} events handed over.` },
+  ar: { title: "إيقاف أو إزالة مستخدم", what: "ما يحدث فوراً", s1: "تُلغى كل الجلسات والمفاتيح وكلمات مرور التطبيقات وأجهزة الإشعارات.",
+    s2: "تُقطع الاتصالات المفتوحة (البوابة، التطبيق، VS Code) ويتوقف تسجيل الوقت الجاري.", s3: "تبقى المستندات والتذاكر والرسائل والسجل محفوظة.",
+    reason: "السبب (داخلي، اختياري)", reasonPh: "مثلاً: ترك العمل في 31.10", handover: "نقل المهام إلى", none: "لا أحد – تعود التذاكر إلى قائمة الانتظار",
+    forward: "تحويل البريد إلى صندوق الشخص المستلم (مع نسخة)", remove: "إزالة الحساب نهائياً", removeHint: "يُحرَّر عنوان البريد ويختفي الحساب من القوائم وتُزال الأقسام، ولا يمكن إعادة تفعيله.",
+    found: "مفتوح لدى هذا الشخص", tickets: "تذاكر", subs: "إنابات", events: "مواعيد قادمة (كمنظّم)", sessions: "جلسات نشطة", devices: "أجهزة إشعارات", rooms: "غرف مجموعات/دعم", timer: "تسجيل وقت جارٍ",
+    lockBtn: "إيقاف", removeBtn: "إزالة", cancel: "إلغاء", confirm: (n: string) => `إيقاف «${n}» الآن؟`, confirmRemove: (n: string) => `إزالة «${n}» نهائياً؟ لا يمكن التراجع.`,
+    done: "تم", moved: (t: number, s: number, e: number) => `تم نقل ${t} تذاكر و${s} إنابات و${e} مواعيد.` },
+};
+
+type Handover = { tickets: number; substitute_for: number; leave_open: number; events: number; sessions: number; devices: number; rooms: number; mailbox: string | null; running_timer: number };
+
+function LockDialog({ u, staff, onClose }: { u: UserRow; staff: UserRow[]; onClose: (changed: boolean) => void }) {
+  const { locale } = useI18n();
+  const L = LT[locale];
+  const [info, setInfo] = useState<Handover | null>(null);
+  const [reason, setReason] = useState("");
+  const [to, setTo] = useState("");
+  const [forward, setForward] = useState(false);
+  const [remove, setRemove] = useState(!u.is_active);
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<string | null>(null);
+  useEffect(() => { api<Handover>(`/api/v1/users/${u.id}/handover`).then(setInfo).catch((e) => setErr(e.message)); }, [u.id]);
+  const target = staff.find((s) => s.id === to);
+  const submit = async () => {
+    if (!confirm(remove ? L.confirmRemove(u.display_name) : L.confirm(u.display_name))) return;
+    setBusy(true); setErr(null);
+    try {
+      const r = await api<{ tickets: number; substitutes: number; events: number }>(`/api/v1/users/${u.id}/deactivate`, {
+        body: { reason, handover_to: to || null, forward_mail: forward && !!to, remove },
+      });
+      setDone(L.moved(r.tickets, r.substitutes, r.events));
+    } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+  };
+  const facts: [string, number][] = info ? [[L.tickets, info.tickets], [L.subs, info.substitute_for], [L.events, info.events], [L.sessions, info.sessions], [L.devices, info.devices], [L.rooms, info.rooms], [L.timer, info.running_timer]] : [];
+  return (
+    <Modal title={`${L.title}: ${u.display_name}`} onClose={() => onClose(!!done)}>
+      {done ? (
+        <>
+          <div className="alert ok">{L.done}. {done}</div>
+          <button className="btn" onClick={() => onClose(true)}>OK</button>
+        </>
+      ) : (
+        <form onSubmit={(e) => { e.preventDefault(); submit(); }}>
+          {u.is_active && (
+            <div className="lock-what">
+              <b>{L.what}</b>
+              <ul><li>{L.s1}</li><li>{L.s2}</li><li>{L.s3}</li></ul>
+            </div>
+          )}
+          {info && (
+            <div className="lock-facts">
+              <b>{L.found}</b>
+              <div className="chips">{facts.filter(([, n]) => n > 0).map(([k, n]) => <span key={k} className="chip on">{n} {k}</span>)}
+                {info.mailbox && <span className="chip"><Icon name="mail" size={13} /> {info.mailbox}</span>}</div>
+            </div>
+          )}
+          {u.is_active && <>
+            <Field label={L.reason}><input maxLength={500} placeholder={L.reasonPh} value={reason} onChange={(e) => setReason(e.target.value)} /></Field>
+            <Field label={L.handover}>
+              <select value={to} onChange={(e) => setTo(e.target.value)}>
+                <option value="">{L.none}</option>
+                {staff.map((s) => <option key={s.id} value={s.id}>{s.display_name} · {s.departments.join(", ") || s.role}</option>)}
+              </select>
+            </Field>
+            {info?.mailbox && to && target?.mailbox && (
+              <label className="check-row"><input type="checkbox" checked={forward} onChange={(e) => setForward(e.target.checked)} /> {L.forward} → <span dir="ltr">{target.mailbox}</span></label>
+            )}
+          </>}
+          <label className="check-row danger-row"><input type="checkbox" checked={remove} onChange={(e) => setRemove(e.target.checked)} /> <b>{L.remove}</b></label>
+          {remove && <p className="muted" style={{ marginTop: 0 }}>{L.removeHint}</p>}
+          {err && <div className="alert">{err}</div>}
+          <div className="row">
+            <button className="btn danger" disabled={busy || (!u.is_active && !remove)}><Icon name={remove ? "trash" : "lock"} size={16} /> {remove ? L.removeBtn : L.lockBtn}</button>
+            <button type="button" className="btn ghost" onClick={() => onClose(false)}>{L.cancel}</button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
 
 const RT = {
   de: { rights: "Rechte", title: "Rolle & Abteilungen", save: "Speichern", help: "Wer sieht was?",

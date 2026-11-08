@@ -64,12 +64,19 @@ async fn ticket_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<Option<Uui
 }
 
 /// Echtzeit-Hinweis an Benutzer (Portal/App)
-fn notify(users: &[Uuid], event: &str, ticket: Uuid, number: &str, subject: &str) {
+fn notify(db: &sqlx::PgPool, actor: Uuid, users: &[Uuid], event: &str, ticket: Uuid, number: &str, subject: &str) {
     let msg =
         json!({ "type": "ticket", "event": event, "id": ticket, "number": number, "subject": subject }).to_string();
     for u in users {
         super::chat::send_user(*u, &msg);
     }
+    let to: Vec<Uuid> = users.iter().copied().filter(|u| *u != actor).collect();
+    let prio = if event == "new" { 2 } else { 1 };
+    super::notify::emit(
+        db,
+        &to,
+        super::notify::Note::new("ticket", event, Some(ticket), &format!("{number} · {subject}")).priority(prio),
+    );
 }
 
 /// Support-Team: Abteilung SUP, Leitung und Admins
@@ -254,7 +261,7 @@ pub async fn create(
         .await?;
     super::audit(&mut tx, &user.actor(), "create", "ticket", id, json!({ "number": number, "priority": prio })).await?;
     tx.commit().await?;
-    notify(&support_team(&s).await, "new", id, &number, subject);
+    notify(&s.db, user.id, &support_team(&s).await, "new", id, &number, subject);
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "number": number, "priority": prio }))))
 }
 
@@ -352,7 +359,7 @@ pub async fn reply(
             None => support_team(&s).await,
         }
     };
-    notify(&to, "message", id, &number, &subject);
+    notify(&s.db, user.id, &to, "message", id, &number, &subject);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -455,7 +462,7 @@ pub async fn patch(
         to.push(a);
     }
     to.retain(|u| *u != user.id);
-    notify(&to, "update", id, &number, &subject);
+    notify(&s.db, user.id, &to, "update", id, &number, &subject);
     Ok(StatusCode::NO_CONTENT)
 }
 

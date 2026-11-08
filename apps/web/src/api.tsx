@@ -7,7 +7,9 @@ export class ApiError extends Error {
 }
 
 const TOKEN_KEY = "cc_session";
-export const getToken = () => sessionStorage.getItem(TOKEN_KEY);
+// Normal: nur dieser Tab (sessionStorage). „Angemeldet bleiben“: localStorage (z. B. installierte App).
+export const getToken = () => sessionStorage.getItem(TOKEN_KEY) ?? localStorage.getItem(TOKEN_KEY);
+const dropToken = () => { sessionStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_KEY); };
 
 export async function api<T = any>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
@@ -20,7 +22,7 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   if (res.status === 401 && token && !path.endsWith("/auth/login")) {
-    sessionStorage.removeItem(TOKEN_KEY);
+    dropToken();
     window.dispatchEvent(new Event("cc-logout"));
   }
   if (!res.ok) {
@@ -141,12 +143,14 @@ export type Me = {
   departments: string[];
   is_employee: boolean;
   must_change_password: boolean;
+  locale?: "de" | "en" | "ar";
+  may_announce?: boolean;
 };
 
 type AuthCtx = {
   me: Me | null;
   ready: boolean;
-  login: (email: string, password: string, code?: string) => Promise<"ok" | "2fa">;
+  login: (email: string, password: string, code?: string, remember?: boolean) => Promise<"ok" | "2fa">;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
@@ -183,23 +187,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
-  const login = async (email: string, password: string, code?: string) => {
+  const login = async (email: string, password: string, code?: string, remember = false) => {
     const r = await api<{ token?: string; two_factor_required?: boolean }>("/api/v1/auth/login", {
-      body: { email, password, code },
+      body: { email, password, code, remember },
     });
     if (r.two_factor_required) return "2fa" as const;
-    sessionStorage.setItem(TOKEN_KEY, r.token!);
+    dropToken();
+    (remember ? localStorage : sessionStorage).setItem(TOKEN_KEY, r.token!);
     await refresh();
     return "ok" as const;
   };
 
   const logout = async () => {
+    // Push-Abo dieses Geräts lösen: nach dem Abmelden keine Anrufe/Meldungen mehr hier
+    try {
+      const reg = await navigator.serviceWorker?.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+      if (sub) {
+        await api("/api/v1/push/unsubscribe", { body: { endpoint: sub.endpoint } }).catch(() => {});
+        await sub.unsubscribe();
+      }
+    } catch {
+      /* egal */
+    }
     try {
       await api("/api/v1/auth/logout", { method: "POST" });
     } catch {
       /* egal */
     }
-    sessionStorage.removeItem(TOKEN_KEY);
+    dropToken();
     cache.clear(); // keine Daten des vorherigen Benutzers im Speicher lassen
     setMe(null);
   };

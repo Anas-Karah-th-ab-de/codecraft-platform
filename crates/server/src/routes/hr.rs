@@ -67,11 +67,13 @@ async fn team_of(db: &PgPool, actor: &User) -> ApiResult<Vec<Uuid>> {
     })
 }
 
-fn notify(users: &[Uuid], kind: &str, event: &str, id: Uuid, title: &str) {
+fn notify(db: &sqlx::PgPool, actor: Uuid, users: &[Uuid], kind: &str, event: &str, id: Uuid, title: &str) {
     let msg = json!({ "type": kind, "event": event, "id": id, "title": title }).to_string();
     for u in users {
         super::chat::send_user(*u, &msg);
     }
+    let to: Vec<Uuid> = users.iter().copied().filter(|u| *u != actor).collect();
+    super::notify::emit(db, &to, super::notify::Note::new(kind, event, Some(id), title));
 }
 
 // ── Zeiterfassung ──────────────────────────────────────────────────────
@@ -537,9 +539,9 @@ pub async fn leave_create(
         .bind(target)
         .fetch_all(&s.db)
         .await?;
-        notify(&leads, "leave", "new", id, &kind);
+        notify(&s.db, user.id, &leads, "leave", "new", id, &kind);
     } else {
-        notify(&[target], "leave", "update", id, &kind);
+        notify(&s.db, user.id, &[target], "leave", "update", id, &kind);
     }
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "days": days }))))
 }
@@ -602,7 +604,7 @@ pub async fn leave_patch(
     let mut to = vec![owner];
     to.extend(b.substitute_id);
     to.retain(|u| *u != user.id);
-    notify(&to, "leave", "update", id, b.status.as_deref().unwrap_or("update"));
+    notify(&s.db, user.id, &to, "leave", "update", id, b.status.as_deref().unwrap_or("update"));
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -830,7 +832,7 @@ pub async fn event_create(
     super::meet::sync_meeting(&mut tx, id, b.online, b.lobby).await?;
     let fresh = super::meet::sync_guests(&mut tx, id, &b.guests).await?;
     tx.commit().await?;
-    notify(&att, "calendar", "new", id, b.title.trim());
+    notify(&s.db, user.id, &att, "calendar", "new", id, b.title.trim());
     super::meet::invite_guests(s.db.clone(), id, fresh);
     let meeting: Option<Uuid> =
         sqlx::query_scalar("SELECT id FROM meetings WHERE event_id = $1").bind(id).fetch_optional(&s.db).await?;
@@ -910,7 +912,7 @@ pub async fn event_update(
     super::meet::sync_meeting(&mut tx, id, b.online, b.lobby).await?;
     let fresh = super::meet::sync_guests(&mut tx, id, &b.guests).await?;
     tx.commit().await?;
-    notify(&att, "calendar", "update", id, b.title.trim());
+    notify(&s.db, user.id, &att, "calendar", "update", id, b.title.trim());
     super::meet::invite_guests(s.db.clone(), id, fresh);
     Ok(StatusCode::NO_CONTENT)
 }
@@ -923,7 +925,7 @@ pub async fn event_delete(State(s): State<AppState>, user: User, Path(id): Path<
         .fetch_all(&s.db)
         .await?;
     sqlx::query("DELETE FROM calendar_events WHERE id = $1").bind(id).execute(&s.db).await?;
-    notify(&att, "calendar", "delete", id, "");
+    notify(&s.db, user.id, &att, "calendar", "delete", id, "");
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -960,7 +962,7 @@ pub async fn event_respond(
         .bind(&b.response)
         .execute(&s.db)
         .await?;
-    notify(&[creator], "calendar", "response", id, &title);
+    notify(&s.db, user.id, &[creator], "calendar", "response", id, &title);
     Ok(StatusCode::NO_CONTENT)
 }
 

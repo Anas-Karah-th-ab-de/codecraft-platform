@@ -6,6 +6,7 @@ pub mod legacy_pdf;
 pub mod legacy_users;
 pub mod mail;
 pub mod pdf;
+pub mod push;
 pub mod routes;
 pub mod stun;
 pub mod turn;

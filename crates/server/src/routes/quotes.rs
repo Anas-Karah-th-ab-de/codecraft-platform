@@ -665,7 +665,7 @@ pub async fn send(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -
         .await?;
     super::audit(&mut tx, &user.actor(), "send", "quote", id, json!({ "number": number })).await?;
     tx.commit().await?;
-    notify(&org_users(&s, org).await, "quote", "sent", id, &number, &title);
+    notify(&s.db, user.id, &org_users(&s, org).await, "quote", "sent", id, &number, &title);
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -717,7 +717,7 @@ pub async fn respond(
     let project = after_response(&mut tx, id, org, &q, b.accept).await?;
     super::audit(&mut tx, &user.actor(), status, "quote", id, json!({ "project": project })).await?;
     tx.commit().await?;
-    notify(&super::shop::team(&s, "SAL").await, "quote", status, id, &q.2, &q.3);
+    notify(&s.db, user.id, &super::shop::team(&s, "SAL").await, "quote", status, id, &q.2, &q.3);
     Ok(Json(json!({ "status": status, "project_id": project })))
 }
 
@@ -822,7 +822,7 @@ pub async fn accept_verbal(
     super::audit(&mut tx, &user.actor(), "accept_verbal", "quote", id, json!({ "note": note, "project": project }))
         .await?;
     tx.commit().await?;
-    notify(&org_users(&s, q.0).await, "quote", "accepted", id, &q.2, &q.3);
+    notify(&s.db, user.id, &org_users(&s, q.0).await, "quote", "accepted", id, &q.2, &q.3);
     Ok(Json(json!({ "status": "accepted", "project_id": project })))
 }
 

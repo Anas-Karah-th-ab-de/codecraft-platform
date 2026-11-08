@@ -2,8 +2,9 @@
 // Signale laufen über den WebSocket des Portals; der Server reicht sie nur zwischen Raummitgliedern weiter.
 // Paar-Regel: Bei jedem Teilnehmerpaar erstellt die kleinere Benutzer-ID das Angebot (offer).
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link } from "react-router-dom";
-import { api, useAuth } from "../../api";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ringback, ringtone } from "./Notify";
+import { api, getToken, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
 
 export const TX = {
@@ -97,6 +98,9 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const [reminder, setReminder] = useState<{ id: string; title: string; starts_at: string; meeting: string | null } | null>(null);
   const ringTimer = useRef<number | null>(null);
   const myId = me?.id ?? "";
+  const nav = useNavigate();
+  const { search, pathname } = useLocation();
+  const pendingDecline = useRef<{ room: string; to: string } | null>(null);
 
   const send = useCallback((e: Ev) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(e));
@@ -110,11 +114,15 @@ export function CommProvider({ children }: { children: ReactNode }) {
     api<{ iceServers: RTCIceServer[]; online: string[] }>("/api/v1/chat/ice")
       .then((r) => { ice.current = r.iceServers; setOnline(new Set(r.online)); }).catch(() => {});
     const open = () => {
-      const token = sessionStorage.getItem("cc_session");
+      const token = getToken();
       if (!token || stop) return;
       const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/v1/ws?token=${encodeURIComponent(token)}`);
       wsRef.current = ws;
-      ws.onopen = () => { retry = 0; setConnected(true); };
+      ws.onopen = () => {
+        retry = 0; setConnected(true);
+        const d = pendingDecline.current;
+        if (d) { ws.send(JSON.stringify({ type: "call", room: d.room, to: d.to, data: { kind: "decline" } })); pendingDecline.current = null; }
+      };
       ws.onclose = () => {
         setConnected(false);
         if (!stop) timer = window.setTimeout(open, Math.min(15000, 1000 * 2 ** retry++));
@@ -124,6 +132,8 @@ export function CommProvider({ children }: { children: ReactNode }) {
         if (e.type === "presence") setOnline((s) => { const n = new Set(s); e.online ? n.add(e.user) : n.delete(e.user); return n; });
         if (e.type === "message" && e.message.sender_id !== me.id) setBump((b) => b + 1);
         if (e.type === "call") onSignal(e);
+        // auf einem anderen Gerät angenommen/abgelehnt oder vom Anrufer beendet → hier nicht weiterklingeln
+        if (e.type === "call-handled" && callRef.current?.state === "incoming" && callRef.current.room === e.room) cleanup();
         if (e.type === "calendar" && e.event === "reminder") {
           setReminder({ id: e.id, title: e.title, starts_at: e.starts_at, meeting: e.meeting ?? null });
           if ("Notification" in window && Notification.permission === "granted") new Notification(e.title, { body: TX[locale].startsIn(Math.round((new Date(e.starts_at).getTime() - Date.now()) / 60000)) });
@@ -137,6 +147,41 @@ export function CommProvider({ children }: { children: ReactNode }) {
   }, [me?.id]);
 
   const subscribe = useCallback((fn: (e: Ev) => void) => { subs.current.add(fn); return () => { subs.current.delete(fn); }; }, []);
+
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    const room = p.get("ring"), from = p.get("from");
+    if (!room || !from || !me) return;
+    const fresh = Date.now() - Number(p.get("t") ?? 0) < 45000;
+    if (p.get("decline")) {
+      if (wsRef.current?.readyState === WebSocket.OPEN) signal(room, from, { kind: "decline" });
+      else api(`/api/v1/chat/rooms/${room}/signal`, { body: { to: from, data: { kind: "decline" } } }).catch(() => { pendingDecline.current = { room, to: from }; });
+    } else if (fresh && !callRef.current) {
+      const name = p.get("name") ?? "";
+      setCall({ state: "incoming", room, title: name, media: p.get("media") === "video" ? "video" : "audio", group: false, host: from, invited: [], peers: [{ id: from, name }] });
+    }
+    nav(`${pathname}?room=${room}`, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, me?.id]);
+
+  // Klingeln: Ton, Vibration, System-Hinweis wenn das Portal im Hintergrund ist, Titel blinkt
+  const callState = call?.state;
+  useEffect(() => {
+    const c = callRef.current;
+    if (callState === "incoming" && c) {
+      const stop = ringtone();
+      let sys: Notification | null = null;
+      if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+        sys = new Notification(`${c.title} – ${T.incoming}`, { body: c.media === "video" ? T.callVideo : T.callAudio, tag: `call-${c.room}`, requireInteraction: true, icon: "/brand/icon-192.png" });
+        sys.onclick = () => { window.focus(); sys?.close(); };
+      }
+      const old = document.title;
+      const blink = window.setInterval(() => { document.title = document.title === old ? `📞 ${c.title}` : old; }, 1000);
+      return () => { stop(); sys?.close(); clearInterval(blink); document.title = old; };
+    }
+    if (callState === "outgoing") return ringback();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [callState]);
 
   // ── Medien und Verbindungen ──
   const media = async (kind: "audio" | "video") => {
