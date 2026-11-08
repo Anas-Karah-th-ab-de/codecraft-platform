@@ -3,6 +3,7 @@ pub mod account;
 mod catalog;
 pub mod chat;
 mod devices;
+pub mod hr;
 mod invoices;
 mod jobs;
 pub mod mail;
@@ -130,6 +131,17 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/tickets/{id}", get(tickets::get).patch(tickets::patch))
         .route("/api/v1/tickets/{id}/messages", post(tickets::reply))
         .route("/api/v1/organizations/{id}/sla", put(tickets::set_sla))
+        // Mitarbeiter: Zeiterfassung, Urlaub, Kalender
+        .route("/api/v1/time", get(hr::time_list).post(hr::time_add))
+        .route("/api/v1/time/status", get(hr::time_status))
+        .route("/api/v1/time/clock", post(hr::clock))
+        .route("/api/v1/time/{id}", put(hr::time_update).delete(hr::time_delete))
+        .route("/api/v1/leave", get(hr::leave_list).post(hr::leave_create))
+        .route("/api/v1/leave/{id}", patch(hr::leave_patch))
+        .route("/api/v1/calendar", get(hr::calendar).post(hr::event_create))
+        .route("/api/v1/calendar/{id}", put(hr::event_update).delete(hr::event_delete))
+        .route("/api/v1/calendar/{id}/respond", post(hr::event_respond))
+        .route("/api/v1/people", get(hr::people))
         // Einmal-Zugriffscodes (Kunde gibt Geräte für Techniker frei)
         .route("/api/v1/access-codes", get(access::list).post(access::create))
         .route("/api/v1/access-codes/redeem", post(access::redeem))

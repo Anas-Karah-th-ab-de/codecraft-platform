@@ -963,3 +963,20 @@ table.tickets tr.overdue td { background: #fef2f2; }
 .badge.ord-invoiced, .badge.req-accepted, .badge.req-in_progress { background: #ede9fe; color: #5b21b6; }
 .badge.ord-delivered, .badge.req-done { background: #dcfce7; color: #166534; }
 .badge.ord-cancelled, .badge.req-rejected { background: #f1f5f9; color: #64748b; }
+
+/* Zeit, Urlaub, Kalender */
+.clock { display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+.btn.big { font-size: 1.15em; padding: 14px 18px; justify-content: center; }
+.badge.lv-requested { background: #fef3c7; color: #92400e; } .badge.lv-approved { background: #dcfce7; color: #166534; }
+.badge.lv-rejected, .badge.lv-cancelled { background: #f1f5f9; color: #64748b; }
+.cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: #e2e8f0; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.cal-h { background: #f8fafc; padding: 6px; font-weight: 600; font-size: .8em; text-align: center; }
+.cal-d { background: #fff; min-height: 96px; padding: 4px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+.cal-d.out { background: #f8fafc; color: #94a3b8; } .cal-d.today .cal-n { background: #2563eb; color: #fff; border-radius: 50%; }
+.cal-n { font-size: .8em; font-weight: 600; width: 22px; height: 22px; display: grid; place-items: center; }
+.cal-ev { font-size: .72em; text-align: start; border: 0; border-radius: 4px; padding: 2px 4px; background: #dbeafe; color: #1e3a8a; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev.mand { background: #fee2e2; color: #7f1d1d; } .cal-ev.declined { opacity: .45; text-decoration: line-through; }
+.cal-lv { font-size: .7em; border-radius: 4px; padding: 1px 4px; background: #dcfce7; color: #166534; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-lv.lv-requested { background: #fef9c3; color: #854d0e; }
+.att-pick { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 4px; max-height: 180px; overflow: auto; }
+@media (max-width: 700px) { .cal-d { min-height: 64px; } .cal-ev, .cal-lv { font-size: .62em; } }

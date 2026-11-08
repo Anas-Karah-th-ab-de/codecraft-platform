@@ -15,6 +15,7 @@ import { CustomerAccess, ForcePassword } from "./Access";
 import Tickets from "./Tickets";
 import Shop from "./Shop";
 import DevRequests from "./DevRequests";
+import Work from "./Work";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -34,6 +35,7 @@ export default function Portal() {
     ["shop", "p.shop", true],
     ["anfragen-entwicklung", "p.dev", true],
     ["mail", "p.mail", me.is_employee],
+    ["arbeit", "p.work", me.is_employee],
     ["projekte", "p.projects", true],
     ["angebote", "p.quotes", true],
     ["rechnungen", "p.invoices", true],
@@ -74,6 +76,7 @@ export default function Portal() {
           <Route path="shop" element={<Shop />} />
           <Route path="anfragen-entwicklung/*" element={<DevRequests />} />
           <Route path="mail" element={<Mail />} />
+          <Route path="arbeit" element={<Work />} />
           <Route path="projekte/*" element={<Projects />} />
           <Route path="angebote/*" element={<Quotes />} />
           <Route path="rechnungen/*" element={<Invoices />} />

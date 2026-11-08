@@ -385,6 +385,13 @@ pub async fn patch(
     if !staff && (b.assignee_id.is_some() || b.unassign || b.urgency.is_some()) {
         return Err(ApiError::Forbidden);
     }
+    // Bearbeiter heute im Urlaub mit Vertretung → Vertretung übernimmt
+    let mut b = b;
+    if let Some(a) = b.assignee_id {
+        if let Some(sub) = super::hr::substitute_today(&s.db, a).await {
+            b.assignee_id = Some(sub);
+        }
+    }
     if let Some(a) = b.assignee_id {
         let ok: bool = sqlx::query_scalar(
             "SELECT EXISTS (SELECT 1 FROM users WHERE id = $1 AND is_active AND role NOT IN ('customer', 'device'))",
