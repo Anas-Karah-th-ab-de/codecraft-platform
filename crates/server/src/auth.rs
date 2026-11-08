@@ -6,7 +6,7 @@ use argon2::password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, Pass
 use argon2::Argon2;
 use axum::extract::FromRequestParts;
 use axum::http::request::Parts;
-use codecraft_domain::access::{allowed, Permission, Role};
+use codecraft_domain::access::{allowed_in, Permission, Role};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use totp_rs::{Algorithm, Secret, TOTP};
@@ -71,12 +71,19 @@ pub struct User {
     pub email: String,
     pub role: Role,
     pub organization_id: Option<Uuid>,
+    /// Abteilungskürzel (ACC, SAL, SUP, DEV, MGT) – grenzen die Rechte auf Bereiche ein
+    pub departments: Vec<String>,
 }
 
 impl User {
+    /// Darf der Mitarbeiter das in seinen Abteilungen? (Kunden: nur eigene Firma)
+    pub fn can(&self, perm: Permission) -> bool {
+        allowed_in(self.role, &self.departments, perm, self.organization_id.is_some())
+    }
+
     pub fn require(&self, perm: Permission, record_org: Option<Uuid>) -> Result<(), ApiError> {
         let own = record_org.is_some() && record_org == self.organization_id;
-        if allowed(self.role, perm, own) {
+        if allowed_in(self.role, &self.departments, perm, own) {
             Ok(())
         } else {
             Err(ApiError::Forbidden)
@@ -88,7 +95,7 @@ impl User {
     }
 }
 
-type UserRow = (Uuid, Uuid, String, String, Option<Uuid>, bool);
+type UserRow = (Uuid, Uuid, String, String, Option<Uuid>, bool, Vec<String>);
 
 /// Was ein Benutzer mit Einmal-Passwort aufrufen darf, bevor er ein eigenes gesetzt hat
 const BEFORE_PASSWORD_CHANGE: &[&str] = &["/api/v1/me", "/api/v1/auth/password", "/api/v1/auth/logout"];
@@ -107,7 +114,9 @@ impl FromRequestParts<AppState> for User {
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let token = bearer(parts).ok_or(ApiError::Unauthorized)?;
         let row: Option<UserRow> = sqlx::query_as(
-            "SELECT u.id, t.id, u.email, u.role, u.organization_id, u.must_change_password
+            "SELECT u.id, t.id, u.email, u.role, u.organization_id, u.must_change_password,
+                    ARRAY(SELECT d.code FROM user_departments ud JOIN departments d ON d.id = ud.department_id
+                           WHERE ud.user_id = u.id ORDER BY d.code)
                FROM api_tokens t JOIN users u ON u.id = t.user_id
               WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active
                 AND (t.expires_at IS NULL OR t.expires_at > now())",
@@ -115,12 +124,13 @@ impl FromRequestParts<AppState> for User {
         .bind(hash_token(token))
         .fetch_optional(&state.db)
         .await?;
-        let (id, token_id, email, role, organization_id, must_change) = row.ok_or(ApiError::Unauthorized)?;
+        let (id, token_id, email, role, organization_id, must_change, departments) =
+            row.ok_or(ApiError::Unauthorized)?;
         if must_change && !BEFORE_PASSWORD_CHANGE.contains(&parts.uri.path()) {
             return Err(ApiError::PasswordChangeRequired);
         }
         let role = Role::parse(&role).ok_or(ApiError::Unauthorized)?;
-        Ok(User { id, token_id, email, role, organization_id })
+        Ok(User { id, token_id, email, role, organization_id, departments })
     }
 }
 

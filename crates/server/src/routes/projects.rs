@@ -82,7 +82,7 @@ const PROJECT_SELECT: &str = "
       FROM projects p LEFT JOIN organizations o ON o.id = p.organization_id";
 
 pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<ProjectRow>>> {
-    let org = scope(&user, Permission::CustomerRead)?;
+    let org = scope(&user, Permission::ProjectRead)?;
     let sql = format!(
         "{PROJECT_SELECT} WHERE ($1::uuid IS NULL OR p.organization_id = $1)
           ORDER BY (p.status IN ('completed','archived')), p.created_at DESC"
@@ -121,7 +121,7 @@ pub struct UpdateRow {
 }
 
 pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<ProjectDetail>> {
-    let org = scope(&user, Permission::CustomerRead)?;
+    let org = scope(&user, Permission::ProjectRead)?;
     let project: ProjectRow = sqlx::query_as(&format!("{PROJECT_SELECT} WHERE p.id = $1"))
         .bind(id)
         .fetch_optional(&s.db)
@@ -193,12 +193,13 @@ pub struct QuoteRow {
     pub gross_cents: i64,
     pub sent_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
+    pub doc_kind: String,
 }
 
 const QUOTE_SELECT: &str = "
     SELECT q.id, q.organization_id, o.name AS organization_name, q.project_id, p.name AS project_name,
            q.number, q.title, q.revision, q.status, q.currency::text AS currency, q.tax_mode, q.locale,
-           q.valid_until, q.net_cents, q.tax_cents, q.gross_cents, q.sent_at, q.created_at
+           q.valid_until, q.net_cents, q.tax_cents, q.gross_cents, q.sent_at, q.created_at, q.doc_kind
       FROM quotes q JOIN organizations o ON o.id = q.organization_id
       LEFT JOIN projects p ON p.id = q.project_id";
 
@@ -255,6 +256,16 @@ pub struct QuoteExtra {
     pub advance_percent: Option<i32>,
     pub customer_response: Option<String>,
     pub responded_at: Option<DateTime<Utc>>,
+    pub payment_method_id: Option<Uuid>,
+    pub payment_method: Option<String>,
+    pub contract_start: Option<NaiveDate>,
+    pub contract_end: Option<NaiveDate>,
+    pub billing_interval: Option<String>,
+    pub recurring_cents: Option<i64>,
+    pub notice_days: Option<i32>,
+    pub accepted_via: Option<String>,
+    pub accepted_by_name: Option<String>,
+    pub acceptance_note: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -279,8 +290,12 @@ pub async fn get_quote(State(s): State<AppState>, user: User, Path(id): Path<Uui
         return Err(ApiError::NotFound);
     }
     let extra = sqlx::query_as(
-        "SELECT description, notes, tax_note, tax_rate_bp, project_start, project_end, hourly_rate_cents,
-                discounted_rate_cents, total_hours_milli, advance_percent, customer_response, responded_at FROM quotes WHERE id = $1",
+        "SELECT q.description, q.notes, q.tax_note, q.tax_rate_bp, q.project_start, q.project_end, q.hourly_rate_cents,
+                q.discounted_rate_cents, q.total_hours_milli, q.advance_percent, q.customer_response, q.responded_at,
+                q.payment_method_id, pm.name AS payment_method, q.contract_start, q.contract_end, q.billing_interval, q.recurring_cents,
+                q.notice_days, q.accepted_via, u.display_name AS accepted_by_name, q.acceptance_note
+           FROM quotes q LEFT JOIN payment_methods pm ON pm.id = q.payment_method_id LEFT JOIN users u ON u.id = q.accepted_by
+          WHERE q.id = $1",
     )
     .bind(id)
     .fetch_one(&s.db)
@@ -356,7 +371,7 @@ pub async fn quote_pdf(
 const PROJECT_STATUSES: [&str; 5] = ["planning", "active", "on_hold", "completed", "archived"];
 
 async fn project_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<(Option<Uuid>, String)> {
-    user.require(Permission::CustomerWrite, None)?;
+    user.require(Permission::ProjectWrite, None)?;
     sqlx::query_as("SELECT organization_id, name FROM projects WHERE id = $1")
         .bind(id)
         .fetch_optional(&s.db)
@@ -598,7 +613,7 @@ pub async fn create(
     user: User,
     Json(b): Json<NewProject>,
 ) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
-    user.require(Permission::CustomerWrite, None)?;
+    user.require(Permission::ProjectWrite, None)?;
     let kind =
         b.kind.unwrap_or_else(|| if b.organization_id.is_some() { "customer".into() } else { "internal".into() });
     let org = match kind.as_str() {

@@ -5,6 +5,7 @@ import { fmtDate, money, useI18n, type Key } from "../../i18n";
 import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
 import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
 import QuoteEditor from "./QuoteEditor";
+import { PaymentBox, usePaymentMethods } from "./Payment";
 
 type InvRow = {
   id: string; number: string | null; status: string; kind: string; currency: string; gross_cents: number | null;
@@ -89,11 +90,15 @@ type QuoteRow = {
   id: string; organization_id: string; organization_name: string; project_id: string | null; project_name: string | null;
   number: string; title: string; revision: string | null; status: string; currency: string; tax_mode: string; locale: string;
   valid_until: string | null; net_cents: number; tax_cents: number; gross_cents: number; sent_at: string | null; created_at: string;
+  doc_kind: "quote" | "contract";
 };
 type QuoteDetail = QuoteRow & {
   description: string; notes: string; tax_note: string | null; project_start: string | null; project_end: string | null;
   hourly_rate_cents: number | null; discounted_rate_cents: number | null; total_hours_milli: number | null; advance_percent: number | null;
   customer_response: string | null; responded_at: string | null;
+  payment_method_id: string | null; payment_method: string | null; contract_start: string | null; contract_end: string | null;
+  billing_interval: "monthly" | "quarterly" | "yearly" | null; recurring_cents: number | null; notice_days: number | null;
+  accepted_via: "customer" | "verbal" | null; accepted_by_name: string | null; acceptance_note: string | null;
   items: { block_nr: number | null; block_title: string | null; position_nr: string | null; description: string; quantity_milli: number; unit: string; unit_price_cents: number; total_cents: number }[];
   milestones: { label: string; title: string; blocks: string | null; goal: string | null }[];
   payments: { label: string; due_date: string | null; amount_cents: number; currency: string; description: string | null; paid_at: string | null }[];
@@ -132,7 +137,7 @@ function ProjectList() {
     <>
       <div className="row between">
         <h1>{t("p.projects")}</h1>
-        {me?.is_employee && can(me, "invoice_write") && <button className="btn" onClick={() => setCreating(true)}>+ {PK[locale].new}</button>}
+        {me?.is_employee && can(me, "project_write") && <button className="btn" onClick={() => setCreating(true)}>+ {PK[locale].new}</button>}
       </div>
       {creating && <NewProject onClose={() => setCreating(false)} />}
       <input placeholder={t("p.search")} value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 260, marginBottom: 12 }} />
@@ -209,7 +214,7 @@ function QuoteTable({ rows, showCustomer }: { rows: QuoteRow[]; showCustomer?: b
           <tbody>{rows.map((q) => (
             <tr key={q.id}>
               <td style={{ whiteSpace: "nowrap" }}><Link to={`/portal/angebote/${q.id}`}>{q.number}</Link></td>
-              <td dir="auto">{q.title}{q.revision && <span className="muted"> · {q.revision}</span>}</td>
+              <td dir="auto">{q.doc_kind === "contract" && <span className="badge" style={{ marginInlineEnd: 6 }}>{QA[locale].contract}</span>}{q.title}{q.revision && <span className="muted"> · {q.revision}</span>}</td>
               {showCustomer && <td dir="auto">{q.organization_name}</td>}
               <td><Badge s={q.status} /></td>
               <td className="n">{money(q.gross_cents, locale, q.currency)}</td>
@@ -224,13 +229,25 @@ function QuoteTable({ rows, showCustomer }: { rows: QuoteRow[]; showCustomer?: b
 const QA = {
   de: { new: "Neues Angebot", edit: "Bearbeiten", send: "An Kunden senden", sendQ: "Angebot jetzt an den Kunden senden? Danach ist es nicht mehr änderbar.",
     del: "Löschen", copy: "Als neue Revision kopieren", accept: "Angebot annehmen", reject: "Ablehnen", comment: "Kommentar (optional)",
-    invFull: "Rechnung (komplett)", invAdv: "Anzahlungsrechnung", invPay: "Rechnung Rate", response: "Antwort des Kunden", acceptQ: "Angebot verbindlich annehmen?" },
+    invFull: "Rechnung (komplett)", invAdv: "Anzahlungsrechnung", invPay: "Rechnung Rate", response: "Antwort des Kunden", acceptQ: "Angebot verbindlich annehmen?",
+    contract: "Vertrag", verbal: "Mündlich vereinbart", verbalNote: "Vermerk: wer, wann, was zugesagt (z. B. „Telefonat 05.11. mit Hr. Nord – Vertrag ab Januar“)",
+    verbalOk: "Als angenommen festhalten", verbalBy: "Mündlich vereinbart, festgehalten von", invPeriod: "Rechnung für Zeitraum ab", terms: "Vertrag",
+    from: "ab", until: "bis", open: "unbefristet", notice: "Kündigungsfrist", days: "Tage", fee: "Entgelt",
+    iv: { monthly: "monatlich", quarterly: "vierteljährlich", yearly: "jährlich" } },
   en: { new: "New quote", edit: "Edit", send: "Send to customer", sendQ: "Send this quote to the customer now? It can't be changed afterwards.",
     del: "Delete", copy: "Copy as new revision", accept: "Accept quote", reject: "Decline", comment: "Comment (optional)",
-    invFull: "Invoice (full)", invAdv: "Advance invoice", invPay: "Invoice instalment", response: "Customer response", acceptQ: "Accept this quote bindingly?" },
+    invFull: "Invoice (full)", invAdv: "Advance invoice", invPay: "Invoice instalment", response: "Customer response", acceptQ: "Accept this quote bindingly?",
+    contract: "Contract", verbal: "Agreed verbally", verbalNote: "Note: who agreed what and when (e.g. “call on 5 Nov with Mr Nord – contract from January”)",
+    verbalOk: "Record as accepted", verbalBy: "Agreed verbally, recorded by", invPeriod: "Invoice for period from", terms: "Contract",
+    from: "from", until: "until", open: "indefinite", notice: "Notice period", days: "days", fee: "Fee",
+    iv: { monthly: "monthly", quarterly: "quarterly", yearly: "yearly" } },
   ar: { new: "عرض جديد", edit: "تعديل", send: "إرسال إلى العميل", sendQ: "إرسال العرض للعميل الآن؟ لا يمكن تعديله بعد ذلك.",
     del: "حذف", copy: "نسخ كمراجعة جديدة", accept: "قبول العرض", reject: "رفض", comment: "تعليق (اختياري)",
-    invFull: "فاتورة (كاملة)", invAdv: "فاتورة الدفعة المقدمة", invPay: "فاتورة دفعة", response: "رد العميل", acceptQ: "هل تقبل هذا العرض بشكل ملزم؟" },
+    invFull: "فاتورة (كاملة)", invAdv: "فاتورة الدفعة المقدمة", invPay: "فاتورة دفعة", response: "رد العميل", acceptQ: "هل تقبل هذا العرض بشكل ملزم؟",
+    contract: "عقد", verbal: "تم الاتفاق شفهياً", verbalNote: "ملاحظة: من وافق ومتى وعلى ماذا (مثلاً: «مكالمة 5/11 مع السيد نورد – العقد من يناير»)",
+    verbalOk: "تسجيل كمقبول", verbalBy: "اتفاق شفهي، سجّله", invPeriod: "فاتورة للفترة من", terms: "العقد",
+    from: "من", until: "حتى", open: "غير محدد المدة", notice: "مدة الإشعار", days: "يوماً", fee: "الرسوم",
+    iv: { monthly: "شهرياً", quarterly: "كل ربع سنة", yearly: "سنوياً" } },
 };
 
 function QuoteActions({ q, reload }: { q: QuoteDetail; reload: () => void }) {
@@ -239,6 +256,8 @@ function QuoteActions({ q, reload }: { q: QuoteDetail; reload: () => void }) {
   const { me } = useAuth();
   const nav = useNavigate();
   const [comment, setComment] = useState("");
+  const [verbal, setVerbal] = useState<string | null>(null);
+  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 8) + "01");
   const [err, setErr] = useState<string | null>(null);
   const run = (p: Promise<unknown>, after?: (r: any) => void) => p.then((r) => { after ? after(r) : reload(); }).catch((e) => setErr(e.message));
   const staff = !!me?.is_employee && can(me, "invoice_write");
@@ -250,13 +269,18 @@ function QuoteActions({ q, reload }: { q: QuoteDetail; reload: () => void }) {
           <button className="btn small" onClick={() => confirm(T.sendQ) && run(api(`/api/v1/quotes/${q.id}/send`, { method: "POST" }))}>✉ {T.send}</button>
           <button className="btn small danger" onClick={() => confirm(T.del + "?") && run(api(`/api/v1/quotes/${q.id}`, { method: "DELETE" }), () => nav("/portal/angebote"))}>{T.del}</button>
         </>}
+        {staff && ["draft", "sent"].includes(q.status) && verbal === null && <button className="btn small ghost" onClick={() => setVerbal("")}>🤝 {T.verbal}</button>}
         {staff && <button className="btn small ghost" onClick={() => run(api<{ id: string }>(`/api/v1/quotes/${q.id}/duplicate`, { method: "POST" }), (r) => nav(`/portal/angebote/${r.id}/bearbeiten`))}>⧉ {T.copy}</button>}
         {staff && q.status === "accepted" && <>
           {q.advance_percent ? <button className="btn small" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "advance" } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invAdv} ({q.advance_percent} %)</button> : null}
           {q.payments.map((p, i) => (
             <button key={i} className="btn small ghost" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "payment", payment: i + 1 } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invPay} {i + 1}</button>
           ))}
-          <button className="btn small ghost" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "full" } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invFull}</button>
+          {q.items.length > 0 && <button className="btn small ghost" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "full" } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invFull}</button>}
+          {q.doc_kind === "contract" && <span className="row" style={{ gap: 4 }}>
+            <input type="date" style={{ width: "auto" }} value={period} min={q.contract_start ?? undefined} max={q.contract_end ?? undefined} onChange={(e) => setPeriod(e.target.value)} />
+            <button className="btn small" onClick={() => run(api<{ invoice_id: string }>(`/api/v1/quotes/${q.id}/invoice`, { body: { mode: "period", period_start: period } }), (r) => nav(`/portal/rechnungen/${r.invoice_id}`))}>{T.invPeriod} {fmtDate(period, locale)}</button>
+          </span>}
         </>}
         {!me?.is_employee && q.status === "sent" && <>
           <input style={{ flex: 1, minWidth: 200 }} placeholder={T.comment} value={comment} onChange={(e) => setComment(e.target.value)} />
@@ -264,6 +288,15 @@ function QuoteActions({ q, reload }: { q: QuoteDetail; reload: () => void }) {
           <button className="btn danger" onClick={() => run(api(`/api/v1/quotes/${q.id}/respond`, { body: { accept: false, comment } }))}>{T.reject}</button>
         </>}
       </div>
+      {verbal !== null && (
+        <form className="row" style={{ marginTop: 8, gap: 8, alignItems: "start" }}
+          onSubmit={(e) => { e.preventDefault(); run(api(`/api/v1/quotes/${q.id}/accept-verbal`, { body: { note: verbal } }), () => { setVerbal(null); reload(); }); }}>
+          <textarea required minLength={5} maxLength={2000} rows={2} style={{ flex: 1 }} placeholder={T.verbalNote} value={verbal} onChange={(e) => setVerbal(e.target.value)} />
+          <button className="btn">✓ {T.verbalOk}</button>
+          <button type="button" className="btn ghost" onClick={() => setVerbal(null)}>✕</button>
+        </form>
+      )}
+      {q.accepted_via === "verbal" && <p className="muted" style={{ marginTop: 8 }}>🤝 {T.verbalBy} {q.accepted_by_name}{q.acceptance_note && <>: „{q.acceptance_note}“</>}</p>}
       {q.customer_response && <p className="muted" style={{ marginTop: 8 }}>{T.response}: „{q.customer_response}“</p>}
       {err && <div className="alert">{err}</div>}
     </div>
@@ -280,7 +313,10 @@ function QuoteList() {
     <>
       <div className="row between">
         <h1>{t("p.quotes")}</h1>
-        {me?.is_employee && can(me, "invoice_write") && <Link className="btn" to="/portal/angebote/neu">+ {QA[locale].new}</Link>}
+        {me?.is_employee && can(me, "invoice_write") && <span className="row">
+          <Link className="btn ghost" to="/portal/angebote/neu?kind=contract">+ {QA[locale].contract}</Link>
+          <Link className="btn" to="/portal/angebote/neu">+ {QA[locale].new}</Link>
+        </span>}
       </div>
       <div className="tabs" style={{ marginBottom: 12 }}>
         {["", "draft", "sent", "accepted", "rejected"].map((s) => (
@@ -295,6 +331,7 @@ function QuoteList() {
 function QuoteView() {
   const { id } = useParams();
   const { t, locale } = useI18n();
+  const methods = usePaymentMethods();
   const { data: q, error, reload } = useApi<QuoteDetail>(`/api/v1/quotes/${id}`, [id]);
   if (!q) return <Loading error={error} />;
   const m = (c: number) => money(c, locale, q.currency);
@@ -310,7 +347,7 @@ function QuoteView() {
     <>
       <Link to="/portal/angebote">← {t("p.quotes")}</Link>
       <div className="row" style={{ margin: "8px 0" }}>
-        <h1 style={{ margin: 0 }}>{q.number}</h1><Badge s={q.status} />{q.revision && <span className="muted">{q.revision}</span>}
+        <h1 style={{ margin: 0 }}>{q.number}</h1><Badge s={q.status} />{q.doc_kind === "contract" && <span className="badge">{QA[locale].contract}</span>}{q.revision && <span className="muted">{q.revision}</span>}
         <span style={{ marginInlineStart: "auto" }} className="row">
           {(["de", "en", "ar"] as const).map((l) => (
             <button key={l} className="btn ghost small" onClick={() => openPdf(`/api/v1/quotes/${q.id}/pdf?locale=${l}`)}>⬇ PDF {l.toUpperCase()}</button>
@@ -326,6 +363,16 @@ function QuoteView() {
           <b>{fmtDate(q.sent_at ?? q.created_at, locale)}</b> → {fmtDate(q.valid_until, locale)}</div>
         <div className="card"><div className="muted">{t("p.total")}</div><b>{m(q.gross_cents)}</b>
           {q.advance_percent != null && <div className="muted">{t("p.advance")}: {q.advance_percent} %</div>}</div>
+        {q.doc_kind === "contract" && q.billing_interval && (
+          <div className="card"><div className="muted">{QA[locale].terms}</div>
+            <b>{m(q.recurring_cents ?? 0)} {QA[locale].iv[q.billing_interval]}</b> <span className="muted">({t("p.net")})</span>
+            <div>{QA[locale].from} {fmtDate(q.contract_start, locale)} {q.contract_end ? `${QA[locale].until} ${fmtDate(q.contract_end, locale)}` : `· ${QA[locale].open}`}</div>
+            {q.notice_days != null && <div className="muted">{QA[locale].notice}: {q.notice_days} {QA[locale].days}</div>}
+          </div>
+        )}
+        {q.payment_method_id && (
+          <div className="card"><PaymentBox p={methods.data?.find((x) => x.id === q.payment_method_id) ?? (q.payment_method ? { kind: "other", name: q.payment_method, details: {} } : null)} /></div>
+        )}
         {(q.project_start || q.total_hours_milli) && (
           <div className="card"><div className="muted">{t("p.period")}</div>
             <b>{fmtDate(q.project_start, locale)}</b> → {fmtDate(q.project_end, locale)}

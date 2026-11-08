@@ -13,7 +13,7 @@ use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Utc};
-use codecraft_domain::access::{allowed, Permission, Role};
+use codecraft_domain::access::{allowed_in, Permission, Role};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -61,7 +61,14 @@ pub fn display(code: &str) -> String {
 /// - interne Geräte (ohne Kunde): Mitarbeiter mit Geräterechten
 /// - Kundengeräte: zusätzlich gültiger, eingelöster Code – oder Kunde erlaubt Dauerzugriff
 pub async fn authorize(db: &PgPool, user: Uuid, role: Role, device: Uuid) -> ApiResult<()> {
-    if !allowed(role, Permission::DeviceManage, false) {
+    // Abteilungen frisch aus der DB – greift auch bei der Nachprüfung laufender Sitzungen
+    let depts: Vec<String> = sqlx::query_scalar(
+        "SELECT d.code FROM user_departments ud JOIN departments d ON d.id = ud.department_id WHERE ud.user_id = $1",
+    )
+    .bind(user)
+    .fetch_all(db)
+    .await?;
+    if !allowed_in(role, &depts, Permission::DeviceManage, false) {
         return Err(ApiError::Forbidden);
     }
     let (org, policy): (Option<Uuid>, String) =

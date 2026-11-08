@@ -3,6 +3,10 @@
 //! Ablauf: Entwurf (Positionen in Blöcken, Meilensteine, Zahlungsplan) → an Kunden senden
 //! (Druckdaten werden eingefroren) → Kunde nimmt im Portal an oder lehnt ab → bei Annahme
 //! entsteht das Projekt mit den Meilensteinen → Rechnung (komplett, Anzahlung oder Zahlungsrate).
+//!
+//! Verträge sind Angebote der Art `contract` mit Laufzeit, wiederkehrendem Entgelt und
+//! Kündigungsfrist (Rechnung je Abrechnungszeitraum). Nach einer mündlichen Vereinbarung kann
+//! das Team ein Angebot/einen Vertrag selbst als angenommen festhalten (mit Vermerk, protokolliert).
 
 use crate::auth::User;
 use crate::error::{ApiError, ApiResult};
@@ -96,6 +100,22 @@ pub struct QuoteIn {
     pub milestones: Vec<MilestoneIn>,
     #[serde(default)]
     pub payments: Vec<PaymentIn>,
+    /// leer = Standard des Kunden bzw. globaler Standard
+    pub payment_method_id: Option<Uuid>,
+    /// quote | contract
+    #[serde(default = "quote_kind")]
+    pub doc_kind: String,
+    pub contract_start: Option<NaiveDate>,
+    pub contract_end: Option<NaiveDate>,
+    /// monthly | quarterly | yearly
+    pub billing_interval: Option<String>,
+    /// Entgelt je Zeitraum (netto)
+    pub recurring_cents: Option<i64>,
+    pub notice_days: Option<i32>,
+}
+
+fn quote_kind() -> String {
+    "quote".into()
 }
 
 fn eur() -> String {
@@ -124,7 +144,28 @@ fn check(b: &QuoteIn) -> ApiResult<Checked> {
     if title.is_empty() || title.chars().count() > 300 {
         return Err(ApiError::BadRequest("Titel 1–300 Zeichen".into()));
     }
-    if b.items.is_empty() || b.items.len() > 500 || b.milestones.len() > 50 || b.payments.len() > 20 {
+    let contract = match b.doc_kind.as_str() {
+        "quote" => false,
+        "contract" => true,
+        _ => return Err(ApiError::BadRequest("Art: quote oder contract".into())),
+    };
+    if contract {
+        let start = b.contract_start.ok_or_else(|| ApiError::BadRequest("Vertragsbeginn fehlt".into()))?;
+        if b.contract_end.is_some_and(|e| e < start) {
+            return Err(ApiError::BadRequest("Vertragsende vor Vertragsbeginn".into()));
+        }
+        if !b.billing_interval.as_deref().is_some_and(|i| matches!(i, "monthly" | "quarterly" | "yearly")) {
+            return Err(ApiError::BadRequest("Abrechnung: monthly, quarterly oder yearly".into()));
+        }
+        if !b.recurring_cents.is_some_and(|c| c >= 0) {
+            return Err(ApiError::BadRequest("Entgelt je Zeitraum fehlt".into()));
+        }
+        if b.notice_days.is_some_and(|d| !(0..=730).contains(&d)) {
+            return Err(ApiError::BadRequest("Kündigungsfrist 0–730 Tage".into()));
+        }
+    }
+    // Verträge dürfen ohne einmalige Positionen auskommen (nur laufendes Entgelt)
+    if (b.items.is_empty() && !contract) || b.items.len() > 500 || b.milestones.len() > 50 || b.payments.len() > 20 {
         return Err(ApiError::BadRequest("1–500 Positionen, höchstens 50 Meilensteine und 20 Raten".into()));
     }
     if b.advance_percent.is_some_and(|p| !(0..=100).contains(&p)) {
@@ -264,7 +305,34 @@ async fn check_refs(conn: &mut PgConnection, b: &QuoteIn) -> ApiResult<String> {
             }
         }
     }
+    if let Some(m) = b.payment_method_id {
+        super::payments::check_active(conn, m).await?;
+    }
     Ok(b.locale.clone().filter(|l| matches!(l.as_str(), "de" | "en" | "ar")).unwrap_or(locale))
+}
+
+/// Zahlungsart und Vertragsfelder (ohne Zahlungsart: Standard des Kunden / global)
+async fn write_terms(conn: &mut PgConnection, id: Uuid, b: &QuoteIn) -> ApiResult<()> {
+    let contract = b.doc_kind == "contract";
+    sqlx::query(
+        "UPDATE quotes SET doc_kind = $2, contract_start = $3, contract_end = $4, billing_interval = $5, recurring_cents = $6, notice_days = $7,
+                payment_method_id = COALESCE($8,
+                    (SELECT o.payment_method_id FROM organizations o JOIN payment_methods p ON p.id = o.payment_method_id
+                      WHERE o.id = quotes.organization_id AND p.is_active),
+                    (SELECT id FROM payment_methods WHERE is_default))
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(&b.doc_kind)
+    .bind(b.contract_start.filter(|_| contract))
+    .bind(b.contract_end.filter(|_| contract))
+    .bind(b.billing_interval.as_deref().filter(|_| contract))
+    .bind(b.recurring_cents.filter(|_| contract))
+    .bind(b.notice_days.filter(|_| contract))
+    .bind(b.payment_method_id)
+    .execute(conn)
+    .await?;
+    Ok(())
 }
 
 fn default_note(tax: TaxMode, locale: &str, given: &Option<String>) -> Option<String> {
@@ -332,6 +400,7 @@ pub async fn create(
     .execute(&mut *tx)
     .await?;
     write_children(&mut tx, id, &b, &c.totals).await?;
+    write_terms(&mut tx, id, &b).await?;
     if let Some(r) = b.request_id {
         sqlx::query("UPDATE dev_requests SET quote_id = $2, updated_at = now() WHERE id = $1")
             .bind(r)
@@ -394,6 +463,7 @@ pub async fn update(
     .execute(&mut *tx)
     .await?;
     write_children(&mut tx, id, &b, &c.totals).await?;
+    write_terms(&mut tx, id, &b).await?;
     if let Some(r) = b.request_id {
         sqlx::query("UPDATE dev_requests SET quote_id = $2, updated_at = now() WHERE id = $1")
             .bind(r)
@@ -446,11 +516,20 @@ pub async fn pdf_data(conn: &mut PgConnection, id: Uuid) -> ApiResult<Value> {
         sent_at: Option<chrono::DateTime<Utc>>,
         customer: String,
         address: String,
+        locale: String,
+        payment_method_id: Option<Uuid>,
+        doc_kind: String,
+        contract_start: Option<NaiveDate>,
+        contract_end: Option<NaiveDate>,
+        billing_interval: Option<String>,
+        recurring_cents: Option<i64>,
+        notice_days: Option<i32>,
     }
     let q: Q = sqlx::query_as(
         "SELECT q.number, q.title, q.description, q.revision, q.currency::text AS currency, q.tax_mode, q.tax_rate_bp, q.tax_note, q.valid_until,
                 q.project_start, q.project_end, q.hourly_rate_cents, q.discounted_rate_cents, q.total_hours_milli, q.advance_percent,
-                q.net_cents, q.tax_cents, q.gross_cents, q.notes, q.created_at, q.sent_at, o.name AS customer, o.address
+                q.net_cents, q.tax_cents, q.gross_cents, q.notes, q.created_at, q.sent_at, o.name AS customer, o.address,
+                q.locale, q.payment_method_id, q.doc_kind, q.contract_start, q.contract_end, q.billing_interval, q.recurring_cents, q.notice_days
            FROM quotes q JOIN organizations o ON o.id = q.organization_id WHERE q.id = $1",
     )
     .bind(id)
@@ -476,6 +555,24 @@ pub async fn pdf_data(conn: &mut PgConnection, id: Uuid) -> ApiResult<Value> {
             .await?;
     let eur = |c: i64| c as f64 / 100.0;
     let date = |d: Option<NaiveDate>| d.map(|d| format!("{d}T00:00:00.000Z"));
+    let mut notes: Vec<String> = vec![];
+    if !q.notes.is_empty() {
+        notes.push(q.notes.clone());
+    }
+    if q.doc_kind == "contract" {
+        notes.push(contract_text(
+            &q.locale,
+            q.contract_start,
+            q.contract_end,
+            q.billing_interval.as_deref(),
+            q.recurring_cents,
+            q.notice_days,
+            &q.currency,
+        ));
+    }
+    if let Some(p) = super::payments::info(&mut *conn, q.payment_method_id).await? {
+        notes.push(super::payments::text(&p, &q.locale));
+    }
     let lines: Vec<&str> = q.address.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     Ok(json!({
         "proposalNr": q.number, "title": q.title, "description": q.description, "revision": q.revision, "currency": q.currency,
@@ -483,7 +580,7 @@ pub async fn pdf_data(conn: &mut PgConnection, id: Uuid) -> ApiResult<Value> {
         "validUntil": date(q.valid_until), "projectStart": date(q.project_start), "projectEnd": date(q.project_end),
         "hourlyRate": q.hourly_rate_cents.map(eur), "discountedHourlyRate": q.discounted_rate_cents.map(eur), "totalHours": q.total_hours_milli.map(|h| h as f64 / 1000.0),
         "advancePaymentPercent": q.advance_percent, "subtotal": eur(q.net_cents), "tax": eur(q.tax_cents), "total": eur(q.gross_cents),
-        "notes": if q.notes.is_empty() { Value::Null } else { Value::String(q.notes.clone()) },
+        "notes": if notes.is_empty() { Value::Null } else { Value::String(notes.join("\n\n")) },
         "issuedAt": q.sent_at.unwrap_or(q.created_at).to_rfc3339(), "status": "SENT",
         "customerName": q.customer,
         "customerAddress": { "companyName": q.customer, "street": lines.first(), "city": lines.get(1) },
@@ -494,6 +591,53 @@ pub async fn pdf_data(conn: &mut PgConnection, id: Uuid) -> ApiResult<Value> {
         "milestones": ms.iter().map(|m| json!({ "milestoneNr": m.0, "title": m.1, "blocks": m.2, "goal": m.3 })).collect::<Vec<_>>(),
         "paymentSchedule": pays.iter().map(|p| json!({ "dueLabel": p.0, "amount": eur(p.1), "currency": p.2, "description": p.3 })).collect::<Vec<_>>(),
     }))
+}
+
+fn interval_label(locale: &str, i: &str) -> &'static str {
+    match (locale, i) {
+        ("en", "monthly") => "monthly",
+        ("en", "quarterly") => "quarterly",
+        ("en", _) => "yearly",
+        ("ar", "monthly") => "شهرياً",
+        ("ar", "quarterly") => "كل ربع سنة",
+        ("ar", _) => "سنوياً",
+        (_, "monthly") => "monatlich",
+        (_, "quarterly") => "vierteljährlich",
+        _ => "jährlich",
+    }
+}
+
+/// Vertragsbedingungen als Absatz für das PDF
+fn contract_text(
+    locale: &str,
+    start: Option<NaiveDate>,
+    end: Option<NaiveDate>,
+    interval: Option<&str>,
+    cents: Option<i64>,
+    notice: Option<i32>,
+    currency: &str,
+) -> String {
+    let d = |x: NaiveDate| x.format("%d.%m.%Y").to_string();
+    let amount = format!("{:.2} {currency}", cents.unwrap_or(0) as f64 / 100.0);
+    let iv = interval_label(locale, interval.unwrap_or("monthly"));
+    let start = start.map(d).unwrap_or_default();
+    match locale {
+        "en" => format!(
+            "**Contract terms:** term from {start}{}, fee {amount} (net) {iv}{}.",
+            end.map(|e| format!(" until {}", d(e))).unwrap_or_else(|| ", indefinite".into()),
+            notice.map(|n| format!(", notice period {n} days")).unwrap_or_default()
+        ),
+        "ar" => format!(
+            "**شروط العقد:** يبدأ في {start}{}، الرسوم {amount} (صافي) {iv}{}.",
+            end.map(|e| format!(" حتى {}", d(e))).unwrap_or_else(|| "، لمدة غير محددة".into()),
+            notice.map(|n| format!("، مدة الإشعار بالإلغاء {n} يوماً")).unwrap_or_default()
+        ),
+        _ => format!(
+            "**Vertragsbedingungen:** Laufzeit ab {start}{}, Entgelt {amount} (netto) {iv}{}.",
+            end.map(|e| format!(" bis {}", d(e))).unwrap_or_else(|| ", unbefristet".into()),
+            notice.map(|n| format!(", Kündigungsfrist {n} Tage")).unwrap_or_default()
+        ),
+    }
 }
 
 /// An den Kunden senden: Druckdaten einfrieren, Kunde wird benachrichtigt
@@ -541,9 +685,7 @@ pub async fn respond(
 ) -> ApiResult<Json<Value>> {
     let org = user.organization_id.filter(|_| !user.role.is_employee()).ok_or(ApiError::Forbidden)?;
     let mut tx = s.db.begin().await?;
-    type Row =
-        (Uuid, String, String, String, Option<NaiveDate>, Option<Uuid>, Option<NaiveDate>, Option<NaiveDate>, String);
-    let q: Row = sqlx::query_as(
+    let q: AcceptRow = sqlx::query_as(
         "SELECT organization_id, status, number, title, valid_until, project_id, project_start, project_end, description
            FROM quotes WHERE id = $1 FOR UPDATE",
     )
@@ -563,14 +705,35 @@ pub async fn respond(
         return Err(ApiError::Conflict("Angebot ist abgelaufen – bitte neues Angebot anfordern".into()));
     }
     let status = if b.accept { "accepted" } else { "rejected" };
-    sqlx::query("UPDATE quotes SET status = $2, responded_at = now(), customer_response = NULLIF($3, ''), updated_at = now() WHERE id = $1")
-        .bind(id)
-        .bind(status)
-        .bind(b.comment.trim().chars().take(4000).collect::<String>())
-        .execute(&mut *tx)
-        .await?;
+    sqlx::query(
+        "UPDATE quotes SET status = $2, responded_at = now(), customer_response = NULLIF($3, ''), updated_at = now(),
+                accepted_via = CASE WHEN $2 = 'accepted' THEN 'customer' END WHERE id = $1",
+    )
+    .bind(id)
+    .bind(status)
+    .bind(b.comment.trim().chars().take(4000).collect::<String>())
+    .execute(&mut *tx)
+    .await?;
+    let project = after_response(&mut tx, id, org, &q, b.accept).await?;
+    super::audit(&mut tx, &user.actor(), status, "quote", id, json!({ "project": project })).await?;
+    tx.commit().await?;
+    notify(&super::shop::team(&s, "SAL").await, "quote", status, id, &q.2, &q.3);
+    Ok(Json(json!({ "status": status, "project_id": project })))
+}
+
+type AcceptRow =
+    (Uuid, String, String, String, Option<NaiveDate>, Option<Uuid>, Option<NaiveDate>, Option<NaiveDate>, String);
+
+/// Nach Annahme: Projekt mit Meilensteinen anlegen (falls noch keins), Anfrage nachziehen
+async fn after_response(
+    conn: &mut PgConnection,
+    id: Uuid,
+    org: Uuid,
+    q: &AcceptRow,
+    accept: bool,
+) -> ApiResult<Option<Uuid>> {
     let mut project = q.5;
-    if b.accept && project.is_none() {
+    if accept && project.is_none() {
         let pid = Uuid::now_v7();
         let base = super::requests::slug(&q.3);
         let slug = format!("{}-{}", if base.is_empty() { "projekt" } else { &base }, &pid.simple().to_string()[24..]);
@@ -586,7 +749,7 @@ pub async fn respond(
         .bind(&q.8)
         .bind(q.6)
         .bind(q.7)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
         sqlx::query(
             "INSERT INTO project_milestones (id, project_id, position, title, description)
@@ -594,23 +757,73 @@ pub async fn respond(
         )
         .bind(id)
         .bind(pid)
-        .execute(&mut *tx)
+        .execute(&mut *conn)
         .await?;
-        sqlx::query("UPDATE quotes SET project_id = $2 WHERE id = $1").bind(id).bind(pid).execute(&mut *tx).await?;
+        sqlx::query("UPDATE quotes SET project_id = $2 WHERE id = $1").bind(id).bind(pid).execute(&mut *conn).await?;
         project = Some(pid);
     }
     sqlx::query(
         "UPDATE dev_requests SET status = $2, project_id = COALESCE(project_id, $3), updated_at = now() WHERE quote_id = $1",
     )
     .bind(id)
-    .bind(if b.accept { "in_progress" } else { "rejected" })
+    .bind(if accept { "in_progress" } else { "rejected" })
     .bind(project)
+    .execute(&mut *conn)
+    .await?;
+    Ok(project)
+}
+
+#[derive(Deserialize)]
+pub struct Verbal {
+    /// Wer hat wann was zugesagt (Pflicht, landet im Protokoll)
+    pub note: String,
+}
+
+/// Team hält eine mündliche Vereinbarung fest: Angebot/Vertrag gilt als angenommen.
+/// Entwürfe werden dabei eingefroren (wie beim Senden), der Kunde wird benachrichtigt.
+pub async fn accept_verbal(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<Verbal>,
+) -> ApiResult<Json<Value>> {
+    user.require(Permission::InvoiceWrite, None)?;
+    let note = b.note.trim();
+    if note.chars().count() < 5 || note.chars().count() > 2000 {
+        return Err(ApiError::BadRequest("Vermerk 5–2000 Zeichen (wer, wann, was vereinbart)".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    let q: AcceptRow = sqlx::query_as(
+        "SELECT organization_id, status, number, title, valid_until, project_id, project_start, project_end, description
+           FROM quotes WHERE id = $1 FOR UPDATE",
+    )
+    .bind(id)
+    .fetch_optional(&mut *tx)
+    .await?
+    .ok_or(ApiError::NotFound)?;
+    if !matches!(q.1.as_str(), "draft" | "sent") {
+        return Err(ApiError::Conflict("Angebot wurde bereits beantwortet".into()));
+    }
+    let was_draft = q.1 == "draft";
+    sqlx::query(
+        "UPDATE quotes SET status = 'accepted', sent_at = COALESCE(sent_at, now()), responded_at = now(), updated_at = now(),
+                accepted_via = 'verbal', accepted_by = $2, acceptance_note = $3 WHERE id = $1",
+    )
+    .bind(id)
+    .bind(user.id)
+    .bind(note)
     .execute(&mut *tx)
     .await?;
-    super::audit(&mut tx, &user.actor(), status, "quote", id, json!({ "project": project })).await?;
+    if was_draft {
+        let data = pdf_data(&mut tx, id).await?;
+        sqlx::query("UPDATE quotes SET pdf_snapshot = $2 WHERE id = $1").bind(id).bind(&data).execute(&mut *tx).await?;
+    }
+    let project = after_response(&mut tx, id, q.0, &q, true).await?;
+    super::audit(&mut tx, &user.actor(), "accept_verbal", "quote", id, json!({ "note": note, "project": project }))
+        .await?;
     tx.commit().await?;
-    notify(&super::shop::team(&s, "SAL").await, "quote", status, id, &q.2, &q.3);
-    Ok(Json(json!({ "status": status, "project_id": project })))
+    notify(&org_users(&s, q.0).await, "quote", "accepted", id, &q.2, &q.3);
+    Ok(Json(json!({ "status": "accepted", "project_id": project })))
 }
 
 #[derive(Deserialize)]
@@ -619,6 +832,18 @@ pub struct InvoiceReq {
     pub mode: String,
     /// bei payment: Nummer der Rate (1 …)
     pub payment: Option<i32>,
+    /// bei period (Verträge): Beginn des Abrechnungszeitraums (Standard: heute)
+    pub period_start: Option<NaiveDate>,
+}
+
+/// Abrechnungszeitraum: Beginn → letzter Tag vor dem nächsten Beginn
+fn period_end(start: NaiveDate, interval: &str) -> NaiveDate {
+    let months = match interval {
+        "quarterly" => 3,
+        "yearly" => 12,
+        _ => 1,
+    };
+    start.checked_add_months(chrono::Months::new(months)).map(|d| d - chrono::Days::new(1)).unwrap_or(start)
 }
 
 /// Rechnungsentwurf aus dem Angebot (komplett, Anzahlung laut Angebot, oder eine Zahlungsrate)
@@ -682,7 +907,39 @@ pub async fn invoice(
             let net = if vat > 0 { (amount as i128 * 10_000 / (10_000 + vat as i128)) as i64 } else { amount };
             vec![(format!("{label} – Angebot {}", q.3), 1000, Unit::Flat, net, vat)]
         }
-        _ => return Err(ApiError::BadRequest("mode: full, advance oder payment".into())),
+        "period" => {
+            type C = (String, Option<NaiveDate>, Option<NaiveDate>, Option<String>, Option<i64>);
+            let (kind, start, end, interval, cents): C = sqlx::query_as(
+                "SELECT doc_kind, contract_start, contract_end, billing_interval, recurring_cents FROM quotes WHERE id = $1",
+            )
+            .bind(id)
+            .fetch_one(&mut *tx)
+            .await?;
+            if kind != "contract" {
+                return Err(ApiError::BadRequest("Zeitraum-Rechnung nur für Verträge".into()));
+            }
+            let interval = interval.unwrap_or_else(|| "monthly".into());
+            let from = b.period_start.or(start).unwrap_or_else(|| Utc::now().date_naive());
+            if start.is_some_and(|s| from < s) || end.is_some_and(|e| from > e) {
+                return Err(ApiError::BadRequest("Zeitraum liegt außerhalb der Vertragslaufzeit".into()));
+            }
+            let to = period_end(from, &interval);
+            let to = end.map(|e| e.min(to)).unwrap_or(to);
+            vec![(
+                format!(
+                    "Vertragsentgelt {} {} – {} (Vertrag {})",
+                    interval_label("de", &interval),
+                    from.format("%d.%m.%Y"),
+                    to.format("%d.%m.%Y"),
+                    q.3
+                ),
+                1000,
+                Unit::Flat,
+                cents.unwrap_or(0),
+                vat,
+            )]
+        }
+        _ => return Err(ApiError::BadRequest("mode: full, advance, payment oder period".into())),
     };
     let inv = super::invoices::draft_with_lines(
         &mut tx,
@@ -695,6 +952,12 @@ pub async fn invoice(
         &format!("Angebot {}", q.3),
     )
     .await?;
+    // Zahlungsart aus dem Angebot/Vertrag übernehmen
+    sqlx::query("UPDATE invoices SET payment_method_id = COALESCE((SELECT payment_method_id FROM quotes WHERE id = $2), payment_method_id) WHERE id = $1")
+        .bind(inv)
+        .bind(id)
+        .execute(&mut *tx)
+        .await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(json!({ "invoice_id": inv }))))
 }
@@ -728,10 +991,12 @@ pub async fn duplicate(
     sqlx::query(
         "INSERT INTO quotes (id, organization_id, project_id, number, title, description, revision, currency, tax_mode, tax_rate_bp, tax_note, locale,
                              valid_until, project_start, project_end, hourly_rate_cents, discounted_rate_cents, total_hours_milli, advance_percent,
-                             net_cents, tax_cents, gross_cents, notes)
+                             net_cents, tax_cents, gross_cents, notes, payment_method_id, doc_kind, contract_start, contract_end,
+                             billing_interval, recurring_cents, notice_days)
          SELECT $2, organization_id, project_id, $3, title, description, revision, currency, tax_mode, tax_rate_bp, tax_note, locale,
                 CURRENT_DATE + 30, project_start, project_end, hourly_rate_cents, discounted_rate_cents, total_hours_milli, advance_percent,
-                net_cents, tax_cents, gross_cents, notes FROM quotes WHERE id = $1",
+                net_cents, tax_cents, gross_cents, notes, payment_method_id, doc_kind, contract_start, contract_end,
+                billing_interval, recurring_cents, notice_days FROM quotes WHERE id = $1",
     )
     .bind(id)
     .bind(nid)
@@ -757,6 +1022,16 @@ pub async fn duplicate(
 #[cfg(test)]
 mod tests {
     use super::is_hours;
+    use chrono::NaiveDate;
+
+    #[test]
+    fn periods() {
+        let d = |s: &str| s.parse::<NaiveDate>().unwrap();
+        assert_eq!(super::period_end(d("2026-01-31"), "monthly"), d("2026-02-27"));
+        assert_eq!(super::period_end(d("2026-01-01"), "monthly"), d("2026-01-31"));
+        assert_eq!(super::period_end(d("2026-01-01"), "quarterly"), d("2026-03-31"));
+        assert_eq!(super::period_end(d("2026-01-01"), "yearly"), d("2026-12-31"));
+    }
 
     #[test]
     fn hour_units() {

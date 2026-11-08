@@ -11,6 +11,11 @@ use tower::ServiceExt;
 use uuid::Uuid;
 
 async fn user(db: &PgPool, role: &str, org: Option<Uuid>) -> String {
+    user_in(db, role, org, "ACC").await
+}
+
+/// Mitarbeiter in einer Abteilung (Kunden/Admins: ohne Abteilung)
+async fn user_in(db: &PgPool, role: &str, org: Option<Uuid>, dept: &str) -> String {
     let id = Uuid::now_v7();
     let token = auth::new_token("cc_u_");
     sqlx::query("INSERT INTO users (id, email, display_name, role, organization_id) VALUES ($1, $2, 'T', $3, $4)")
@@ -21,6 +26,16 @@ async fn user(db: &PgPool, role: &str, org: Option<Uuid>) -> String {
         .execute(db)
         .await
         .unwrap();
+    if !matches!(role, "customer" | "admin" | "device") {
+        sqlx::query(
+            "INSERT INTO user_departments (user_id, department_id) SELECT $1, id FROM departments WHERE code = $2",
+        )
+        .bind(id)
+        .bind(dept)
+        .execute(db)
+        .await
+        .unwrap();
+    }
     sqlx::query("INSERT INTO api_tokens (id, token_hash, user_id, name) VALUES ($1, $2, $3, 't')")
         .bind(Uuid::now_v7())
         .bind(auth::hash_token(&token))
@@ -217,6 +232,18 @@ async fn permissions(db: PgPool) {
     assert_eq!(s, StatusCode::CREATED);
     let issue = format!("/api/v1/invoices/{}/issue", v["id"].as_str().unwrap());
     assert_eq!(call(&db, "POST", &issue, &staff, None).await.0, StatusCode::FORBIDDEN);
+
+    // Abteilungen trennen Bereiche: Entwickler sieht keine Rechnungen, Support keine Angebote
+    let dev = user_in(&db, "lead", None, "DEV").await;
+    assert_eq!(call(&db, "GET", "/api/v1/invoices", &dev, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&db, "GET", "/api/v1/projects", &dev, None).await.0, StatusCode::OK);
+    let sup = user_in(&db, "staff", None, "SUP").await;
+    assert_eq!(call(&db, "GET", "/api/v1/quotes", &sup, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&db, "GET", "/api/v1/projects", &sup, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&db, "GET", "/api/v1/tickets", &sup, None).await.0, StatusCode::OK);
+    let acc = user_in(&db, "staff", None, "ACC").await;
+    assert_eq!(call(&db, "GET", "/api/v1/tickets", &acc, None).await.0, StatusCode::FORBIDDEN);
+    assert_eq!(call(&db, "GET", "/api/v1/devices", &acc, None).await.0, StatusCode::FORBIDDEN);
 
     // ohne gültiges Token
     assert_eq!(call(&db, "GET", "/api/v1/invoices", "falsch", None).await.0, StatusCode::UNAUTHORIZED);

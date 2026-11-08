@@ -5,7 +5,7 @@ use crate::auth::{
 };
 use crate::error::{ApiError, ApiResult};
 use crate::AppState;
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use codecraft_domain::access::{Permission, Role};
@@ -325,6 +325,67 @@ pub async fn create_user(
     .await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "mailbox": mailbox }))))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AccessIn {
+    pub role: Role,
+    #[serde(default)]
+    pub departments: Vec<String>,
+}
+
+/// Rolle und Abteilungen eines Mitarbeiters ändern (nur Admin). Kunden/Geräte bleiben, was sie sind.
+/// Sitzungen bleiben gültig, Rechte gelten ab der nächsten Anfrage.
+pub async fn set_access(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<AccessIn>,
+) -> ApiResult<StatusCode> {
+    user.require(Permission::UserManage, None)?;
+    if !b.role.is_employee() {
+        return Err(ApiError::BadRequest("Nur Mitarbeiterrollen".into()));
+    }
+    if id == user.id && b.role != Role::Admin {
+        return Err(ApiError::Conflict("Eigene Admin-Rechte können nicht entzogen werden".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    let old: String = sqlx::query_scalar("SELECT role FROM users WHERE id = $1 FOR UPDATE")
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if !Role::parse(&old).is_some_and(Role::is_employee) {
+        return Err(ApiError::BadRequest("Kunden- und Gerätekonten haben keine Mitarbeiterrolle".into()));
+    }
+    let role = serde_json::to_value(b.role).ok().and_then(|v| v.as_str().map(String::from)).unwrap_or_default();
+    sqlx::query("UPDATE users SET role = $2 WHERE id = $1").bind(id).bind(&role).execute(&mut *tx).await?;
+    sqlx::query("DELETE FROM user_departments WHERE user_id = $1").bind(id).execute(&mut *tx).await?;
+    for (i, code) in b.departments.iter().enumerate() {
+        let r = sqlx::query(
+            "INSERT INTO user_departments (user_id, department_id, is_primary)
+             SELECT $1, id, $3 FROM departments WHERE code = $2 ON CONFLICT DO NOTHING",
+        )
+        .bind(id)
+        .bind(code)
+        .bind(i == 0)
+        .execute(&mut *tx)
+        .await?;
+        if r.rows_affected() == 0 {
+            return Err(ApiError::BadRequest(format!("Abteilung {code} existiert nicht oder doppelt")));
+        }
+    }
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "set_access",
+        "user",
+        id,
+        json!({ "from": old, "role": role, "departments": b.departments }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 /// Einmal-Passwort setzen (DB-Teil, auch für das CLI): alle Sitzungen und App-Passwörter

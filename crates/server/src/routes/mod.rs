@@ -9,6 +9,7 @@ mod jobs;
 pub mod mail;
 pub mod media;
 mod organizations;
+mod payments;
 mod projects;
 mod quotes;
 pub mod remote;
@@ -42,6 +43,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/me", get(account::me))
         .route("/api/v1/users", get(account::list_users).post(account::create_user))
         .route("/api/v1/users/{id}/reset-password", post(account::reset_password))
+        .route("/api/v1/users/{id}/access", put(account::set_access))
         // Katalog
         .route("/api/v1/departments", get(catalog::departments))
         .route("/api/v1/products", get(catalog::products).post(catalog::create_product))
@@ -68,6 +70,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/invoices/{id}/items", put(invoices::replace_items))
         .route("/api/v1/invoices/{id}/issue", post(invoices::issue))
         .route("/api/v1/invoices/{id}/pay", post(invoices::mark_paid))
+        .route("/api/v1/invoices/{id}/payment-method", put(invoices::set_payment))
         .route("/api/v1/invoices/{id}/cancel", post(invoices::cancel))
         .route("/api/v1/invoices/{id}/pdf", get(invoices::pdf))
         // Projekte & Kostenvoranschläge
@@ -91,6 +94,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/quotes/{id}/respond", post(quotes::respond))
         .route("/api/v1/quotes/{id}/invoice", post(quotes::invoice))
         .route("/api/v1/quotes/{id}/duplicate", post(quotes::duplicate))
+        .route("/api/v1/quotes/{id}/accept-verbal", post(quotes::accept_verbal))
+        .route("/api/v1/payment-methods", get(payments::list).post(payments::create))
+        .route("/api/v1/payment-methods/{id}", put(payments::update))
+        .route("/api/v1/organizations/{id}/payment-method", put(payments::set_org_default))
         .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
         // Kommunikation: Chat, Anrufe (WebRTC-Signalisierung), Echtzeit
         .route("/api/v1/ws", get(chat::ws))

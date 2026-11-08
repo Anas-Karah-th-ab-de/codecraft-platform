@@ -315,6 +315,8 @@ pub struct InvoiceDetail {
     pub items: Vec<Item>,
     pub totals: Totals,
     pub tax_notice: Option<&'static str>,
+    /// Zahlungsart: ausgestellt = eingefrorene Daten, Entwurf = aktuelle
+    pub payment: Option<serde_json::Value>,
 }
 
 async fn detail(conn: &mut PgConnection, id: Uuid) -> ApiResult<InvoiceDetail> {
@@ -323,7 +325,52 @@ async fn detail(conn: &mut PgConnection, id: Uuid) -> ApiResult<InvoiceDetail> {
     let mode = tax_mode_from_str(&invoice.tax_mode);
     let totals = compute_totals(&lines(&items), mode);
     let tax_notice = codecraft_domain::invoice::tax_notice(mode, &invoice.locale);
-    Ok(InvoiceDetail { invoice, items, totals, tax_notice })
+    let payment = payment_of(conn, id).await?;
+    Ok(InvoiceDetail { invoice, items, totals, tax_notice, payment })
+}
+
+/// Zahlungsart einer Rechnung (eingefroren oder aktuell)
+async fn payment_of(conn: &mut PgConnection, id: Uuid) -> ApiResult<Option<serde_json::Value>> {
+    let (method, snapshot): (Option<Uuid>, Option<serde_json::Value>) =
+        sqlx::query_as("SELECT payment_method_id, payment_snapshot FROM invoices WHERE id = $1")
+            .bind(id)
+            .fetch_one(&mut *conn)
+            .await?;
+    if let Some(mut s) = snapshot {
+        s["id"] = json!(method);
+        return Ok(Some(s));
+    }
+    super::payments::info(conn, method).await
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PaymentBody {
+    pub payment_method_id: Uuid,
+}
+
+/// Zahlungsart eines Entwurfs ändern
+pub async fn set_payment(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<PaymentBody>,
+) -> ApiResult<Json<InvoiceDetail>> {
+    user.require(Permission::InvoiceWrite, None)?;
+    let mut tx = s.db.begin().await?;
+    super::payments::check_active(&mut tx, b.payment_method_id).await?;
+    let r = sqlx::query("UPDATE invoices SET payment_method_id = $2 WHERE id = $1 AND status = 'draft'")
+        .bind(id)
+        .bind(b.payment_method_id)
+        .execute(&mut *tx)
+        .await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::Conflict("Nur bei Entwürfen änderbar".into()));
+    }
+    super::audit(&mut tx, &user.actor(), "set_payment_method", "invoice", id, json!({ "method": b.payment_method_id }))
+        .await?;
+    let d = detail(&mut tx, id).await?;
+    tx.commit().await?;
+    Ok(Json(d))
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────
@@ -340,6 +387,8 @@ pub struct NewInvoice {
     pub notes: String,
     #[serde(default)]
     pub items: Vec<ItemInput>,
+    /// leer = Standard des Kunden bzw. globaler Standard
+    pub payment_method_id: Option<Uuid>,
 }
 
 fn eur() -> Currency {
@@ -363,9 +412,12 @@ pub async fn create_draft(
         .ok_or_else(|| ApiError::BadRequest("Organisation existiert nicht".into()))?;
     let locale = b.locale.unwrap_or(org_locale);
     let items = resolve(&mut tx, &locale, b.currency.as_str(), b.items).await?;
+    if let Some(m) = b.payment_method_id {
+        super::payments::check_active(&mut tx, m).await?;
+    }
     let id = Uuid::now_v7();
     sqlx::query(
-        "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes) VALUES ($1, $2, $3, $4, $5, $6)",
+        "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes, payment_method_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
     )
     .bind(id)
     .bind(b.organization_id)
@@ -373,6 +425,7 @@ pub async fn create_draft(
     .bind(tax_mode_to_str(b.tax_mode))
     .bind(&locale)
     .bind(&b.notes)
+    .bind(b.payment_method_id)
     .execute(&mut *tx)
     .await?;
     insert_items(&mut tx, id, &items).await?;
@@ -740,7 +793,11 @@ pub async fn pdf(
                 &inv.notes,
             )
         });
-        let template = crate::legacy_pdf::template(&mut conn).await;
+        let mut template = crate::legacy_pdf::template(&mut conn).await;
+        // gewählte Zahlungsart statt fester Bankdaten (Altbelege ohne Zahlungsart bleiben unverändert)
+        if let Some(p) = &d.payment {
+            super::payments::apply_to_template(&mut template, p);
+        }
         let locale = q.locale.as_deref().unwrap_or(&inv.locale);
         if let Some(bytes) = crate::legacy_pdf::render("invoice", locale, template, data).await {
             return Ok(pdf_response(bytes));

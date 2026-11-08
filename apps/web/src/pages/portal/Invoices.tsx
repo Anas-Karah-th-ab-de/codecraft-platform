@@ -3,6 +3,7 @@ import { Link, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { api, can, openPdf, useApi, useAuth } from "../../api";
 import { fmtDate, money, useI18n, type Key, type Locale } from "../../i18n";
 import { Badge, Field, Loading, Modal, toCents, useSubmit } from "../../ui";
+import { PaymentBox, PaymentSelect, PT, type PaymentInfo } from "./Payment";
 
 type I18n = { de: string; en: string; ar: string };
 export type Price = { id: string; product_id: string; code: string; name: I18n; billing: string; amount_cents: number | null; is_active: boolean; currency: string; features: any };
@@ -19,7 +20,7 @@ type Inv = {
   project_id: string | null; project_name: string | null; service_from: string | null; service_to: string | null; legacy: boolean;
 };
 type Item = { description: string; quantity_milli: number; unit: string; unit_price: number; vat_rate_bp: number; product_id: string | null; price_id: string | null };
-type Detail = Inv & { items: Item[]; totals: { net: number; tax: number; gross: number }; tax_notice: string | null };
+type Detail = Inv & { items: Item[]; totals: { net: number; tax: number; gross: number }; tax_notice: string | null; payment: PaymentInfo | null };
 
 export default function Invoices() {
   return (
@@ -92,6 +93,7 @@ function InvoiceEditor({ onClose, draft }: { onClose: () => void; draft?: Detail
   const [taxMode, setTaxMode] = useState(draft?.tax_mode ?? "standard");
   const [invLocale, setInvLocale] = useState<string>(draft?.locale ?? "");
   const [notes, setNotes] = useState(draft?.notes ?? "");
+  const [payment, setPayment] = useState("");
   const [rows, setRows] = useState<Row[]>(
     draft?.items.map((i) => ({
       mode: i.price_id ? "catalog" : "free", price_id: i.price_id ?? "", description: i.description,
@@ -132,7 +134,7 @@ function InvoiceEditor({ onClose, draft }: { onClose: () => void; draft?: Detail
       onClose();
     } else {
       const d = await api<Detail>("/api/v1/invoices", {
-        body: { organization_id: org, tax_mode: taxMode, locale: invLocale || undefined, notes, items: items() },
+        body: { organization_id: org, tax_mode: taxMode, locale: invLocale || undefined, notes, items: items(), payment_method_id: payment || null },
       });
       nav(`/portal/rechnungen/${d.id}`);
     }
@@ -159,6 +161,7 @@ function InvoiceEditor({ onClose, draft }: { onClose: () => void; draft?: Detail
                 {["standard", "reverse_charge", "not_taxable"].map((m) => <option key={m} value={m}>{t(`tax.${m}` as Key)}</option>)}
               </select>
             </Field>
+            <Field label={PT[locale].method}><PaymentSelect value={payment} onChange={setPayment} /></Field>
           </div>
         )}
         <h3>{t("p.items")}</h3>
@@ -289,6 +292,19 @@ function InvoiceDetail() {
           <b>{t(`tax.${d.tax_mode}` as Key)} · {d.locale.toUpperCase()}</b>
           {d.legacy && <div className="muted" style={{ fontSize: ".85em" }}>↺ {t("p.legacy")}</div>}
         </div>
+        {(d.payment || d.status === "draft") && (
+          <div className="card">
+            <PaymentBox p={d.payment} />
+            {d.status === "draft" && can(me, "invoice_write") && (
+              <div style={{ marginTop: 6 }}>
+                <PaymentSelect required value={d.payment?.id ?? ""} onChange={(v) => s.run(async () => {
+                  await api(`/api/v1/invoices/${d.id}/payment-method`, { method: "PUT", body: { payment_method_id: v } });
+                  reload();
+                })()} />
+              </div>
+            )}
+          </div>
+        )}
       </div>
       <div className="card" style={{ padding: 0 }}>
         <table>

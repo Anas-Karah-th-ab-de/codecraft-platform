@@ -50,7 +50,8 @@ async fn new_user(db: &PgPool, admin: &str, email: &str, role: &str, org: Option
         "/api/v1/users",
         admin,
         Some(json!({
-            "email": email, "display_name": email, "role": role, "password": "start-passwort-1", "organization_id": org
+            "email": email, "display_name": email, "role": role, "password": "start-passwort-1", "organization_id": org,
+            "departments": if role == "customer" { json!([]) } else { json!(["SUP", "ACC"]) }
         })),
     )
     .await;

@@ -4,6 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api, useApi } from "../../api";
 import { money, useI18n } from "../../i18n";
 import { Field, Loading } from "../../ui";
+import { PaymentSelect, PT } from "./Payment";
 
 const QT = {
   de: { new: "Neues Angebot", edit: "Angebot bearbeiten", head: "Kopfdaten", customer: "Kunde", project: "Projekt (optional)", request: "Zu Anfrage (optional)",
@@ -13,6 +14,9 @@ const QT = {
     mtitle: "Titel", blocks: "Blöcke", goal: "Ziel", addMs: "+ Meilenstein", payments: "Zahlungsplan", plabel: "Fällig / Bezeichnung", amount: "Betrag (brutto)",
     pdesc: "Hinweis", addPay: "+ Rate", autoPay: "Aus Anzahlung erzeugen", net: "Netto", vat: "USt. 19 %", gross: "Gesamt", save: "Speichern", cancel: "Abbrechen",
     payDiff: "Zahlungsplan weicht von der Summe ab", none: "—",
+    kind: "Art", quote: "Angebot", contract: "Vertrag", newC: "Neuer Vertrag", cStart: "Vertragsbeginn", cEnd: "Vertragsende (leer = unbefristet)",
+    interval: "Abrechnung", fee: "Entgelt je Zeitraum (netto)", notice: "Kündigungsfrist (Tage)", oneTime: "Einmalige Positionen (optional bei Verträgen)",
+    iv: { monthly: "monatlich", quarterly: "vierteljährlich", yearly: "jährlich" },
     tx: { standard: "Standard (19 %)", reverse_charge: "Reverse Charge (0 %)", not_taxable: "Nicht steuerbar (0 %)" } },
   en: { new: "New quote", edit: "Edit quote", head: "Header", customer: "Customer", project: "Project (optional)", request: "For request (optional)",
     title: "Title", desc: "Description", currency: "Currency", tax: "Tax", lang: "Language", valid: "Valid until", start: "Project start", end: "Project end",
@@ -21,6 +25,9 @@ const QT = {
     mtitle: "Title", blocks: "Blocks", goal: "Goal", addMs: "+ Milestone", payments: "Payment schedule", plabel: "Due / label", amount: "Amount (gross)",
     pdesc: "Note", addPay: "+ Instalment", autoPay: "Create from advance", net: "Net", vat: "VAT 19 %", gross: "Total", save: "Save", cancel: "Cancel",
     payDiff: "Payment schedule differs from total", none: "—",
+    kind: "Type", quote: "Quote", contract: "Contract", newC: "New contract", cStart: "Contract start", cEnd: "Contract end (empty = indefinite)",
+    interval: "Billing", fee: "Fee per period (net)", notice: "Notice period (days)", oneTime: "One-time items (optional for contracts)",
+    iv: { monthly: "monthly", quarterly: "quarterly", yearly: "yearly" },
     tx: { standard: "Standard (19 %)", reverse_charge: "Reverse charge (0 %)", not_taxable: "Not taxable (0 %)" } },
   ar: { new: "عرض جديد", edit: "تعديل العرض", head: "البيانات الأساسية", customer: "العميل", project: "المشروع (اختياري)", request: "للطلب (اختياري)",
     title: "العنوان", desc: "الوصف", currency: "العملة", tax: "الضريبة", lang: "اللغة", valid: "صالح حتى", start: "بداية المشروع", end: "نهاية المشروع",
@@ -29,6 +36,9 @@ const QT = {
     mtitle: "العنوان", blocks: "الأقسام", goal: "الهدف", addMs: "+ مرحلة", payments: "جدول الدفعات", plabel: "الاستحقاق / الوصف", amount: "المبلغ (إجمالي)",
     pdesc: "ملاحظة", addPay: "+ دفعة", autoPay: "إنشاء من الدفعة المقدمة", net: "الصافي", vat: "ضريبة 19 %", gross: "الإجمالي", save: "حفظ", cancel: "إلغاء",
     payDiff: "جدول الدفعات لا يطابق الإجمالي", none: "—",
+    kind: "النوع", quote: "عرض سعر", contract: "عقد", newC: "عقد جديد", cStart: "بداية العقد", cEnd: "نهاية العقد (فارغ = غير محدد)",
+    interval: "الفوترة", fee: "الرسوم لكل فترة (صافي)", notice: "مدة الإشعار (أيام)", oneTime: "بنود لمرة واحدة (اختيارية في العقود)",
+    iv: { monthly: "شهرياً", quarterly: "كل ربع سنة", yearly: "سنوياً" },
     tx: { standard: "عادي (19 %)", reverse_charge: "احتساب عكسي (0 %)", not_taxable: "غير خاضع (0 %)" } },
 };
 
@@ -39,6 +49,8 @@ type Form = {
   organization_id: string; project_id: string; request_id: string; title: string; description: string; revision: string; currency: string; tax_mode: string;
   locale: string; valid_until: string; project_start: string; project_end: string; hourly_rate: string; advance_percent: string; notes: string;
   items: Item[]; milestones: Ms[]; payments: Pay[];
+  doc_kind: "quote" | "contract"; contract_start: string; contract_end: string; billing_interval: "monthly" | "quarterly" | "yearly";
+  recurring: string; notice_days: string; payment_method_id: string;
 };
 const num = (s: string) => { const n = parseFloat(String(s).replace(",", ".")); return Number.isFinite(n) ? n : 0; };
 const cents = (s: string) => Math.round(num(s) * 100);
@@ -56,7 +68,10 @@ export default function QuoteEditor() {
   const [f, setF] = useState<Form | null>(id ? null : {
     organization_id: sp.get("org") ?? "", project_id: sp.get("project") ?? "", request_id: sp.get("request") ?? "", title: "", description: "", revision: "",
     currency: "EUR", tax_mode: "standard", locale: "", valid_until: new Date(Date.now() + 30 * 864e5).toISOString().slice(0, 10), project_start: "", project_end: "",
-    hourly_rate: "", advance_percent: "30", notes: "", items: [emptyItem()], milestones: [], payments: [],
+    hourly_rate: "", advance_percent: sp.get("kind") === "contract" ? "" : "30", notes: "",
+    items: sp.get("kind") === "contract" ? [] : [emptyItem()], milestones: [], payments: [],
+    doc_kind: sp.get("kind") === "contract" ? "contract" : "quote", contract_start: "", contract_end: "", billing_interval: "monthly",
+    recurring: "", notice_days: "30", payment_method_id: "",
   });
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -72,6 +87,9 @@ export default function QuoteEditor() {
         qty: String(i.quantity_milli / 1000), unit: i.unit, price: String(i.unit_price_cents / 100) })),
       milestones: q.milestones.map((m: any) => ({ label: m.label, title: m.title, blocks: m.blocks ?? "", goal: m.goal ?? "" })),
       payments: q.payments.map((p: any) => ({ label: p.label, due_date: p.due_date ?? "", amount: String(p.amount_cents / 100), description: p.description ?? "" })),
+      doc_kind: q.doc_kind ?? "quote", contract_start: q.contract_start ?? "", contract_end: q.contract_end ?? "", billing_interval: q.billing_interval ?? "monthly",
+      recurring: q.recurring_cents != null ? String(q.recurring_cents / 100) : "", notice_days: q.notice_days != null ? String(q.notice_days) : "",
+      payment_method_id: q.payment_method_id ?? "",
     })).catch((e) => setErr(e.message));
   }, [id]);
 
@@ -107,6 +125,9 @@ export default function QuoteEditor() {
           description: i.description, quantity_milli: Math.round(num(i.qty) * 1000), unit: i.unit, unit_price_cents: cents(i.price) })),
         milestones: f.milestones.map((x) => ({ label: x.label, title: x.title, blocks: x.blocks || null, goal: x.goal || null })),
         payments: f.payments.map((p) => ({ label: p.label, due_date: p.due_date || null, amount_cents: cents(p.amount), description: p.description || null })),
+        payment_method_id: f.payment_method_id || null, doc_kind: f.doc_kind,
+        ...(f.doc_kind === "contract" ? { contract_start: f.contract_start || null, contract_end: f.contract_end || null, billing_interval: f.billing_interval,
+          recurring_cents: cents(f.recurring), notice_days: f.notice_days ? Math.round(num(f.notice_days)) : null } : {}),
       };
       if (id) { await api(`/api/v1/quotes/${id}`, { method: "PUT", body }); nav(`/portal/angebote/${id}`); }
       else { const r = await api<{ id: string }>("/api/v1/quotes", { body }); nav(`/portal/angebote/${r.id}`); }
@@ -116,7 +137,25 @@ export default function QuoteEditor() {
   return (
     <form className="quote-ed" onSubmit={(e) => { e.preventDefault(); save(); }}>
       <Link to={id ? `/portal/angebote/${id}` : "/portal/angebote"}>← {T.cancel}</Link>
-      <h1>{id ? T.edit : T.new}</h1>
+      <h1>{id ? T.edit : f.doc_kind === "contract" ? T.newC : T.new}</h1>
+      <div className="tabs" style={{ marginBottom: 12 }}>
+        {(["quote", "contract"] as const).map((k) => (
+          <button type="button" key={k} className={f.doc_kind === k ? "on" : ""} onClick={() => set({ doc_kind: k, items: k === "quote" && f.items.length === 0 ? [emptyItem()] : f.items })}>{T[k]}</button>
+        ))}
+      </div>
+      {f.doc_kind === "contract" && (
+        <div className="card grid2" style={{ marginBottom: 12 }}>
+          <Field label={T.cStart}><input required type="date" value={f.contract_start} onChange={(e) => set({ contract_start: e.target.value })} /></Field>
+          <Field label={T.cEnd}><input type="date" min={f.contract_start} value={f.contract_end} onChange={(e) => set({ contract_end: e.target.value })} /></Field>
+          <Field label={T.interval}>
+            <select value={f.billing_interval} onChange={(e) => set({ billing_interval: e.target.value as Form["billing_interval"] })}>
+              {Object.entries(T.iv).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </Field>
+          <Field label={`${T.fee} (${f.currency})`}><input required inputMode="decimal" value={f.recurring} onChange={(e) => set({ recurring: e.target.value })} /></Field>
+          <Field label={T.notice}><input type="number" min={0} max={730} value={f.notice_days} onChange={(e) => set({ notice_days: e.target.value })} /></Field>
+        </div>
+      )}
       <div className="card grid2">
         <Field label={T.customer}>
           <select required value={f.organization_id} onChange={(e) => set({ organization_id: e.target.value, project_id: "", request_id: "", locale: orgs.data?.find((o) => o.id === e.target.value)?.locale ?? "" })}>
@@ -156,10 +195,11 @@ export default function QuoteEditor() {
         <Field label={T.start}><input type="date" value={f.project_start} onChange={(e) => set({ project_start: e.target.value })} /></Field>
         <Field label={T.end}><input type="date" min={f.project_start} value={f.project_end} onChange={(e) => set({ project_end: e.target.value })} /></Field>
         <Field label={T.rate}><input inputMode="decimal" value={f.hourly_rate} onChange={(e) => set({ hourly_rate: e.target.value })} /></Field>
+        <Field label={PT[locale].method}><PaymentSelect value={f.payment_method_id} onChange={(v) => set({ payment_method_id: v })} /></Field>
       </div>
       <Field label={T.desc}><textarea dir={dir} rows={3} value={f.description} onChange={(e) => set({ description: e.target.value })} /></Field>
 
-      <h2>{T.items}</h2>
+      <h2>{f.doc_kind === "contract" ? T.oneTime : T.items}</h2>
       <div className="card" style={{ padding: 0, overflowX: "auto" }}>
         <table className="qe-items" dir={dir}>
           <thead><tr><th>{T.block}</th><th>{T.blockTitle}</th><th>{T.pos}</th><th style={{ minWidth: 260 }}>{T.descr}</th><th>{T.qty}</th><th>{T.unit}</th><th>{T.price}</th><th className="n">{T.total}</th><th /></tr></thead>
@@ -174,7 +214,7 @@ export default function QuoteEditor() {
                 <td><input required style={{ width: 80 }} list="units" value={it.unit} onChange={(e) => setItem(i, { unit: e.target.value })} /></td>
                 <td><input required style={{ width: 100 }} inputMode="decimal" value={it.price} onChange={(e) => setItem(i, { price: e.target.value })} /></td>
                 <td className="n"><bdi dir="ltr">{m(totals.lines[i] ?? 0)}</bdi></td>
-                <td><button type="button" className="btn small ghost" disabled={f.items.length === 1} onClick={() => set({ items: f.items.filter((_, j) => j !== i) })}>✕</button></td>
+                <td><button type="button" className="btn small ghost" disabled={f.items.length === 1 && f.doc_kind === "quote"} onClick={() => set({ items: f.items.filter((_, j) => j !== i) })}>✕</button></td>
               </tr>
             ))}
           </tbody>

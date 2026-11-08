@@ -9,6 +9,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, Duration, Utc};
+use codecraft_domain::access::Permission;
 use codecraft_domain::access::Role;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -47,7 +48,7 @@ pub fn response_time(priority: i16) -> Duration {
 }
 
 fn is_staff(user: &User) -> bool {
-    user.role.is_employee()
+    user.role.is_employee() && user.can(Permission::TicketWork)
 }
 
 /// Sichtbarkeit: Mitarbeiter alles, Kunden nur die eigene Firma

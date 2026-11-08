@@ -209,21 +209,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => useContext(Auth);
 
-/** Rechte wie im Backend (domain::access) – nur für die Anzeige, geprüft wird serverseitig */
-export function can(me: Me | null, what: "invoice_issue" | "catalog_write" | "jobs" | "users" | "devices" | "invoice_write") {
+/** Rechte wie im Backend (domain::access: Rolle + Abteilung) – nur für die Anzeige, geprüft wird serverseitig */
+export type Right =
+  | "invoice_read" | "invoice_write" | "invoice_issue" | "customer_read" | "customer_write"
+  | "devices" | "catalog_read" | "catalog_write" | "jobs" | "users" | "project_read" | "project_write" | "tickets";
+
+const ROLE_RIGHTS: Record<string, Right[]> = {
+  lead: ["invoice_read", "invoice_write", "invoice_issue", "customer_read", "customer_write", "devices", "catalog_read", "catalog_write", "jobs", "project_read", "project_write", "tickets"],
+  manager: ["invoice_read", "invoice_write", "invoice_issue", "customer_read", "customer_write", "devices", "catalog_read", "jobs", "project_read", "project_write", "tickets"],
+  staff: ["invoice_read", "invoice_write", "customer_read", "catalog_read", "project_read", "project_write", "tickets"],
+  trainee: ["customer_read", "catalog_read", "project_read", "tickets"],
+};
+
+const DEPTS: Record<Right, string[]> = {
+  invoice_read: ["ACC", "SAL", "MGT"],
+  invoice_write: ["ACC", "SAL", "MGT"],
+  invoice_issue: ["ACC", "SAL", "MGT"],
+  customer_read: ["ACC", "SAL", "SUP", "DEV", "MGT"],
+  customer_write: ["ACC", "SAL", "MGT"],
+  devices: ["SUP", "DEV", "MGT"],
+  catalog_read: ["ACC", "SAL", "SUP", "DEV", "MGT"],
+  catalog_write: ["SAL", "MGT"],
+  jobs: ["MGT"],
+  users: [],
+  project_read: ["DEV", "SAL", "ACC", "MGT"],
+  project_write: ["DEV", "SAL", "MGT"],
+  tickets: ["SUP", "DEV", "MGT"],
+};
+
+export function can(me: Me | null, what: Right) {
   if (!me) return false;
-  const r = me.role;
-  switch (what) {
-    case "invoice_issue":
-    case "devices":
-      return ["admin", "lead", "manager"].includes(r);
-    case "invoice_write":
-      return ["admin", "lead", "manager", "staff"].includes(r);
-    case "catalog_write":
-      return ["admin", "lead"].includes(r);
-    case "jobs":
-      return ["admin", "lead", "manager"].includes(r);
-    case "users":
-      return r === "admin";
-  }
+  if (me.role === "admin") return true;
+  if (me.role === "customer") return ["invoice_read", "customer_read", "project_read"].includes(what);
+  if (!(ROLE_RIGHTS[me.role] ?? []).includes(what)) return false;
+  return DEPTS[what].some((d) => me.departments.includes(d));
 }

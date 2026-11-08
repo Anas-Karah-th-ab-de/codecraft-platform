@@ -19,7 +19,7 @@ const STATUSES: [&str; 7] = ["submitted", "in_review", "quoted", "accepted", "re
 
 fn scope(user: &User) -> ApiResult<Option<Uuid>> {
     if user.role.is_employee() {
-        user.require(Permission::CustomerRead, None)?;
+        user.require(Permission::ProjectRead, None)?;
         Ok(None)
     } else {
         Ok(Some(user.organization_id.ok_or(ApiError::Forbidden)?))
@@ -236,7 +236,7 @@ pub async fn patch(
         return Err(ApiError::Forbidden);
     }
     if staff {
-        user.require(Permission::CustomerWrite, None)?;
+        user.require(Permission::ProjectWrite, None)?;
     }
     for (table, v) in [("quotes", b.quote_id), ("projects", b.project_id)] {
         if let Some(v) = v {
@@ -303,7 +303,7 @@ pub async fn to_project(
     user: User,
     Path(id): Path<Uuid>,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
-    user.require(Permission::CustomerWrite, None)?;
+    user.require(Permission::ProjectWrite, None)?;
     let (org, number, title) = visible(&s, &user, id).await?;
     let (existing, desc, kind, date): (Option<Uuid>, String, String, Option<NaiveDate>) =
         sqlx::query_as("SELECT project_id, description, kind, desired_date FROM dev_requests WHERE id = $1")
