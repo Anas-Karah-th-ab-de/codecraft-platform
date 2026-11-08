@@ -10,6 +10,7 @@ pub mod media;
 mod organizations;
 mod projects;
 pub mod remote;
+pub mod tickets;
 
 use crate::AppState;
 use axum::extract::DefaultBodyLimit;
@@ -110,6 +111,12 @@ pub fn router() -> Router<AppState> {
             get(remote::get_file).post(remote::put_file).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
         )
         .route("/api/v1/devices/{id}/screen", get(remote::screen_ws))
+        // Support-Tickets
+        .route("/api/v1/tickets", get(tickets::list).post(tickets::create))
+        .route("/api/v1/tickets/stats", get(tickets::stats))
+        .route("/api/v1/tickets/{id}", get(tickets::get).patch(tickets::patch))
+        .route("/api/v1/tickets/{id}/messages", post(tickets::reply))
+        .route("/api/v1/organizations/{id}/sla", put(tickets::set_sla))
         // Einmal-Zugriffscodes (Kunde gibt Geräte für Techniker frei)
         .route("/api/v1/access-codes", get(access::list).post(access::create))
         .route("/api/v1/access-codes/redeem", post(access::redeem))

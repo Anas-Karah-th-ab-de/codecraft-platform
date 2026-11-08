@@ -10,7 +10,7 @@ type I18n = { de: string; en: string; ar: string };
 type Dept = { code: string; name: I18n };
 
 // ── Kunden ──────────────────────────────────────────────────────────────────
-type Org = { id: string; name: string; address: string; vat_id: string | null; email: string | null; locale: string };
+type Org = { id: string; name: string; address: string; vat_id: string | null; email: string | null; locale: string; sla: "basic" | "business" | "premium" };
 
 export function Customers() {
   const { t } = useI18n();
@@ -30,10 +30,15 @@ export function Customers() {
       <div className="card" style={{ padding: 0 }}>
         {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
           <table>
-            <thead><tr><th>{t("p.customer")}</th><th>{t("p.address")}</th><th>{t("p.vat_id")}</th><th>{t("p.email")}</th><th>{t("p.language")}</th></tr></thead>
+            <thead><tr><th>{t("p.customer")}</th><th>{t("p.address")}</th><th>{t("p.vat_id")}</th><th>{t("p.email")}</th><th>{t("p.language")}</th><th>SLA</th></tr></thead>
             <tbody>
               {data.filter((o) => !q || o.name.toLowerCase().includes(q.toLowerCase())).map((o) => (
-                <tr key={o.id}><td><b>{o.name}</b></td><td style={{ whiteSpace: "pre-line" }}>{o.address}</td><td>{o.vat_id ?? "–"}</td><td>{o.email ?? "–"}</td><td>{o.locale.toUpperCase()}</td></tr>
+                <tr key={o.id}><td><b>{o.name}</b></td><td style={{ whiteSpace: "pre-line" }}>{o.address}</td><td>{o.vat_id ?? "–"}</td><td>{o.email ?? "–"}</td><td>{o.locale.toUpperCase()}</td>
+                  <td>{me && ["admin", "lead"].includes(me.role) ? (
+                    <select value={o.sla} onChange={(e) => api(`/api/v1/organizations/${o.id}/sla`, { method: "PUT", body: { sla: e.target.value } }).then(reload)}>
+                      <option value="basic">Basis</option><option value="business">Business</option><option value="premium">Premium</option>
+                    </select>
+                  ) : o.sla}</td></tr>
               ))}
             </tbody>
           </table>
