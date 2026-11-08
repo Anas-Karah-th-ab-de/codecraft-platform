@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { deliverBlob, isApp } from "./native";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -46,6 +47,14 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
 
 /** Datei (PDF) mit Token laden und in neuem Tab öffnen */
 export async function openPdf(path: string) {
+  // App: speichern und im PDF-Viewer öffnen (WebView zeigt keine Blob-Fenster)
+  if (isApp()) {
+    const res = await fetch(path, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (!res.ok) throw new ApiError(res.status, "PDF");
+    const name = decodeURIComponent(res.headers.get("content-disposition")?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i)?.[1] ?? "dokument.pdf");
+    await deliverBlob(await res.blob(), name);
+    return;
+  }
   const win = window.open("", "_blank");
   const res = await fetch(path, { headers: { authorization: `Bearer ${getToken()}` } });
   if (!res.ok) {

@@ -61,3 +61,14 @@ pub fn open_control_settings() {
 pub fn support_changed(running: bool) {
     let _ = with_bridge(|env, cls| env.call_static_method(cls, "supportChanged", "(Z)V", &[JValue::Bool(running as u8)])?.v());
 }
+
+/// Datei per FileProvider mit der passenden App öffnen (PDF-Viewer, Galerie …)
+pub fn open_file(path: &str, mime: &str) -> bool {
+    with_bridge(|env, cls| {
+        let p = env.new_string(path)?;
+        let m = env.new_string(mime)?;
+        env.call_static_method(cls, "openFile", "(Ljava/lang/String;Ljava/lang/String;)Z", &[JValue::Object(&p), JValue::Object(&m)])?
+            .z()
+    })
+    .unwrap_or(false)
+}

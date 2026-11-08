@@ -529,6 +529,7 @@ export function generateInvoicePdf(
   }
 
   // ── Zahlungsinformationen
+  const payTop = y;
   setFont(doc, locale, "bold");
   doc.setFontSize(9);
   doc.setTextColor(...primary);
@@ -555,6 +556,15 @@ export function generateInvoicePdf(
     doc.setTextColor(...primary);
     doc.text(value, marginL + 45, y);
     y += 4;
+  }
+  // QR-Code der Zahlungsart (z. B. ShamCash) rechts daneben
+  const qr = loadPaymentQr((template as unknown as { paymentQr?: string }).paymentQr);
+  if (qr) {
+    const w = 30, h = qr.ratio * 30;
+    try {
+      doc.addImage(qr.dataUrl, qr.format, marginL + contentW - w, payTop - 3, w, h);
+      y = Math.max(y, payTop - 3 + h + 2);
+    } catch { /* Bild unlesbar → ohne QR */ }
   }
   y += 4;
 
@@ -590,4 +600,31 @@ export function generateInvoicePdf(
 
   const arrayBuffer = doc.output("arraybuffer");
   return Buffer.from(arrayBuffer);
+}
+
+/** QR-Bild aus `public/` (nur /payment/…, JPEG/PNG, kein Path-Traversal) */
+function loadPaymentQr(src?: string): { dataUrl: string; format: "JPEG" | "PNG"; ratio: number } | null {
+  if (!src || !src.startsWith("/payment/") || src.includes("..")) return null;
+  const format = /\.png$/i.test(src) ? "PNG" : /\.jpe?g$/i.test(src) ? "JPEG" : null;
+  if (!format) return null;
+  try {
+    const publicDir = path.join(process.cwd(), "public");
+    const file = path.resolve(publicDir, `.${src}`);
+    if (!file.startsWith(publicDir + path.sep) || !fs.existsSync(file)) return null;
+    const buf = fs.readFileSync(file);
+    let ratio = 1.32;
+    if (format === "PNG" && buf.length > 24) ratio = buf.readUInt32BE(20) / buf.readUInt32BE(16);
+    if (format === "JPEG") {
+      for (let i = 2; i + 9 < buf.length; ) {
+        if (buf[i] !== 0xff) { i++; continue; }
+        const m = buf[i + 1];
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) { ratio = buf.readUInt16BE(i + 5) / buf.readUInt16BE(i + 7); break; }
+        i += 2 + buf.readUInt16BE(i + 2);
+      }
+    }
+    const mime = format === "PNG" ? "image/png" : "image/jpeg";
+    return { dataUrl: `data:${mime};base64,${buf.toString("base64")}`, format, ratio: ratio > 0 && ratio < 4 ? ratio : 1.32 };
+  } catch {
+    return null;
+  }
 }

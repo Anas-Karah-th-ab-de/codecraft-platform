@@ -144,6 +144,52 @@ fn control_available() -> bool {
 
 // ── Befehle für das Portal ──────────────────────────────────────────────────
 
+/// Datei aus dem Portal (PDF, Mail-Anhang, Chat-Datei) speichern und mit der passenden App öffnen.
+/// Die WebView kann Blob-Downloads/-Fenster nicht selbst anzeigen.
+#[tauri::command]
+fn open_file(app: AppHandle, name: String, mime: String, data: String) -> Result<String, String> {
+    use base64::Engine;
+    let bytes = base64::engine::general_purpose::STANDARD.decode(data.as_bytes()).map_err(|e| e.to_string())?;
+    if bytes.len() > 200 * 1024 * 1024 {
+        return Err("Datei zu groß".into());
+    }
+    let safe: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || "._- ()".contains(c) { c } else { '_' })
+        .collect::<String>()
+        .trim_matches(|c| c == '.' || c == ' ')
+        .chars()
+        .take(120)
+        .collect();
+    let safe = if safe.is_empty() { "datei".to_string() } else { safe };
+    #[cfg(target_os = "android")]
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("files");
+    #[cfg(not(target_os = "android"))]
+    let dir = app
+        .path()
+        .download_dir()
+        .or_else(|_| app.path().app_cache_dir())
+        .map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let path = dir.join(&safe);
+    std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
+    let shown = path.to_string_lossy().to_string();
+    #[cfg(target_os = "android")]
+    {
+        if !android::open_file(&shown, &mime) {
+            return Err("Keine App zum Öffnen dieser Datei gefunden".into());
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = &mime;
+        desktop::open_path(&path);
+    }
+    Ok(shown)
+}
+
+
+
 #[derive(Serialize)]
 struct Info {
     app: bool,
@@ -348,7 +394,8 @@ pub fn run() {
             support_start,
             support_stop,
             support_status,
-            control_settings
+            control_settings,
+            open_file
         ])
         .run(tauri::generate_context!())
         .expect("App konnte nicht starten");

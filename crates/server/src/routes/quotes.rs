@@ -319,6 +319,7 @@ async fn write_terms(conn: &mut PgConnection, id: Uuid, b: &QuoteIn) -> ApiResul
                 payment_method_id = COALESCE($8,
                     (SELECT o.payment_method_id FROM organizations o JOIN payment_methods p ON p.id = o.payment_method_id
                       WHERE o.id = quotes.organization_id AND p.is_active),
+                    (SELECT id FROM payment_methods WHERE quotes.locale = 'ar' AND kind = 'shamcash' AND is_active ORDER BY sort LIMIT 1),
                     (SELECT id FROM payment_methods WHERE is_default))
           WHERE id = $1",
     )

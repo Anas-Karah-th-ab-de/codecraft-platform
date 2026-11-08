@@ -22,6 +22,7 @@
     "allow-support-start",
     "allow-support-stop",
     "allow-support-status",
-    "allow-control-settings"
+    "allow-control-settings",
+    "allow-open-file"
   ]
 }

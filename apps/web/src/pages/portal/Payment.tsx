@@ -6,7 +6,7 @@ import { Field, ListTools, Loading, Modal, matches } from "../../ui";
 
 export type PaymentMethod = {
   id: string; kind: "shamcash" | "bank" | "cash" | "paypal" | "other"; name: string; is_default: boolean; is_active: boolean; sort: number;
-  details: { payee?: string; provider?: string; account?: string; account_label?: string; bic?: string; address?: string; note?: string };
+  details: { payee?: string; provider?: string; account?: string; account_label?: string; bic?: string; address?: string; note?: string; qr?: string; sender_bic?: string };
 };
 export type PaymentInfo = { id?: string; kind: string; name: string; details: PaymentMethod["details"] };
 
@@ -14,16 +14,19 @@ export const PT = {
   de: { title: "Zahlungsarten", method: "Zahlungsart", standard: "Standard", auto: "Standard des Kunden", new: "+ Zahlungsart", edit: "Zahlungsart bearbeiten",
     kind: "Art", name: "Name", payee: "Empfänger", provider: "Anbieter / Bank", account: "Konto / IBAN / ID", accountLabel: "Bezeichnung des Kontos",
     bic: "BIC", address: "Adresse", note: "Hinweis für Kunden", active: "aktiv", inactive: "deaktiviert", makeDefault: "als Standard",
+    sender_bic: "Sender-BIC (Auslandsüberweisung)", qr: "QR-Bild (Pfad, z. B. /payment/sham-cash-qr.jpg)", scan: "Mit der App scannen oder Konto-ID kopieren", copy: "Kopieren", copied: "Kopiert",
     save: "Speichern", cancel: "Abbrechen", hint: "Kontodaten werden nur in der Datenbank gespeichert. Ausgestellte Rechnungen behalten die Daten von damals.",
     kinds: { shamcash: "ShamCash", bank: "Banküberweisung", cash: "Bar", paypal: "PayPal", other: "Andere" } },
   en: { title: "Payment methods", method: "Payment method", standard: "Default", auto: "Customer default", new: "+ Payment method", edit: "Edit payment method",
     kind: "Type", name: "Name", payee: "Payee", provider: "Provider / bank", account: "Account / IBAN / ID", accountLabel: "Account label",
     bic: "BIC", address: "Address", note: "Note for customers", active: "active", inactive: "disabled", makeDefault: "as default",
+    sender_bic: "Sender BIC (international transfer)", qr: "QR image (path, e.g. /payment/sham-cash-qr.jpg)", scan: "Scan with the app or copy the account ID", copy: "Copy", copied: "Copied",
     save: "Save", cancel: "Cancel", hint: "Account details are stored only in the database. Issued invoices keep the details from that time.",
     kinds: { shamcash: "ShamCash", bank: "Bank transfer", cash: "Cash", paypal: "PayPal", other: "Other" } },
   ar: { title: "طرق الدفع", method: "طريقة الدفع", standard: "افتراضي", auto: "افتراضي العميل", new: "+ طريقة دفع", edit: "تعديل طريقة الدفع",
     kind: "النوع", name: "الاسم", payee: "المستفيد", provider: "المزوّد / البنك", account: "الحساب / IBAN / المعرّف", accountLabel: "تسمية الحساب",
     bic: "BIC", address: "العنوان", note: "ملاحظة للعملاء", active: "مفعّل", inactive: "معطّل", makeDefault: "كافتراضي",
+    sender_bic: "رمز BIC للمصرف المرسل (تحويل دولي)", qr: "صورة رمز QR (المسار، مثلاً /payment/sham-cash-qr.jpg)", scan: "امسح الرمز بالتطبيق أو انسخ معرّف الحساب", copy: "نسخ", copied: "تم النسخ",
     save: "حفظ", cancel: "إلغاء", hint: "تُحفظ بيانات الحساب في قاعدة البيانات فقط. تحتفظ الفواتير الصادرة ببياناتها وقت الإصدار.",
     kinds: { shamcash: "شام كاش", bank: "تحويل بنكي", cash: "نقداً", paypal: "PayPal", other: "أخرى" } },
 };
@@ -52,15 +55,29 @@ export function PaymentBox({ p }: { p: PaymentInfo | null | undefined }) {
   if (!p) return null;
   const d = p.details ?? {};
   const rows: [string, string | undefined][] = [
-    [T.payee, d.payee], [T.provider, d.provider], [d.account_label || (p.kind === "bank" ? "IBAN" : T.account), d.account], [T.bic, d.bic], [T.note, d.note],
+    [T.payee, d.payee], [T.provider, d.provider], [d.account_label || (p.kind === "bank" ? "IBAN" : T.account), d.account], [T.bic, d.bic], [(T as any).sender_bic, d.sender_bic], [T.note, d.note],
   ];
   return (
-    <div>
-      <div className="muted">{T.method}</div>
-      <b>{p.name}</b>
-      {rows.filter((r) => r[1]).map(([l, v]) => <div key={l} style={{ fontSize: ".9em" }}><span className="muted">{l}:</span> <bdi dir="ltr">{v}</bdi></div>)}
+    <div className="pay-box">
+      <div>
+        <div className="muted">{T.method}</div>
+        <b>{p.name}</b>
+        {rows.filter((r) => r[1]).map(([l, v]) => <div key={l} style={{ fontSize: ".9em" }}><span className="muted">{l}:</span> <bdi dir="ltr">{v}</bdi></div>)}
+        {d.account && <CopyBtn text={d.account} T={T} />}
+      </div>
+      {d.qr && (
+        <figure className="pay-qr">
+          <a href={d.qr} target="_blank" rel="noreferrer"><img src={d.qr} alt={`QR ${p.name}`} loading="lazy" /></a>
+          <figcaption className="muted">{T.scan}</figcaption>
+        </figure>
+      )}
     </div>
   );
+}
+
+function CopyBtn({ text, T }: { text: string; T: (typeof PT)["de"] }) {
+  const [ok, setOk] = useState(false);
+  return <button type="button" className="btn small ghost" style={{ marginTop: 6 }} onClick={() => navigator.clipboard?.writeText(text).then(() => { setOk(true); setTimeout(() => setOk(false), 1500); })}>{ok ? T.copied : T.copy}</button>;
 }
 
 /** Pflege der Zahlungsarten (nur Admin) */
@@ -124,9 +141,10 @@ function MethodForm({ m, onClose }: { m: PaymentMethod | null; onClose: () => vo
             </select>
           </Field>
           <Field label={T.name}><input required maxLength={80} value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-          {det("payee")}{det("provider")}{det("account")}{det("account_label")}{det("bic")}{det("address")}
+          {det("payee")}{det("provider")}{det("account")}{det("account_label")}{det("bic")}{det("sender_bic")}{det("address")}
         </div>
         {det("note")}
+        {det("qr")}
         <div className="row" style={{ gap: 16, margin: "8px 0" }}>
           <label><input type="checkbox" checked={f.is_active} disabled={f.is_default} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> {T.active}</label>
           <label><input type="checkbox" checked={f.is_default} disabled={m?.is_default} onChange={(e) => setF({ ...f, is_default: e.target.checked, is_active: e.target.checked || f.is_active })} /> {T.makeDefault}</label>

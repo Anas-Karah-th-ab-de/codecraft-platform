@@ -102,6 +102,22 @@ object SupportBridge {
         }
     }
 
+    /** Datei aus dem Cache per FileProvider an eine passende App geben */
+    @JvmStatic fun openFile(path: String, mime: String): Boolean {
+        val c = app ?: return false
+        return try {
+            val uri = androidx.core.content.FileProvider.getUriForFile(c, c.packageName + ".fileprovider", java.io.File(path))
+            val view = Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, mime.ifBlank { "application/octet-stream" })
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            view.clipData = android.content.ClipData.newRawUri("", uri)
+            c.startActivity(Intent.createChooser(view, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     @JvmStatic fun openControlSettings() {
         val c = app ?: return
         c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

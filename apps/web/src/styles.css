@@ -1276,3 +1276,9 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 }
 
 @media (max-width: 520px) { .kind-grid { grid-template-columns: 1fr !important; } }
+
+/* Zahlungsdaten mit QR-Code (z. B. ShamCash) */
+.pay-box { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.pay-qr { margin: 0; text-align: center; }
+.pay-qr img { width: 150px; max-width: 42vw; height: auto; border-radius: 10px; display: block; margin: 0 auto 4px; }
+.pay-qr figcaption { font-size: .8em; max-width: 170px; }

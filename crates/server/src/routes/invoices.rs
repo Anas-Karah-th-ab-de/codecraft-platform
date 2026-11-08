@@ -329,13 +329,22 @@ async fn detail(conn: &mut PgConnection, id: Uuid) -> ApiResult<InvoiceDetail> {
     Ok(InvoiceDetail { invoice, items, totals, tax_notice, payment })
 }
 
-/// Zahlungsart einer Rechnung (eingefroren oder aktuell)
+/// Zahlungsart einer Rechnung (eingefroren oder aktuell).
+/// Übernommene Altrechnungen (mit Original-Druckdaten) wurden per Banküberweisung bezahlt – die beim
+/// Import zugeordnete Zahlungsart gilt für sie nicht (sie sind festgeschrieben und bleiben unverändert).
 async fn payment_of(conn: &mut PgConnection, id: Uuid) -> ApiResult<Option<serde_json::Value>> {
-    let (method, snapshot): (Option<Uuid>, Option<serde_json::Value>) =
-        sqlx::query_as("SELECT payment_method_id, payment_snapshot FROM invoices WHERE id = $1")
+    let (method, snapshot, legacy): (Option<Uuid>, Option<serde_json::Value>, bool) =
+        sqlx::query_as("SELECT payment_method_id, payment_snapshot, pdf_snapshot IS NOT NULL FROM invoices WHERE id = $1")
             .bind(id)
             .fetch_one(&mut *conn)
             .await?;
+    if legacy {
+        let bank: Option<Uuid> =
+            sqlx::query_scalar("SELECT id FROM payment_methods WHERE kind = 'bank' ORDER BY is_default DESC, sort LIMIT 1")
+                .fetch_optional(&mut *conn)
+                .await?;
+        return super::payments::info(conn, bank).await;
+    }
     if let Some(mut s) = snapshot {
         s["id"] = json!(method);
         return Ok(Some(s));
@@ -412,9 +421,13 @@ pub async fn create_draft(
         .ok_or_else(|| ApiError::BadRequest("Organisation existiert nicht".into()))?;
     let locale = b.locale.unwrap_or(org_locale);
     let items = resolve(&mut tx, &locale, b.currency.as_str(), b.items).await?;
-    if let Some(m) = b.payment_method_id {
-        super::payments::check_active(&mut tx, m).await?;
-    }
+    let payment = match b.payment_method_id {
+        Some(m) => {
+            super::payments::check_active(&mut tx, m).await?;
+            Some(m)
+        }
+        None => super::payments::default_for(&mut tx, b.organization_id, &locale).await?,
+    };
     let id = Uuid::now_v7();
     sqlx::query(
         "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes, payment_method_id) VALUES ($1, $2, $3, $4, $5, $6, $7)",
@@ -425,7 +438,7 @@ pub async fn create_draft(
     .bind(tax_mode_to_str(b.tax_mode))
     .bind(&locale)
     .bind(&b.notes)
-    .bind(b.payment_method_id)
+    .bind(payment)
     .execute(&mut *tx)
     .await?;
     insert_items(&mut tx, id, &items).await?;
@@ -779,6 +792,7 @@ pub async fn pdf(
     if q.format.as_deref() != Some("html") {
         let (snapshot,): (Option<serde_json::Value>,) =
             sqlx::query_as("SELECT pdf_snapshot FROM invoices WHERE id = $1").bind(id).fetch_one(&mut *conn).await?;
+        let legacy = snapshot.is_some();
         let data = snapshot.unwrap_or_else(|| {
             crate::legacy_pdf::invoice_data(
                 inv.number.as_deref(),
@@ -794,8 +808,8 @@ pub async fn pdf(
             )
         });
         let mut template = crate::legacy_pdf::template(&mut conn).await;
-        // gewählte Zahlungsart statt fester Bankdaten (Altbelege ohne Zahlungsart bleiben unverändert)
-        if let Some(p) = &d.payment {
+        // gewählte Zahlungsart statt fester Bankdaten; übernommene Altrechnungen drucken ihre Original-Bankdaten
+        if let Some(p) = d.payment.as_ref().filter(|_| !legacy) {
             super::payments::apply_to_template(&mut template, p);
         }
         let locale = q.locale.as_deref().unwrap_or(&inv.locale);

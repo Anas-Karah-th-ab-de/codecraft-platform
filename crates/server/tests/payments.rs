@@ -77,11 +77,11 @@ fn method_id(list: &Value, kind: &str) -> String {
 async fn payment_methods_per_customer_and_document(db: PgPool) {
     let (admin, org, kunde, sales) = setup(&db).await;
 
-    // Standard: ShamCash; Bank vorhanden
+    // Standard: Banküberweisung; ShamCash vorhanden
     let (_, list) = call(&db, "GET", "/api/v1/payment-methods", &sales, None).await;
     let def: Vec<&Value> = list.as_array().unwrap().iter().filter(|m| m["is_default"] == true).collect();
     assert_eq!(def.len(), 1);
-    assert_eq!(def[0]["kind"], "shamcash");
+    assert_eq!(def[0]["kind"], "bank");
     let sham = method_id(&list, "shamcash");
     let bank = method_id(&list, "bank");
 
@@ -302,4 +302,30 @@ async fn contract_agreed_verbally(db: PgPool) {
     .await
     .unwrap();
     assert_eq!(n, 1);
+}
+
+/// Ohne Auswahl: deutsche Kunden → Banküberweisung (Standard), arabische Kunden → ShamCash
+#[sqlx::test(migrator = "codecraft_server::MIGRATOR")]
+async fn shamcash_only_for_arabic_customers(db: PgPool) {
+    let (admin, org, _kunde, sales) = setup(&db).await;
+    let (_, o) = call(
+        &db,
+        "POST",
+        "/api/v1/organizations",
+        &admin,
+        Some(json!({ "name": "مستشفى إدلب", "address": "إدلب", "locale": "ar" })),
+    )
+    .await;
+    let ar_org = o["id"].as_str().unwrap().to_owned();
+    let draft = |org: &str| {
+        json!({ "organization_id": org,
+        "items": [{ "description": "Wartung", "quantity_milli": 1000, "unit": "flat", "unit_price": 10000, "vat_rate_bp": 0 }] })
+    };
+    let (s, de) = call(&db, "POST", "/api/v1/invoices", &sales, Some(draft(&org))).await;
+    assert_eq!(s, StatusCode::CREATED, "{de}");
+    assert_eq!(de["payment"]["kind"], "bank");
+    let (s, ar) = call(&db, "POST", "/api/v1/invoices", &sales, Some(draft(&ar_org))).await;
+    assert_eq!(s, StatusCode::CREATED, "{ar}");
+    assert_eq!(ar["locale"], "ar");
+    assert_eq!(ar["payment"]["kind"], "shamcash");
 }

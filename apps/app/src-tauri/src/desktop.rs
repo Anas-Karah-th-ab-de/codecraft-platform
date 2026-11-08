@@ -193,3 +193,16 @@ fn on_event(app: &AppHandle, v: &serde_json::Value) {
         _ => {}
     }
 }
+
+/// Datei mit dem Standardprogramm des Systems öffnen
+pub fn open_path(path: &std::path::Path) {
+    #[cfg(target_os = "windows")]
+    let r = std::process::Command::new("cmd").args(["/C", "start", ""]).arg(path).spawn();
+    #[cfg(target_os = "macos")]
+    let r = std::process::Command::new("open").arg(path).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let r = std::process::Command::new("xdg-open").arg(path).spawn();
+    if let Err(e) = r {
+        tracing::warn!("Datei öffnen: {e}");
+    }
+}

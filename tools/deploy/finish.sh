@@ -36,9 +36,9 @@ add SYSTEM_MAIL_FROM noreply@code-craft.tech
 mkdir -p /etc/systemd/system/codecraft.service.d
 cat > /etc/systemd/system/codecraft.service.d/pdf.conf <<'D'
 [Service]
+# Chromium (PDF) braucht JIT und Systemaufrufe außerhalb von @system-service – sonst hängt die PDF-Erzeugung
 MemoryDenyWriteExecute=no
 SystemCallFilter=
-SystemCallFilter=@system-service
 D
 systemctl daemon-reload
 

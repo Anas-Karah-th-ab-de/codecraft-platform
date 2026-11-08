@@ -1993,6 +1993,7 @@ dependencies = [
 name = "km-portal"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "codecraft-agent",
  "codecraft-protocol",
  "futures-util",

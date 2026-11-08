@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, getToken, useAuth } from "../../api";
+import { deliverBlob } from "../../native";
 import { fmtDate, useI18n } from "../../i18n";
 import { TX, useComm } from "./Comm";
 
@@ -31,9 +32,8 @@ function FileBubble({ f }: { f: FileRef }) {
     return () => { if (url) URL.revokeObjectURL(url); };
   }, [f]);
   const download = async () => {
-    const u = await fetchFile(f, false);
-    const a = Object.assign(document.createElement("a"), { href: u, download: f.name });
-    a.click(); setTimeout(() => URL.revokeObjectURL(u), 5000);
+    const r = await fetch(`/api/v1/chat/files/${f.id}`, { headers: { authorization: `Bearer ${getToken()}` } });
+    if (r.ok) await deliverBlob(await r.blob(), f.name);
   };
   return (
     <div className="chat-file">

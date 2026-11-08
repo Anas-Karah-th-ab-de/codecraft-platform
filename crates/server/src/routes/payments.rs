@@ -17,7 +17,10 @@ use sqlx::PgConnection;
 use uuid::Uuid;
 
 const KINDS: [&str; 5] = ["shamcash", "bank", "cash", "paypal", "other"];
-const FIELDS: [&str; 7] = ["payee", "provider", "account", "account_label", "bic", "address", "note"];
+/// `qr`: Bild des Zahlungs-QR-Codes (z. B. aus der ShamCash-App) unter `/payment/…`
+/// `sender_bic`: BIC der Absenderbank für Auslandsüberweisungen (wie im Altsystem gedruckt)
+const FIELDS: [&str; 9] =
+    ["payee", "provider", "account", "account_label", "bic", "address", "note", "qr", "sender_bic"];
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
 pub struct Method {
@@ -79,6 +82,14 @@ fn clean(b: &MethodIn) -> ApiResult<Value> {
         let v = v.as_str().ok_or_else(|| ApiError::BadRequest(format!("{k}: Text erwartet")))?.trim();
         if v.chars().count() > 300 {
             return Err(ApiError::BadRequest(format!("{k}: höchstens 300 Zeichen")));
+        }
+        if k == "qr"
+            && !v.is_empty()
+            && !(v.starts_with("/payment/")
+                && !v.contains("..")
+                && [".jpg", ".jpeg", ".png"].iter().any(|e| v.to_lowercase().ends_with(e)))
+        {
+            return Err(ApiError::BadRequest("qr: Bild unter /payment/… (jpg/png)".into()));
         }
         if !v.is_empty() {
             out.insert(k.clone(), Value::String(v.to_string()));
@@ -225,6 +236,18 @@ pub(crate) async fn check_active(conn: &mut PgConnection, id: Uuid) -> ApiResult
 }
 
 /// `{kind, name, details}` einer Zahlungsart
+/// Zahlungsart, wenn im Beleg keine gewählt ist: Standard des Kunden → bei arabischen Belegen
+/// ShamCash (falls aktiv) → globaler Standard (Banküberweisung)
+pub(crate) const DEFAULT_SQL: &str = "COALESCE(
+    (SELECT o.payment_method_id FROM organizations o JOIN payment_methods p ON p.id = o.payment_method_id
+      WHERE o.id = $1 AND p.is_active),
+    (SELECT id FROM payment_methods WHERE $2 = 'ar' AND kind = 'shamcash' AND is_active ORDER BY is_default DESC, sort LIMIT 1),
+    (SELECT id FROM payment_methods WHERE is_default AND is_active))";
+
+pub(crate) async fn default_for(conn: &mut PgConnection, org: Uuid, locale: &str) -> ApiResult<Option<Uuid>> {
+    Ok(sqlx::query_scalar(&format!("SELECT {DEFAULT_SQL}")).bind(org).bind(locale).fetch_one(conn).await?)
+}
+
 pub(crate) async fn info(conn: &mut PgConnection, id: Option<Uuid>) -> ApiResult<Option<Value>> {
     let Some(id) = id else { return Ok(None) };
     Ok(sqlx::query_scalar("SELECT jsonb_build_object('id', id, 'kind', kind, 'name', name, 'details', details) FROM payment_methods WHERE id = $1")
@@ -268,7 +291,9 @@ pub(crate) fn apply_to_template(template: &mut Value, p: &Value) {
     template["bankIban"] = json!(s(p, "account"));
     template["bankBic"] = json!(s(p, "bic"));
     template["bankAddress"] = json!(if s(p, "note").is_empty() { s(p, "address") } else { s(p, "note") });
-    template["senderBic"] = json!("");
+    template["senderBic"] = json!(s(p, "sender_bic"));
+    // QR-Code der Zahlungsart (Renderer lädt das Bild aus seinem Ordner public/)
+    template["paymentQr"] = json!(s(p, "qr"));
     if !template["labels"].is_object() {
         template["labels"] = json!({});
     }

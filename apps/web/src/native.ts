@@ -76,3 +76,22 @@ export async function appLogout() {
   try { localStorage.removeItem(USER_KEY); } catch { /* egal */ }
   await native("app_reset").catch(() => {});
 }
+
+const toBase64 = (b: Blob) => new Promise<string>((ok, fail) => {
+  const r = new FileReader();
+  r.onload = () => ok(String(r.result).replace(/^data:[^,]*,/, ""));
+  r.onerror = () => fail(r.error);
+  r.readAsDataURL(b);
+});
+
+/** Datei ausliefern: in der App speichern und mit der passenden App öffnen, im Browser herunterladen */
+export async function deliverBlob(blob: Blob, name: string): Promise<void> {
+  if (isApp()) {
+    await native("open_file", { name, mime: blob.type || "application/octet-stream", data: await toBase64(blob) });
+    return;
+  }
+  const u = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement("a"), { href: u, download: name });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(u), 10000);
+}

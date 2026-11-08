@@ -1,6 +1,7 @@
 // Webmail: Ordner, Liste, Lesen (HTML abgeschottet), Schreiben/Antworten/Weiterleiten, Anhänge; Verwaltung für Admins.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, can, getToken, useAuth } from "../../api";
+import { deliverBlob } from "../../native";
 import { fmtDate, useI18n } from "../../i18n";
 import { useComm } from "./Comm";
 import { Icon } from "../../icons";
@@ -215,8 +216,7 @@ export default function Mail() {
 
   const download = async (path: string, name: string) => {
     const r = await fetch(`${path}?${mq}`, { headers: { authorization: `Bearer ${getToken()}` } });
-    const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(await r.blob()), download: name });
-    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    await deliverBlob(await r.blob(), name);
   };
 
   const quote = (m: Full) => `\n\n${fmtDate(m.sent_at, locale)}, ${m.from_name ?? m.from_addr} ${T.wrote}:\n` + (m.text ?? "").split("\n").map((l) => `> ${l}`).join("\n");
