@@ -1,4 +1,5 @@
-mod account;
+pub mod access;
+pub mod account;
 mod catalog;
 pub mod chat;
 mod devices;
@@ -35,6 +36,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/auth/2fa/disable", post(account::totp_disable))
         .route("/api/v1/me", get(account::me))
         .route("/api/v1/users", get(account::list_users).post(account::create_user))
+        .route("/api/v1/users/{id}/reset-password", post(account::reset_password))
         // Katalog
         .route("/api/v1/departments", get(catalog::departments))
         .route("/api/v1/products", get(catalog::products).post(catalog::create_product))
@@ -105,6 +107,11 @@ pub fn router() -> Router<AppState> {
             get(remote::get_file).post(remote::put_file).layer(DefaultBodyLimit::max(50 * 1024 * 1024)),
         )
         .route("/api/v1/devices/{id}/screen", get(remote::screen_ws))
+        // Einmal-Zugriffscodes (Kunde gibt Geräte für Techniker frei)
+        .route("/api/v1/access-codes", get(access::list).post(access::create))
+        .route("/api/v1/access-codes/redeem", post(access::redeem))
+        .route("/api/v1/access-codes/{id}/revoke", post(access::revoke))
+        .route("/api/v1/devices/{id}/access-policy", put(access::set_policy))
 }
 
 async fn health() -> Json<Value> {

@@ -913,3 +913,11 @@ canvas.screen.idle, canvas.screen.waiting, canvas.screen.denied, canvas.screen.e
 .cmd-out .ok { color: var(--c-ok); font-family: var(--f-mono, monospace); }
 .cmd-out .bad { color: var(--c-bad); font-family: var(--f-mono, monospace); }
 .cmd-out pre { background: var(--c-ink); color: var(--c-on-dark); padding: 10px 12px; border-radius: 10px; max-height: 360px; overflow: auto; white-space: pre-wrap; margin: 4px 0 0; font-size: 12.5px; }
+
+/* Fernzugriff: Einmal-Codes */
+.access-dev { padding: 8px 0; border-bottom: 1px solid var(--line, #e5e7eb); flex-wrap: wrap; gap: 8px; }
+.access-code { text-align: center; border: 2px solid #2563eb; }
+.code-big { font: 700 2.6rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; margin: 12px 0; color: #1e3a8a; user-select: all; }
+.badge.grant-waiting { background: #fef3c7; color: #92400e; }
+.badge.grant-active { background: #dcfce7; color: #166534; }
+.badge.grant-expired, .badge.grant-revoked { background: #f1f5f9; color: #475569; }

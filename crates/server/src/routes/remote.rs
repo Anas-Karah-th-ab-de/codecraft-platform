@@ -18,7 +18,7 @@ use axum::http::header;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use base64::Engine;
-use codecraft_domain::access::{allowed, Permission, Role};
+use codecraft_domain::access::Role;
 use codecraft_protocol::remote::{decode_frame, Capabilities, FromDevice, InputEvent, ToDevice};
 use futures_util::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -103,12 +103,9 @@ async fn request(
     res
 }
 
-fn employee(user: &User) -> ApiResult<()> {
-    if allowed(user.role, Permission::DeviceManage, false) {
-        Ok(())
-    } else {
-        Err(ApiError::Forbidden)
-    }
+/// Mitarbeiter mit Geräterechten; Kundengeräte nur mit eingelöstem Einmal-Code
+async fn access(s: &AppState, user: &User, device: Uuid) -> ApiResult<()> {
+    super::access::authorize(&s.db, user.id, user.role, device).await
 }
 
 async fn audit(s: &AppState, user: &User, action: &str, device: Uuid, data: Value) -> ApiResult<()> {
@@ -239,7 +236,7 @@ async fn on_device_message(s: &AppState, device: Uuid, msg: FromDevice) {
 type StatusRow = (String, String, Option<Value>, Option<Value>, Option<chrono::DateTime<chrono::Utc>>);
 
 pub async fn status(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     let row: Option<StatusRow> = sqlx::query_as(
         "SELECT name, kind, remote_hello, remote_inventory, remote_seen_at FROM devices WHERE id = $1 AND revoked_at IS NULL",
     )
@@ -253,8 +250,8 @@ pub async fn status(State(s): State<AppState>, user: User, Path(id): Path<Uuid>)
     })))
 }
 
-pub async fn inventory(State(_s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+pub async fn inventory(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
+    access(&s, &user, id).await?;
     let r = rid();
     let res = request(id, ToDevice::Inventory { id: r.clone() }, &r, Duration::from_secs(20), |_| true).await?;
     match res.into_iter().next() {
@@ -277,7 +274,7 @@ pub async fn exec(
     Path(id): Path<Uuid>,
     Json(b): Json<ExecBody>,
 ) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     if !caps_of(id)?.exec {
         return Err(ApiError::BadRequest("Befehle sind auf diesem Gerät nicht erlaubt".into()));
     }
@@ -295,7 +292,7 @@ pub async fn exec(
 }
 
 pub async fn reboot(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     if !caps_of(id)?.exec {
         return Err(ApiError::BadRequest("Neustart ist auf diesem Gerät nicht erlaubt".into()));
     }
@@ -314,12 +311,12 @@ pub struct PathQ {
 }
 
 pub async fn list_dir(
-    State(_s): State<AppState>,
+    State(s): State<AppState>,
     user: User,
     Path(id): Path<Uuid>,
     Query(q): Query<PathQ>,
 ) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     if !caps_of(id)?.files {
         return Err(ApiError::BadRequest("Dateizugriff ist auf diesem Gerät nicht erlaubt".into()));
     }
@@ -339,7 +336,7 @@ pub async fn get_file(
     Path(id): Path<Uuid>,
     Query(q): Query<PathQ>,
 ) -> ApiResult<Response> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     if !caps_of(id)?.files {
         return Err(ApiError::BadRequest("Dateizugriff ist auf diesem Gerät nicht erlaubt".into()));
     }
@@ -392,7 +389,7 @@ pub async fn put_file(
     Query(q): Query<PathQ>,
     body: Bytes,
 ) -> ApiResult<Json<Value>> {
-    employee(&user)?;
+    access(&s, &user, id).await?;
     if !caps_of(id)?.files {
         return Err(ApiError::BadRequest("Dateizugriff ist auf diesem Gerät nicht erlaubt".into()));
     }
@@ -434,26 +431,33 @@ pub async fn screen_ws(
 ) -> ApiResult<Response> {
     let row: Option<(Uuid, String, String)> = sqlx::query_as(
         "SELECT u.id, u.display_name, u.role FROM api_tokens t JOIN users u ON u.id = t.user_id
-          WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active AND (t.expires_at IS NULL OR t.expires_at > now())",
+          WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active AND NOT u.must_change_password
+            AND (t.expires_at IS NULL OR t.expires_at > now())",
     )
     .bind(hash_token(&q.token))
     .fetch_optional(&s.db)
     .await?;
     let (user, name, role) = row.ok_or(ApiError::Unauthorized)?;
     let role = Role::parse(&role).ok_or(ApiError::Forbidden)?;
-    if !allowed(role, Permission::DeviceManage, false) {
-        return Err(ApiError::Forbidden);
-    }
+    super::access::authorize(&s.db, user, role, id).await?;
     let caps = caps_of(id)?;
     if !caps.screen {
         return Err(ApiError::BadRequest("Bildschirmzugriff ist auf diesem Gerät nicht erlaubt".into()));
     }
     let fps = q.fps.unwrap_or(8).clamp(1, 20);
     let width = q.width.unwrap_or(1600).clamp(320, 3840);
-    Ok(up.max_message_size(64 * 1024).on_upgrade(move |socket| screen_session(s, id, user, name, fps, width, socket)))
+    let who = Operator { id: user, name, role };
+    Ok(up.max_message_size(64 * 1024).on_upgrade(move |socket| screen_session(s, id, who, fps, width, socket)))
 }
 
-async fn screen_session(s: AppState, device: Uuid, user: Uuid, name: String, fps: u8, width: u32, socket: WebSocket) {
+struct Operator {
+    id: Uuid,
+    name: String,
+    role: Role,
+}
+
+async fn screen_session(s: AppState, device: Uuid, op: Operator, fps: u8, width: u32, socket: WebSocket) {
+    let Operator { id: user, name, role } = op;
     let session = Uuid::now_v7();
     let (mut sink, mut stream) = socket.split();
     let (tx, mut rx) = unbounded_channel::<Message>();
@@ -485,16 +489,32 @@ async fn screen_session(s: AppState, device: Uuid, user: Uuid, name: String, fps
         }
     });
     let started = std::time::Instant::now();
-    while let Some(Ok(m)) = stream.next().await {
-        match m {
-            Message::Text(t) => {
-                // Eingaben des Technikers → Gerät
-                if let Ok(event) = serde_json::from_str::<InputEvent>(&t) {
-                    let _ = send_to(device, &ToDevice::Input { session: session.to_string(), event });
+    // Freigabe läuft ab oder Kunde beendet sie → Sitzung endet spätestens nach 15 s
+    let mut check = tokio::time::interval(Duration::from_secs(15));
+    check.tick().await;
+    loop {
+        tokio::select! {
+            m = stream.next() => {
+                match m {
+                    Some(Ok(Message::Text(t))) => {
+                        // Eingaben des Technikers → Gerät
+                        if let Ok(event) = serde_json::from_str::<InputEvent>(&t) {
+                            let _ = send_to(device, &ToDevice::Input { session: session.to_string(), event });
+                        }
+                    }
+                    Some(Ok(Message::Close(_))) | None | Some(Err(_)) => break,
+                    _ => {}
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            _ = check.tick() => {
+                if super::access::authorize(&s.db, user, role, device).await.is_err() {
+                    let _ = tx.send(Message::Text(
+                        json!({ "t": "screen_ended", "reason": "Freigabe beendet" }).to_string().into(),
+                    ));
+                    tokio::time::sleep(Duration::from_millis(200)).await;
+                    break;
+                }
+            }
         }
         if writer.is_finished() {
             break;

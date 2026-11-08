@@ -54,7 +54,7 @@ pub struct LoginBody {
     pub code: Option<String>,
 }
 
-type LoginRow = (Uuid, String, String, String, Option<Uuid>, Option<String>, Option<String>);
+type LoginRow = (Uuid, String, String, String, Option<Uuid>, Option<String>, Option<String>, bool);
 
 pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiResult<Json<Value>> {
     let email = b.email.trim().to_lowercase();
@@ -62,13 +62,13 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
         return Err(ApiError::TooManyRequests);
     }
     let row: Option<LoginRow> = sqlx::query_as(
-        "SELECT id, email, display_name, role, organization_id, password_hash, totp_secret
+        "SELECT id, email, display_name, role, organization_id, password_hash, totp_secret, must_change_password
            FROM users WHERE lower(email) = $1 AND is_active",
     )
     .bind(&email)
     .fetch_optional(&s.db)
     .await?;
-    let Some((id, email_db, name, role, org, Some(hash), totp)) = row else {
+    let Some((id, email_db, name, role, org, Some(hash), totp, must_change)) = row else {
         // gleiche Laufzeit wie bei existierendem Benutzer
         let _ = verify_password(&b.password, "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$AAAAAAAAAAAAAAAAAAAAAA");
         record_fail(&email);
@@ -107,7 +107,8 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
     Ok(Json(json!({
         "token": token,
         "expires_in_s": SESSION_HOURS * 3600,
-        "user": { "id": id, "email": email_db, "display_name": name, "role": role, "organization_id": org }
+        "user": { "id": id, "email": email_db, "display_name": name, "role": role, "organization_id": org },
+        "must_change_password": must_change,
     })))
 }
 
@@ -117,9 +118,10 @@ pub async fn logout(State(s): State<AppState>, user: User) -> ApiResult<StatusCo
 }
 
 pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>> {
-    let (name, totp, depts): (String, bool, Vec<String>) = sqlx::query_as(
+    let (name, totp, depts, must_change): (String, bool, Vec<String>, bool) = sqlx::query_as(
         "SELECT u.display_name, u.totp_secret IS NOT NULL,
-                COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}')
+                COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}'),
+                u.must_change_password
            FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id
            LEFT JOIN departments d ON d.id = ud.department_id
@@ -131,7 +133,7 @@ pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>>
     Ok(Json(json!({
         "id": user.id, "email": user.email, "display_name": name, "role": user.role,
         "organization_id": user.organization_id, "two_factor": totp, "departments": depts,
-        "is_employee": user.role.is_employee(),
+        "is_employee": user.role.is_employee(), "must_change_password": must_change,
     })))
 }
 
@@ -201,8 +203,11 @@ pub async fn change_password(
     if !hash.is_some_and(|h| verify_password(&b.current, &h)) {
         return Err(ApiError::BadRequest("Aktuelles Passwort ist falsch".into()));
     }
+    if b.new == b.current {
+        return Err(ApiError::BadRequest("Das neue Passwort muss sich vom bisherigen unterscheiden".into()));
+    }
     let mut tx = s.db.begin().await?;
-    sqlx::query("UPDATE users SET password_hash = $2 WHERE id = $1")
+    sqlx::query("UPDATE users SET password_hash = $2, must_change_password = false WHERE id = $1")
         .bind(user.id)
         .bind(hash_password(&b.new)?)
         .execute(&mut *tx)
@@ -232,6 +237,7 @@ pub struct UserRow {
     pub departments: Vec<String>,
     pub last_login_at: Option<chrono::DateTime<chrono::Utc>>,
     pub mailbox: Option<String>,
+    pub must_change_password: bool,
 }
 
 pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<UserRow>>> {
@@ -241,7 +247,8 @@ pub async fn list_users(State(s): State<AppState>, user: User) -> ApiResult<Json
                 u.totp_secret IS NOT NULL AS two_factor,
                 COALESCE(array_agg(d.code ORDER BY d.code) FILTER (WHERE d.code IS NOT NULL), '{}') AS departments,
                 u.last_login_at,
-                (SELECT address FROM mailboxes mb WHERE mb.user_id = u.id) AS mailbox
+                (SELECT address FROM mailboxes mb WHERE mb.user_id = u.id) AS mailbox,
+                u.must_change_password
            FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id
            LEFT JOIN departments d ON d.id = ud.department_id
@@ -318,6 +325,45 @@ pub async fn create_user(
     .await?;
     tx.commit().await?;
     Ok((StatusCode::CREATED, Json(json!({ "id": id, "mailbox": mailbox }))))
+}
+
+/// Einmal-Passwort setzen (DB-Teil, auch für das CLI): alle Sitzungen und App-Passwörter
+/// werden beendet, beim nächsten Login muss ein eigenes Passwort gewählt werden.
+pub async fn set_onetime_password(tx: &mut sqlx::PgConnection, actor: &str, user_id: Uuid) -> Result<String, ApiError> {
+    let pw = crate::auth::onetime_password();
+    let r = sqlx::query(
+        "UPDATE users SET password_hash = $2, must_change_password = true WHERE id = $1 AND role <> 'device'",
+    )
+    .bind(user_id)
+    .bind(hash_password(&pw)?)
+    .execute(&mut *tx)
+    .await?;
+    if r.rows_affected() == 0 {
+        return Err(ApiError::NotFound);
+    }
+    sqlx::query("UPDATE api_tokens SET revoked_at = now() WHERE user_id = $1 AND revoked_at IS NULL")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await?;
+    sqlx::query("DELETE FROM app_passwords WHERE user_id = $1").bind(user_id).execute(&mut *tx).await?;
+    super::audit(&mut *tx, actor, "password_reset_onetime", "user", user_id, json!({})).await?;
+    Ok(pw)
+}
+
+/// Admin: Einmal-Passwort für einen Benutzer erzeugen – wird nur in dieser Antwort gezeigt
+pub async fn reset_password(
+    State(s): State<AppState>,
+    user: User,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+) -> ApiResult<Json<Value>> {
+    user.require(Permission::UserManage, None)?;
+    if id == user.id {
+        return Err(ApiError::BadRequest("Eigenes Passwort bitte unter Konto ändern".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    let pw = set_onetime_password(&mut tx, &user.actor(), id).await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "password": pw })))
 }
 
 /// Header-Helfer für Logs (IP hinter Proxy)

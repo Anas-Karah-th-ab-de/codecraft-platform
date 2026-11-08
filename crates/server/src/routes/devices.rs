@@ -105,6 +105,7 @@ pub struct DeviceRow {
     pub last_seen_at: Option<DateTime<Utc>>,
     pub license_expires_at: Option<DateTime<Utc>>,
     pub online: bool,
+    pub access_policy: String,
 }
 
 pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<DeviceRow>>> {
@@ -116,7 +117,8 @@ pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<D
     };
     let rows = sqlx::query_as(
         "SELECT id, organization_id, kind, name, version, last_seen_at, license_expires_at,
-                COALESCE(last_seen_at > now() - make_interval(secs => report_interval_s * 3), false) AS online
+                COALESCE(last_seen_at > now() - make_interval(secs => report_interval_s * 3), false) AS online,
+                access_policy
            FROM devices
           WHERE revoked_at IS NULL AND ($1::uuid IS NULL OR organization_id = $1)
           ORDER BY name",

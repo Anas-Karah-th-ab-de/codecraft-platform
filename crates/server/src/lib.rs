@@ -3,6 +3,7 @@
 pub mod auth;
 pub mod error;
 pub mod legacy_pdf;
+pub mod legacy_users;
 pub mod mail;
 pub mod pdf;
 pub mod routes;

@@ -88,7 +88,18 @@ impl User {
     }
 }
 
-type UserRow = (Uuid, Uuid, String, String, Option<Uuid>);
+type UserRow = (Uuid, Uuid, String, String, Option<Uuid>, bool);
+
+/// Was ein Benutzer mit Einmal-Passwort aufrufen darf, bevor er ein eigenes gesetzt hat
+const BEFORE_PASSWORD_CHANGE: &[&str] = &["/api/v1/me", "/api/v1/auth/password", "/api/v1/auth/logout"];
+
+/// Zufälliges Einmal-Passwort, gut abtippbar (ohne 0/O, 1/l/I): `abcd-efgh-jkmn-pqrs` (~93 Bit)
+pub fn onetime_password() -> String {
+    const A: &[u8] = b"abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    let mut rng = rand::thread_rng();
+    let chars: Vec<char> = (0..16).map(|_| A[(rng.next_u32() as usize) % A.len()] as char).collect();
+    chars.chunks(4).map(|c| c.iter().collect::<String>()).collect::<Vec<_>>().join("-")
+}
 
 impl FromRequestParts<AppState> for User {
     type Rejection = ApiError;
@@ -96,7 +107,7 @@ impl FromRequestParts<AppState> for User {
     async fn from_request_parts(parts: &mut Parts, state: &AppState) -> Result<Self, Self::Rejection> {
         let token = bearer(parts).ok_or(ApiError::Unauthorized)?;
         let row: Option<UserRow> = sqlx::query_as(
-            "SELECT u.id, t.id, u.email, u.role, u.organization_id
+            "SELECT u.id, t.id, u.email, u.role, u.organization_id, u.must_change_password
                FROM api_tokens t JOIN users u ON u.id = t.user_id
               WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active
                 AND (t.expires_at IS NULL OR t.expires_at > now())",
@@ -104,7 +115,10 @@ impl FromRequestParts<AppState> for User {
         .bind(hash_token(token))
         .fetch_optional(&state.db)
         .await?;
-        let (id, token_id, email, role, organization_id) = row.ok_or(ApiError::Unauthorized)?;
+        let (id, token_id, email, role, organization_id, must_change) = row.ok_or(ApiError::Unauthorized)?;
+        if must_change && !BEFORE_PASSWORD_CHANGE.contains(&parts.uri.path()) {
+            return Err(ApiError::PasswordChangeRequired);
+        }
         let role = Role::parse(&role).ok_or(ApiError::Unauthorized)?;
         Ok(User { id, token_id, email, role, organization_id })
     }
@@ -158,6 +172,11 @@ mod tests {
         assert!(verify_password("sehr-geheim-123", &h));
         assert!(!verify_password("falsch", &h));
         assert!(password_policy("kurz").is_err());
+        let o = onetime_password();
+        assert_eq!(o.len(), 19);
+        assert!(password_policy(&o).is_ok());
+        assert!(!o.contains(['0', 'O', '1', 'l', 'I']));
+        assert_ne!(o, onetime_password());
     }
 
     #[test]

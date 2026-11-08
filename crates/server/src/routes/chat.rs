@@ -462,7 +462,7 @@ pub async fn ws(State(s): State<AppState>, Query(q): Query<WsQuery>, up: WebSock
     // Browser können beim WebSocket keine Header setzen → Token als Parameter
     let row: Option<(Uuid, String)> = sqlx::query_as(
         "SELECT u.id, u.display_name FROM api_tokens t JOIN users u ON u.id = t.user_id
-          WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active
+          WHERE t.token_hash = $1 AND t.revoked_at IS NULL AND u.is_active AND NOT u.must_change_password
             AND (t.expires_at IS NULL OR t.expires_at > now())",
     )
     .bind(hash_token(&q.token))

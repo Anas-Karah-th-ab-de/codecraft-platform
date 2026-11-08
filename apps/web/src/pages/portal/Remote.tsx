@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { api, getToken } from "../../api";
 import { useI18n } from "../../i18n";
+import { RedeemCode } from "./Access";
 
 const RT = {
   de: {
@@ -47,8 +48,22 @@ export default function Remote() {
   const [st, setSt] = useState<Status | null>(null);
   const [tab, setTab] = useState<"overview" | "screen" | "commands" | "files">("overview");
   const [err, setErr] = useState<string | null>(null);
-  const load = useCallback(() => api<Status>(`/api/v1/devices/${id}/remote`).then(setSt).catch((e) => setErr(e.message)), [id]);
+  const [needCode, setNeedCode] = useState(false);
+  const load = useCallback(() => api<Status>(`/api/v1/devices/${id}/remote`)
+    .then((s) => { setSt(s); setErr(null); setNeedCode(false); })
+    .catch((e) => {
+      // Kundengerät ohne (oder mit abgelaufener) Freigabe → Code des Kunden einlösen
+      if (e.code === "access_code_required") { setSt(null); setNeedCode(true); }
+      setErr(e.message);
+    }), [id]);
   useEffect(() => { load(); const i = setInterval(load, 10000); return () => clearInterval(i); }, [load]);
+  if (needCode) return (
+    <div className="remote">
+      <Link to="/portal/geraete" className="muted">{T.back}</Link>
+      <div className="alert" style={{ margin: "12px 0" }}>{err}</div>
+      <RedeemCode compact onRedeemed={load} />
+    </div>
+  );
   if (!st) return <div className="card">{err ?? "…"}</div>;
   const caps = st.caps;
   const tabs: [typeof tab, string, boolean][] = [

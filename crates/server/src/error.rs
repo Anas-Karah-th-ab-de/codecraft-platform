@@ -18,6 +18,10 @@ pub enum ApiError {
     Conflict(String),
     #[error("zu viele Versuche – bitte später erneut")]
     TooManyRequests,
+    #[error("Bitte zuerst ein eigenes Passwort festlegen")]
+    PasswordChangeRequired,
+    #[error("Für dieses Kundengerät ist ein Zugriffscode des Kunden nötig")]
+    AccessCodeRequired,
     #[error(transparent)]
     Invoice(#[from] InvoiceError),
     #[error(transparent)]
@@ -35,6 +39,8 @@ impl IntoResponse for ApiError {
             ApiError::BadRequest(_) => (StatusCode::BAD_REQUEST, "bad_request"),
             ApiError::Conflict(_) => (StatusCode::CONFLICT, "conflict"),
             ApiError::TooManyRequests => (StatusCode::TOO_MANY_REQUESTS, "too_many_requests"),
+            ApiError::PasswordChangeRequired => (StatusCode::FORBIDDEN, "password_change_required"),
+            ApiError::AccessCodeRequired => (StatusCode::FORBIDDEN, "access_code_required"),
             ApiError::Invoice(InvoiceError::Locked | InvoiceError::InvalidTransition { .. }) => {
                 (StatusCode::CONFLICT, "invoice_state")
             }

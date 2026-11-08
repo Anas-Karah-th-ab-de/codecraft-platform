@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
   }
 }
@@ -25,12 +25,17 @@ export async function api<T = any>(path: string, opts: { method?: string; body?:
   }
   if (!res.ok) {
     let msg = res.statusText;
+    let code: string | undefined;
     try {
-      msg = (await res.json()).message ?? msg;
+      const j = await res.json();
+      msg = j.message ?? msg;
+      code = j.error;
     } catch {
       /* kein JSON */
     }
-    throw new ApiError(res.status, msg);
+    // Einmal-Passwort noch nicht geändert → Portal zeigt nur die Passwort-Seite
+    if (code === "password_change_required") window.dispatchEvent(new Event("cc-must-change"));
+    throw new ApiError(res.status, msg, code);
   }
   if (res.status === 204) return undefined as T;
   const ct = res.headers.get("content-type") ?? "";
@@ -135,6 +140,7 @@ export type Me = {
   two_factor: boolean;
   departments: string[];
   is_employee: boolean;
+  must_change_password: boolean;
 };
 
 type AuthCtx = {
@@ -168,8 +174,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     refresh();
     const onLogout = () => setMe(null);
+    const onMustChange = () => setMe((m) => (m && !m.must_change_password ? { ...m, must_change_password: true } : m));
     window.addEventListener("cc-logout", onLogout);
-    return () => window.removeEventListener("cc-logout", onLogout);
+    window.addEventListener("cc-must-change", onMustChange);
+    return () => {
+      window.removeEventListener("cc-logout", onLogout);
+      window.removeEventListener("cc-must-change", onMustChange);
+    };
   }, [refresh]);
 
   const login = async (email: string, password: string, code?: string) => {

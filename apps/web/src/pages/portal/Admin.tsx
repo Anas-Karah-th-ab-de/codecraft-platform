@@ -4,6 +4,7 @@ import { fmtDate, useI18n, type Key, type Locale } from "../../i18n";
 import { Badge, Field, Loading, Modal, useSubmit } from "../../ui";
 import { I18nInput } from "./Products";
 import type { Product } from "./Invoices";
+import { RedeemCode, ResetPassword, useMustChangeLabel } from "./Access";
 
 type I18n = { de: string; en: string; ar: string };
 type Dept = { code: string; name: I18n };
@@ -204,14 +205,16 @@ export function Requests() {
 }
 
 // ── Geräte ──────────────────────────────────────────────────────────────────
-type Device = { id: string; kind: string; name: string; version: string | null; last_seen_at: string | null; online: boolean };
+type Device = { id: string; kind: string; name: string; version: string | null; last_seen_at: string | null; online: boolean; organization_id: string | null; access_policy: "code" | "staff" };
 
 export function Devices() {
   const { t, locale } = useI18n();
   const { data, error, reload } = useApi<Device[]>("/api/v1/devices");
   const products = useApi<Product[]>("/api/v1/products");
+  const orgs = useApi<{ id: string; name: string }[]>("/api/v1/organizations");
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState({ kind: "agent", name: "", product_id: "" });
+  const [f, setF] = useState({ kind: "agent", name: "", product_id: "", organization_id: "" });
+  const orgName = (id: string | null) => (id ? orgs.data?.find((o) => o.id === id)?.name ?? "…" : "KM Code Craft");
   const [token, setToken] = useState<string | null>(null);
   const s = useSubmit();
   const matching = products.data?.filter((p) => p.device_kind === f.kind) ?? [];
@@ -221,13 +224,16 @@ export function Devices() {
         <h1>{t("p.devices")}</h1>
         <button className="btn" onClick={() => { setOpen(true); setToken(null); }}>+ {t("p.register_device")}</button>
       </div>
+      <div style={{ marginBottom: 16 }}><RedeemCode /></div>
       <div className="card" style={{ padding: 0 }}>
         {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : (
           <table>
-            <thead><tr><th>Name</th><th>{t("p.device")}</th><th>{t("p.version")}</th><th>{t("p.last_seen")}</th><th>{t("p.status")}</th></tr></thead>
+            <thead><tr><th>Name</th><th>{t("p.customer")}</th><th>{t("p.device")}</th><th>{t("p.version")}</th><th>{t("p.last_seen")}</th><th>{t("p.status")}</th></tr></thead>
             <tbody>
               {data.map((d) => (
-                <tr key={d.id}><td><a href={`/portal/geraete/${d.id}`} onClick={(e) => { e.preventDefault(); history.pushState({}, "", `/portal/geraete/${d.id}`); dispatchEvent(new PopStateEvent("popstate")); }}>{d.name}</a></td><td>{d.kind}</td><td>{d.version ?? "–"}</td><td>{fmtDate(d.last_seen_at, locale)}</td>
+                <tr key={d.id}><td><a href={`/portal/geraete/${d.id}`} onClick={(e) => { e.preventDefault(); history.pushState({}, "", `/portal/geraete/${d.id}`); dispatchEvent(new PopStateEvent("popstate")); }}>{d.name}</a></td>
+                  <td>{orgName(d.organization_id)}{d.organization_id && <span title="Zugriff" style={{ marginInlineStart: 6 }}>{d.access_policy === "code" ? "🔐" : "🔓"}</span>}</td>
+                  <td>{d.kind}</td><td>{d.version ?? "–"}</td><td>{fmtDate(d.last_seen_at, locale)}</td>
                   <td><span className={`badge ${d.online ? "online" : "offline"}`}>{d.online ? t("p.online") : t("p.offline")}</span></td></tr>
               ))}
             </tbody>
@@ -244,11 +250,17 @@ export function Devices() {
             </>
           ) : (
             <form onSubmit={s.run(async () => {
-              const r = await api<{ token: string }>("/api/v1/devices", { body: { ...f, product_id: f.product_id || null } });
-              setToken(r.token); setF({ kind: "agent", name: "", product_id: "" }); reload();
+              const r = await api<{ token: string }>("/api/v1/devices", { body: { ...f, product_id: f.product_id || null, organization_id: f.organization_id || null } });
+              setToken(r.token); setF({ kind: "agent", name: "", product_id: "", organization_id: "" }); reload();
             })}>
               <div className="grid2">
                 <Field label="Name"><input required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+                <Field label={t("p.customer")}>
+                  <select value={f.organization_id} onChange={(e) => setF({ ...f, organization_id: e.target.value })}>
+                    <option value="">KM Code Craft (intern)</option>
+                    {orgs.data?.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                  </select>
+                </Field>
                 <Field label={t("p.device")}>
                   <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value, product_id: "" })}>
                     {["agent", "esp32", "ai_appliance", "pos"].map((k) => <option key={k}>{k}</option>)}
@@ -272,10 +284,12 @@ export function Devices() {
 }
 
 // ── Benutzer ────────────────────────────────────────────────────────────────
-type UserRow = { id: string; email: string; display_name: string; role: string; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null };
+type UserRow = { id: string; email: string; display_name: string; role: string; is_active: boolean; two_factor: boolean; mailbox: string | null; departments: string[]; last_login_at: string | null; must_change_password: boolean };
 
 export function Users() {
   const { t, locale } = useI18n();
+  const { me } = useAuth();
+  const mustChange = useMustChangeLabel();
   const { data, error, reload } = useApi<UserRow[]>("/api/v1/users");
   const depts = useApi<Dept[]>("/api/v1/departments");
   const orgs = useApi<{ id: string; name: string }[]>("/api/v1/organizations");
@@ -291,11 +305,12 @@ export function Users() {
       <div className="card" style={{ padding: 0 }}>
         {!data ? <Loading error={error} /> : (
           <table>
-            <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{t("p.mailbox")}</th><th>{t("p.role")}</th><th>{t("p.department")}</th><th>2FA</th><th>{t("p.last_seen")}</th></tr></thead>
+            <thead><tr><th>Name</th><th>{t("p.email")}</th><th>{t("p.mailbox")}</th><th>{t("p.role")}</th><th>{t("p.department")}</th><th>2FA</th><th>{t("p.last_seen")}</th><th /></tr></thead>
             <tbody>
               {data.map((u) => (
-                <tr key={u.id}><td>{u.display_name}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td><td>{u.departments.join(", ") || "–"}</td>
-                  <td>{u.two_factor ? "✅" : "—"}</td><td>{fmtDate(u.last_login_at, locale)}</td></tr>
+                <tr key={u.id}><td>{u.display_name}{u.must_change_password && <div className="muted" style={{ fontSize: ".8em" }}>⏳ {mustChange}</div>}</td><td>{u.email}</td><td>{u.mailbox ?? "–"}</td><td>{u.role}</td><td>{u.departments.join(", ") || "–"}</td>
+                  <td>{u.two_factor ? "✅" : "—"}</td><td>{fmtDate(u.last_login_at, locale)}</td>
+                  <td>{u.id !== me?.id && <ResetPassword userId={u.id} />}</td></tr>
               ))}
             </tbody>
           </table>

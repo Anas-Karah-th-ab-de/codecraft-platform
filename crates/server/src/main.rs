@@ -53,6 +53,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("{token}");
         return Ok(());
     }
+    // import-users <export-ordner> <liste.csv> : alte Benutzer übernehmen, je ein Einmal-Passwort
+    // reset-passwords <liste.csv> <email>…    : Einmal-Passwörter für bestehende Benutzer
+    // Die Liste wird mit Rechten 600 neu angelegt (nie überschrieben) – sicher übergeben, dann löschen.
+    if args.first().map(String::as_str) == Some("import-users") {
+        let (dir, out, skip) = match args.as_slice() {
+            [_, dir, out] => (dir, out, vec![]),
+            [_, dir, out, flag, list] if flag == "--skip" => {
+                (dir, out, list.split(',').map(|e| e.trim().to_lowercase()).collect())
+            }
+            _ => {
+                return Err(
+                    "Nutzung: codecraft-server import-users <export-ordner> <liste.csv> [--skip a@b.de,c@d.de]".into()
+                )
+            }
+        };
+        if std::path::Path::new(out).exists() {
+            return Err(format!("{out} existiert bereits").into());
+        }
+        let (created, skipped) = codecraft_server::legacy_users::import(&db, std::path::Path::new(dir), &skip).await?;
+        codecraft_server::legacy_users::write_list(std::path::Path::new(out), &created)?;
+        for s in &skipped {
+            eprintln!("übersprungen: {s}");
+        }
+        println!("{} Benutzer angelegt → {out}", created.len());
+        return Ok(());
+    }
+    if args.first().map(String::as_str) == Some("reset-passwords") {
+        let [_, out, emails @ ..] = args.as_slice() else {
+            return Err("Nutzung: codecraft-server reset-passwords <liste.csv> <email>…".into());
+        };
+        if emails.is_empty() || std::path::Path::new(out).exists() {
+            return Err("E-Mail-Adressen fehlen oder Liste existiert bereits".into());
+        }
+        let rows = codecraft_server::legacy_users::reset(&db, emails).await?;
+        codecraft_server::legacy_users::write_list(std::path::Path::new(out), &rows)?;
+        println!("{} Einmal-Passwörter → {out}", rows.len());
+        return Ok(());
+    }
     // mail-key : neuen Schlüssel für MAIL_ENC_KEY ausgeben
     if args.first().map(String::as_str) == Some("mail-key") {
         println!("{}", codecraft_server::mail::guard::new_key());

@@ -304,14 +304,15 @@ pub struct MailUser {
     pub address: String,
 }
 
-/// Anmeldung mit Postfach-Adresse oder Login-E-Mail. Mit aktivem 2FA nur per App-Passwort.
+/// Anmeldung mit Postfach-Adresse oder Login-E-Mail. Mit aktivem 2FA nur per App-Passwort;
+/// ein Einmal-Passwort (noch nicht geändert) gilt nicht für Mail.
 pub async fn authenticate(db: &PgPool, login: &str, password: &str) -> Option<MailUser> {
     let login = login.trim().to_lowercase();
     if blocked(&login) {
         return None;
     }
     let row: Option<(Uuid, Uuid, String, Option<String>, bool)> = sqlx::query_as(
-        "SELECT u.id, m.id, m.address, u.password_hash, u.totp_secret IS NOT NULL
+        "SELECT u.id, m.id, m.address, u.password_hash, u.totp_secret IS NOT NULL OR u.must_change_password
            FROM users u JOIN mailboxes m ON m.user_id = u.id
           WHERE u.is_active AND m.is_active AND (m.address = $1 OR lower(u.email) = $1)",
     )

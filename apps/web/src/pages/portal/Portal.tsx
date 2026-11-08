@@ -11,6 +11,7 @@ import { CommProvider } from "./Comm";
 import Chat, { useUnread } from "./Chat";
 import Mail, { AppPasswords, useMailUnread } from "./Mail";
 import Remote from "./Remote";
+import { CustomerAccess, ForcePassword } from "./Access";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -21,6 +22,7 @@ export default function Portal() {
   const { t } = useI18n();
   if (!ready) return <Loading />;
   if (!me) return <Login />;
+  if (me.must_change_password) return <ForcePassword />;
 
   const links: [string, Key, boolean][] = [
     ["", "p.dashboard", true],
@@ -34,6 +36,7 @@ export default function Portal() {
     ["stellen", "p.jobs", can(me, "jobs")],
     ["anfragen", "p.requests", can(me, "jobs")],
     ["geraete", "p.devices", can(me, "devices")],
+    ["fernzugriff", "p.access", me.role === "customer"],
     ["benutzer", "p.users", can(me, "users")],
     ["konto", "p.account", true],
   ];
@@ -71,6 +74,7 @@ export default function Portal() {
           <Route path="anfragen" element={<Requests />} />
           <Route path="geraete" element={<Devices />} />
           <Route path="geraete/:id" element={<Remote />} />
+          <Route path="fernzugriff" element={<CustomerAccess />} />
           <Route path="benutzer" element={<Users />} />
           <Route path="konto" element={<Account />} />
           <Route path="*" element={<Navigate to="/portal" replace />} />
