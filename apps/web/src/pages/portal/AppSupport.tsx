@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, useAuth } from "../../api";
 import { useI18n } from "../../i18n";
 import { Icon } from "../../icons";
-import { isApp, native, type AppInfo, type SupportStatus } from "../../native";
+import { native, type AppInfo, type SupportStatus, useIsApp } from "../../native";
 
 const ST = {
   de: {
@@ -48,6 +48,7 @@ const ST = {
 };
 
 export function AppSupport() {
+  const inApp = useIsApp();
   const { me } = useAuth();
   const { locale } = useI18n();
   const T = ST[locale];
@@ -59,9 +60,9 @@ export function AppSupport() {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const load = useCallback(() => {
-    if (!isApp()) return;
+    if (!inApp) return;
     native<AppInfo>("app_info").then((i) => { setInfo(i); setSt(i.support); }).catch(() => {});
-  }, []);
+  }, [inApp]);
   useEffect(() => {
     load();
     const t = window.setInterval(() => native<SupportStatus>("support_status").then(setSt).catch(() => {}), 5000);
@@ -70,7 +71,7 @@ export function AppSupport() {
     return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
   }, [load]);
 
-  if (!isApp()) return <div className="card muted"><Icon name="device" /> {T.notApp}</div>;
+  if (!inApp) return <div className="card muted"><Icon name="device" /> {T.notApp}</div>;
   const start = async () => {
     setBusy(true); setErr(null);
     try {

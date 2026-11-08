@@ -1269,3 +1269,10 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
   .callview { inset-inline-end: 12px; bottom: 12px; width: calc(100vw - 24px); }
   .ctrl-overlay { inset: 0; border-radius: 0; padding: 10px; }
 }
+
+/* Handy: Aufklapp-Menüs der Kopfzeile am Bildschirm ausrichten statt am Knopf (sonst links abgeschnitten) */
+@media (max-width: 640px) {
+  .bell-pop { position: fixed; top: calc(env(safe-area-inset-top, 0px) + 58px); inset-inline: 10px; width: auto; max-height: calc(100dvh - 80px); overflow: auto; }
+}
+
+@media (max-width: 520px) { .kind-grid { grid-template-columns: 1fr !important; } }

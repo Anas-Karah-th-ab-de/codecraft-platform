@@ -1,4 +1,5 @@
 // Brücke zur Portal-App (Tauri: Android, Windows, Linux). Im Browser ist `isApp()` false.
+import { useEffect, useState } from "react";
 import { api, type Me } from "./api";
 
 export type SupportStatus = { running: boolean; until: number | null; files: boolean; control: boolean; control_available?: boolean };
@@ -31,6 +32,13 @@ export async function waitApp(): Promise<boolean> {
     await new Promise((r) => setTimeout(r, 100));
   }
   return isApp();
+}
+
+/** React: läuft die Seite in der App? Aktualisiert sich, sobald die Brücke (Android: verzögert) da ist */
+export function useIsApp(): boolean {
+  const [app, setApp] = useState(isApp);
+  useEffect(() => { if (!app) waitApp().then((a) => { if (a) setApp(true); }); }, [app]);
+  return app;
 }
 
 export function native<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {

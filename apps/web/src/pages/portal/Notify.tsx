@@ -7,7 +7,7 @@ import { useI18n } from "../../i18n";
 import { Icon } from "../../icons";
 import { Filter, ListTools, matches, NoHits } from "../../ui";
 import { useComm } from "./Comm";
-import { ensureEnrolled, isApp, native } from "../../native";
+import { ensureEnrolled, isApp, native, waitApp } from "../../native";
 
 type L = "de" | "en" | "ar";
 const tri = (de: string, en: string, ar: string) => ({ de, en, ar });
@@ -223,7 +223,7 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
     reload(); reloadAnn();
     api<Prefs>("/api/v1/notifications/prefs").then(setPrefsState).catch(() => {});
     // Service Worker bereitstellen; ein vorhandenes Abo neu melden (Schlüssel/Benutzer könnten gewechselt haben)
-    if (!isApp()) registerSw().then(async () => {
+    if (!isApp() && !/; wv\)/.test(navigator.userAgent)) registerSw().then(async () => {
       if (pushSupported() && Notification.permission === "granted") {
         const sub = await currentSub();
         if (sub) { const j = sub.toJSON(); api("/api/v1/push/subscribe", { body: { endpoint: j.endpoint, keys: j.keys, label: deviceLabel() } }).catch(() => {}); }
@@ -495,7 +495,7 @@ function NotifySettings() {
   const [install, setInstall] = useState<any>(null);
   const loadDev = () => api<typeof devices>("/api/v1/push/devices").then(setDevices).catch(() => {});
   const check = useCallback(async () => {
-    if (isApp()) return setState("app");
+    if (await waitApp()) return setState("app");
     if (!pushSupported()) return setState("unsupported");
     if (Notification.permission === "denied") return setState("blocked");
     setState((await currentSub()) && Notification.permission === "granted" ? "on" : "off");

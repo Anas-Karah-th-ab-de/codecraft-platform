@@ -24,7 +24,7 @@ import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
 import { AppDownload } from "./AppDownload";
-import { isApp } from "../../native";
+import { isApp, useIsApp } from "../../native";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -64,6 +64,7 @@ type NavItem = [to: string, key: Key, show: boolean, group: number];
 
 export default function Portal() {
   const { me, ready, logout } = useAuth();
+  const inApp = useIsApp();
   const { t, locale } = useI18n();
   const T = PT[locale];
   const { pathname } = useLocation();
@@ -93,8 +94,8 @@ export default function Portal() {
     ["anfragen", "p.requests", can(me, "jobs"), 3],
     ["benutzer", "p.users", can(me, "users"), 4],
     ["konto", "p.account", true, 4],
-    ["support-zugriff", "p.remote_help", isApp(), 4],
-    ["app", "p.app", !isApp(), 4],
+    ["support-zugriff", "p.remote_help", inApp, 4],
+    ["app", "p.app", !inApp, 4],
     ["hilfe", "p.help", true, 4],
   ];
   const current = items.find((l) => l[0] === seg);
@@ -231,7 +232,8 @@ function Login() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"pw" | "2fa">("pw");
-  const [remember, setRemember] = useState(() => isApp() || matchMedia("(display-mode: standalone)").matches);
+  // In der App (Android-WebView: Brücke kommt evtl. erst später) und als installierte Web-App angemeldet bleiben
+  const [remember, setRemember] = useState(() => isApp() || /; wv\)/.test(navigator.userAgent) || matchMedia("(display-mode: standalone)").matches);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

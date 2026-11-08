@@ -1,6 +1,6 @@
 import { useI18n } from "../../i18n";
 import { Icon } from "../../icons";
-import { isApp } from "../../native";
+import { useIsApp } from "../../native";
 
 /** App-Downloads für Kunden und Mitarbeiter (Android-APK, Linux-.deb) */
 const AT = {
@@ -42,11 +42,12 @@ const AT = {
 export function AppDownload() {
   const { locale } = useI18n();
   const T = AT[locale];
+  const inApp = useIsApp();
   return (
     <div className="grid2">
       <div className="card">
         <p>{T.intro}</p>
-        {isApp() && <p className="note-ok">{T.inApp}</p>}
+        {inApp && <p className="note-ok">{T.inApp}</p>}
         <div className="dev-row">
           <Icon name="phone" />
           <div><b>{T.android}</b><small className="muted">{T.androidSub}</small></div>
