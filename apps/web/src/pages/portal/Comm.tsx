@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ringback, ringtone } from "./Notify";
 import { api, getToken, useAuth } from "../../api";
 import { RemoteScreen } from "./Remote";
-import { native, waitApp, type AppInfo } from "../../native";
+import { native, useIsApp, waitApp, type AppInfo } from "../../native";
 import { useI18n } from "../../i18n";
 
 export const TX = {
@@ -99,6 +99,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null);
   // Gerätesteuerung im Anruf: eigenes freigegebenes Gerät, Angebote der anderen, gerade geöffnete Ansicht
   const [ctrlMine, setCtrlMine] = useState<string | null>(null);
+  const inApp = useIsApp();
   const ctrlRef = useRef<string | null>(null);
   const [offers, setOffers] = useState<{ from: string; name: string; device: string }[]>([]);
   const [viewing, setViewing] = useState<string | null>(null);
@@ -197,17 +198,43 @@ export function CommProvider({ children }: { children: ReactNode }) {
     return s;
   };
 
-  const connectTo = async (room: string, peer: string) => {
-    if (pcs.current.has(peer)) return;
-    // ICE-Server (inkl. TURN-Zugang) frisch holen – Zugangsdaten laufen ab
+  // ICE-Server (inkl. TURN-Zugang, läuft ab) vor dem Anruf frisch holen – nicht erst beim Verbindungsaufbau
+  const refreshIce = async () => {
     try { ice.current = (await api<{ iceServers: RTCIceServer[] }>("/api/v1/chat/ice")).iceServers; } catch { /* alte behalten */ }
+  };
+  // Diagnose im Server-Log: Zustand und gewählter Verbindungsweg (direkt/relay), Medienfehler
+  const diag = (what: string, extra = "") => {
+    fetch(`/api/v1/app/diag?call=${encodeURIComponent(what)}${extra ? `&x=${encodeURIComponent(extra.slice(0, 200))}` : ""}`).catch(() => {});
+  };
+  const pathOf = async (p: RTCPeerConnection) => {
+    try {
+      const st = await p.getStats();
+      let pair: any = null; const cands = new Map<string, any>();
+      st.forEach((r: any) => {
+        if (r.type === "candidate-pair" && (r.nominated || r.selected) && r.state === "succeeded") pair = r;
+        if (r.type === "local-candidate" || r.type === "remote-candidate") cands.set(r.id, r);
+      });
+      if (!pair) return "kein Paar";
+      return `${cands.get(pair.localCandidateId)?.candidateType}>${cands.get(pair.remoteCandidateId)?.candidateType}`;
+    } catch { return "?"; }
+  };
+
+  const connectTo = async (room: string, peer: string) => {
+    // synchron eintragen: ein gleichzeitig eintreffendes Angebot darf keine zweite Verbindung anlegen
+    if (pcs.current.has(peer)) return;
     const p = new RTCPeerConnection({ iceServers: ice.current });
     pcs.current.set(peer, p);
     p.onicecandidate = (e) => { if (e.candidate) signal(room, peer, { kind: "ice", candidate: e.candidate.toJSON() }); };
-    p.ontrack = (e) => setRemotes((r) => ({ ...r, [peer]: e.streams[0] }));
+    p.ontrack = (e) => setRemotes((r) => ({ ...r, [peer]: e.streams[0] ?? new MediaStream([e.track]) }));
     p.onconnectionstatechange = () => {
-      if (p.connectionState === "connected") setCall((c) => (c ? { ...c, state: "live", startedAt: c.startedAt ?? Date.now() } : c));
-      if (p.connectionState === "failed") dropPeer(peer);
+      if (p.connectionState === "connected") {
+        setCall((c) => (c ? { ...c, state: "live", startedAt: c.startedAt ?? Date.now() } : c));
+        pathOf(p).then((w) => diag("connected", `${w} tracks=${p.getReceivers().filter((r) => r.track?.readyState === "live").length}`));
+      }
+      if (p.connectionState === "failed") {
+        diag("failed", `ice=${p.iceConnectionState} servers=${ice.current.length}`);
+        dropPeer(peer);
+      }
     };
     local.current?.getTracks().forEach((t) => p.addTrack(t, local.current!));
     if (myId < peer) {
@@ -258,7 +285,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
     if (callRef.current) return;
     const others = people.filter((p) => p.id !== myId);
     if (others.length === 0) return;
-    try { await media(m); } catch { setNotice(T.noMedia); return; }
+    try { await refreshIce(); await media(m); } catch (x) { diag("media", String((x as Error)?.name ?? x)); setNotice(T.noMedia); return; }
     setCall({ state: "outgoing", room, title, media: m, group, host: myId, invited: others, peers: [] });
     others.forEach((p) => signal(room, p.id, { kind: "ring", media: m, group, title }));
     ringTimer.current = window.setTimeout(() => { if (callRef.current?.state === "outgoing") end(true); }, 45000);
@@ -267,7 +294,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const accept = async () => {
     const c = callRef.current;
     if (!c) return;
-    try { await media(c.media); } catch { setNotice(T.noMedia); end(true); return; }
+    try { await refreshIce(); await media(c.media); } catch (x) { diag("media", String((x as Error)?.name ?? x)); setNotice(T.noMedia); end(true); return; }
     setCall({ ...c, state: "live" });
     signal(c.room, c.host, { kind: "accept" });
   };
@@ -426,7 +453,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
       {call && (
         <CallView call={call} T={T} local={localStream} remotes={remotes} muted={muted} camOff={camOff} sharing={sharing}
           onAccept={accept} onDecline={() => end(true)} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} onScreen={toggleScreen}
-          ctrlMine={!!ctrlMine} offers={offers} onShareCtrl={shareControl} onStopCtrl={() => stopControl()} onView={setViewing} />
+          inApp={inApp} ctrlMine={!!ctrlMine} offers={offers} onShareCtrl={shareControl} onStopCtrl={() => stopControl()} onView={setViewing} />
       )}
       {call && viewing && (
         <div className="ctrl-overlay" role="dialog">
@@ -458,7 +485,7 @@ const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).slice(0, 2).join
 function CallView(p: {
   call: Call; T: (typeof TX)["de"]; local: MediaStream | null; remotes: Record<string, MediaStream>; muted: boolean; camOff: boolean; sharing: boolean;
   onAccept: () => void; onDecline: () => void; onHangup: () => void; onMute: () => void; onCam: () => void; onScreen: () => void;
-  ctrlMine: boolean; offers: { from: string; name: string; device: string }[]; onShareCtrl: () => void; onStopCtrl: () => void; onView: (d: string) => void;
+  inApp: boolean; ctrlMine: boolean; offers: { from: string; name: string; device: string }[]; onShareCtrl: () => void; onStopCtrl: () => void; onView: (d: string) => void;
 }) {
   const { call, T } = p;
   const [, tick] = useState(0);
@@ -500,12 +527,12 @@ function CallView(p: {
           <>
             <button className={`cv-btn ${p.muted ? "on" : ""}`} onClick={p.onMute} aria-pressed={p.muted}>🎙 {p.muted ? T.unmute : T.mute}</button>
             {video && <button className={`cv-btn ${p.camOff ? "on" : ""}`} onClick={p.onCam} aria-pressed={p.camOff}>📷 {p.camOff ? T.camOn : T.camOff}</button>}
-            {video && live && "getDisplayMedia" in (navigator.mediaDevices ?? {}) && (
+            {video && live && "getDisplayMedia" in (navigator.mediaDevices ?? {}) && !p.inApp && (
               <button className={`cv-btn ${p.sharing ? "on" : ""}`} onClick={p.onScreen}>🖥 {p.sharing ? T.screenStop : T.screen}</button>
             )}
             {live && (p.ctrlMine
-              ? <button className="cv-btn on" onClick={p.onStopCtrl}>🖐 {T.ctrlStop}</button>
-              : <button className="cv-btn" onClick={p.onShareCtrl}>🖐 {T.ctrlShare}</button>)}
+              ? <button className="cv-btn on" onClick={p.onStopCtrl}>🖥 {T.screenStop}</button>
+              : <button className="cv-btn" onClick={p.onShareCtrl}>🖥 {p.inApp ? T.screen : T.ctrlShare}</button>)}
             {live && p.offers.map((o) => <button key={o.from} className="cv-btn ok" onClick={() => p.onView(o.device)}>🖥 {T.ctrlView(o.name)}</button>)}
             <button className="cv-btn end" onClick={p.onHangup}>✕ {T.hangup}</button>
           </>
