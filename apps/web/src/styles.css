@@ -1249,3 +1249,13 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
   .ml-check { width: 18px; }
   .reader-bar .btn small, .reader-bar .sep { display: none; }
 }
+
+/* ══ App: Support-Zugriff ═════════════════════════════════════════════════ */
+.support-state { display: flex; align-items: center; gap: 10px; padding: 12px 14px; margin: 12px 0 4px; border-radius: var(--r-2); background: var(--paper); }
+.support-state .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-3); flex: none; }
+.support-state.on { background: var(--warn-bg); color: var(--warn); }
+.support-state.on .dot { background: var(--red); box-shadow: 0 0 0 4px var(--red-soft); animation: pulse 1.6s infinite; }
+.support-card.live { border-color: var(--warn); }
+.support-card .note-ok { display: grid; gap: 6px; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
+@media (prefers-reduced-motion: reduce) { .support-state.on .dot { animation: none; } }

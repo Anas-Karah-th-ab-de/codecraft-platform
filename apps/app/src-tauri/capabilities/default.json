@@ -1,0 +1,15 @@
+{
+  "identifier": "default",
+  "description": "Startseite der App und das Portal (eigener Server) dürfen die App-Befehle nutzen",
+  "windows": ["main"],
+  "remote": {
+    "urls": [
+      "https://code-craft.tech/*",
+      "https://*.code-craft.tech/*",
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*",
+      "http://10.0.2.2:*/*"
+    ]
+  },
+  "permissions": ["core:default", "notification:default"]
+}

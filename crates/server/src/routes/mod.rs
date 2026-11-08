@@ -1,6 +1,7 @@
 pub mod access;
 pub mod account;
 pub mod announce;
+mod app;
 mod catalog;
 pub mod chat;
 mod devices;
@@ -64,6 +65,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/push/devices/{id}", delete(notify::delete_device))
         .route("/api/v1/events", get(notify::events))
         .route("/api/v1/me/locale", put(notify::set_locale))
+        .route("/api/v1/app/enroll", post(app::enroll))
         .route("/api/v1/account/tokens", get(notify::tokens).post(notify::create_token))
         .route("/api/v1/account/tokens/{id}", delete(notify::revoke_token))
         // Ankündigungen

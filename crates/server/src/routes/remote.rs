@@ -54,6 +54,13 @@ pub fn is_online(device: Uuid) -> bool {
     HUB.lock().unwrap().devices.contains_key(&device)
 }
 
+/// Verbindung eines (gesperrten/ersetzten) Geräts sofort trennen
+pub fn drop_device(device: Uuid) {
+    if let Some(c) = HUB.lock().unwrap().devices.remove(&device) {
+        let _ = c.tx.send(Message::Close(None));
+    }
+}
+
 fn send_to(device: Uuid, msg: &ToDevice) -> ApiResult<Capabilities> {
     let hub = HUB.lock().unwrap();
     let c = hub.devices.get(&device).ok_or_else(|| ApiError::BadRequest("Gerät ist nicht verbunden".into()))?;

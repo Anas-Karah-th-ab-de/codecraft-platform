@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n";
 import { Icon } from "../../icons";
 import { Filter, ListTools, matches, NoHits } from "../../ui";
 import { useComm } from "./Comm";
+import { ensureEnrolled, isApp, native } from "../../native";
 
 type L = "de" | "en" | "ar";
 const tri = (de: string, en: string, ar: string) => ({ de, en, ar });
@@ -51,7 +52,7 @@ export const NT = {
     sound: "Ton bei neuen Mitteilungen", dnd: "Nicht stören", dndOff: "aus", dnd1: "1 Stunde", dndEve: "bis morgen 8 Uhr", dndUntil: "bis",
     muted: "Ohne Ton und ohne Push (bleibt in der Liste)", devices: "Geräte mit Push", noDevices: "Noch keine Geräte.", remove: "Entfernen",
     lastOk: "zuletzt erreicht", never: "noch nie", read: "Gelesen", markUnread: "Als ungelesen", del: "Löschen", kind: "Art",
-    install: "App installieren", installHint: "Portal wie eine App auf Handy oder PC – mit Anrufen und Mitteilungen.", saved: "Gespeichert.",
+    inApp: "Sie nutzen die KM-Portal-App: Mitteilungen und Anrufe kommen über den App-Dienst – auch wenn die App geschlossen ist.", install: "App installieren", installHint: "Portal wie eine App auf Handy oder PC – mit Anrufen und Mitteilungen.", saved: "Gespeichert.",
     now: "gerade eben", min: (n: number) => `vor ${n} Min.`, hours: (n: number) => `vor ${n} Std.`, more: "Mehr laden",
   },
   en: {
@@ -63,7 +64,7 @@ export const NT = {
     sound: "Sound for new notifications", dnd: "Do not disturb", dndOff: "off", dnd1: "1 hour", dndEve: "until 8 am tomorrow", dndUntil: "until",
     muted: "No sound and no push (still listed)", devices: "Devices with push", noDevices: "No devices yet.", remove: "Remove",
     lastOk: "last reached", never: "never", read: "Read", markUnread: "Mark unread", del: "Delete", kind: "Type",
-    install: "Install app", installHint: "Use the portal like an app on phone or PC – with calls and notifications.", saved: "Saved.",
+    inApp: "You are using the KM Portal app: notifications and calls arrive through the app service – even when the app is closed.", install: "Install app", installHint: "Use the portal like an app on phone or PC – with calls and notifications.", saved: "Saved.",
     now: "just now", min: (n: number) => `${n} min ago`, hours: (n: number) => `${n} h ago`, more: "Load more",
   },
   ar: {
@@ -75,7 +76,7 @@ export const NT = {
     sound: "صوت للإشعارات الجديدة", dnd: "عدم الإزعاج", dndOff: "متوقف", dnd1: "ساعة واحدة", dndEve: "حتى الثامنة صباح الغد", dndUntil: "حتى",
     muted: "بدون صوت وبدون إشعار (تبقى في القائمة)", devices: "الأجهزة المفعّلة", noDevices: "لا توجد أجهزة بعد.", remove: "إزالة",
     lastOk: "آخر وصول", never: "أبداً", read: "مقروء", markUnread: "تعليم كغير مقروء", del: "حذف", kind: "النوع",
-    install: "تثبيت التطبيق", installHint: "استخدم البوابة كتطبيق على الهاتف أو الحاسوب – مع المكالمات والإشعارات.", saved: "تم الحفظ.",
+    inApp: "أنت تستخدم تطبيق KM Portal: تصل الإشعارات والمكالمات عبر خدمة التطبيق – حتى عندما يكون التطبيق مغلقاً.", install: "تثبيت التطبيق", installHint: "استخدم البوابة كتطبيق على الهاتف أو الحاسوب – مع المكالمات والإشعارات.", saved: "تم الحفظ.",
     now: "الآن", min: (n: number) => `قبل ${n} دقيقة`, hours: (n: number) => `قبل ${n} ساعة`, more: "تحميل المزيد",
   },
 };
@@ -222,13 +223,25 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
     reload(); reloadAnn();
     api<Prefs>("/api/v1/notifications/prefs").then(setPrefsState).catch(() => {});
     // Service Worker bereitstellen; ein vorhandenes Abo neu melden (Schlüssel/Benutzer könnten gewechselt haben)
-    registerSw().then(async () => {
+    if (!isApp()) registerSw().then(async () => {
       if (pushSupported() && Notification.permission === "granted") {
         const sub = await currentSub();
         if (sub) { const j = sub.toJSON(); api("/api/v1/push/subscribe", { body: { endpoint: j.endpoint, keys: j.keys, label: deviceLabel() } }).catch(() => {}); }
       }
     });
   }, [reload, reloadAnn, me?.id]);
+
+  // App: Installation anmelden; Seite aus einer Benachrichtigung öffnen
+  useEffect(() => {
+    if (!me || !isApp()) return;
+    ensureEnrolled(me).catch(() => {});
+    const take = () => native<string | null>("app_pending_url").then((u) => { if (u) nav(u); }).catch(() => {});
+    take();
+    const vis = () => { if (document.visibilityState === "visible") take(); };
+    window.addEventListener("km-app-open", take);
+    document.addEventListener("visibilitychange", vis);
+    return () => { window.removeEventListener("km-app-open", take); document.removeEventListener("visibilitychange", vis); };
+  }, [me, nav]);
 
   // Sprache für Push-Texte am Server merken
   useEffect(() => { if (me && me.locale !== locale) api("/api/v1/me/locale", { method: "PUT", body: { locale } }).catch(() => {}); }, [locale, me]);
@@ -476,12 +489,13 @@ function NotifySettings() {
   const T = NT[locale];
   const ctx = useNotify();
   const p = ctx.prefs;
-  const [state, setState] = useState<"on" | "off" | "blocked" | "unsupported" | "…">("…");
+  const [state, setState] = useState<"on" | "off" | "blocked" | "unsupported" | "app" | "…">("…");
   const [msg, setMsg] = useState<string | null>(null);
   const [devices, setDevices] = useState<{ id: string; label: string; host: string; last_ok_at: string | null }[]>([]);
   const [install, setInstall] = useState<any>(null);
   const loadDev = () => api<typeof devices>("/api/v1/push/devices").then(setDevices).catch(() => {});
   const check = useCallback(async () => {
+    if (isApp()) return setState("app");
     if (!pushSupported()) return setState("unsupported");
     if (Notification.permission === "denied") return setState("blocked");
     setState((await currentSub()) && Notification.permission === "granted" ? "on" : "off");
@@ -500,7 +514,7 @@ function NotifySettings() {
     <aside className="notes-side">
       <div className="card">
         <h3><Icon name="device" /> {T.thisDevice}</h3>
-        <p className="muted">{state === "on" ? T.pushOn : state === "blocked" ? T.pushBlocked : state === "unsupported" ? T.pushNo : T.pushOff}</p>
+        <p className="muted">{state === "app" ? T.inApp : state === "on" ? T.pushOn : state === "blocked" ? T.pushBlocked : state === "unsupported" ? T.pushNo : T.pushOff}</p>
         <div className="row">
           {state === "off" && <button className="btn small" onClick={() => enablePush().then(() => { check(); loadDev(); }).catch((e) => { setMsg(e.message); check(); })}><Icon name="bell" size={16} /> {T.enable}</button>}
           {state === "on" && <button className="btn small ghost" onClick={() => disablePush().then(() => { check(); loadDev(); })}>{T.disable}</button>}

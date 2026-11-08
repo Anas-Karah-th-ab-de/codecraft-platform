@@ -22,6 +22,8 @@ import Help, { PageHelp } from "./Help";
 import { AnnouncementBanner, Announcements, Bell, NotificationsPage, NotifyProvider, useNotify } from "./Notify";
 import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
+import { AppSupport } from "./AppSupport";
+import { isApp } from "../../native";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -33,7 +35,7 @@ const NAV_ICON: Record<string, string> = {
   "": "home", nachrichten: "chat", mail: "mail", mitteilungen: "bell", ankuendigungen: "megaphone", support: "support",
   "anfragen-entwicklung": "code", projekte: "folder", shop: "cart", kunden: "building", produkte: "box", geraete: "cpu",
   fernzugriff: "key", angebote: "quote", rechnungen: "receipt", arbeit: "clock", stellen: "briefcase", anfragen: "inbox2",
-  benutzer: "users", konto: "account", hilfe: "help",
+  benutzer: "users", konto: "account", hilfe: "help", "support-zugriff": "shield",
 };
 
 /** Seitenmenü eingeklappt? Eigene Wahl wird gemerkt; ohne Wahl klappt E-Mail automatisch ein (mehr Platz). */
@@ -90,6 +92,7 @@ export default function Portal() {
     ["anfragen", "p.requests", can(me, "jobs"), 3],
     ["benutzer", "p.users", can(me, "users"), 4],
     ["konto", "p.account", true, 4],
+    ["support-zugriff", "p.remote_help", isApp(), 4],
     ["hilfe", "p.help", true, 4],
   ];
   const current = items.find((l) => l[0] === seg);
@@ -182,7 +185,8 @@ export default function Portal() {
             <Route path="fernzugriff" element={<CustomerAccess />} />
             <Route path="benutzer" element={<Users />} />
             <Route path="konto" element={<Account />} />
-            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe", "mitteilungen", "ankuendigungen"].includes(l[0])).map((l) => t(l[1]))} />} />
+            <Route path="support-zugriff" element={<><h1>{t("p.remote_help")}</h1><AppSupport /></>} />
+            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe", "mitteilungen", "ankuendigungen", "support-zugriff"].includes(l[0])).map((l) => t(l[1]))} />} />
             <Route path="*" element={
               <div className="notfound" style={{ minHeight: "50vh" }}>
                 <div><BrokenTrace /><h1>404</h1><p>{T.nf}</p><Link className="btn" to="/portal">{T.back}</Link></div>
@@ -224,7 +228,7 @@ function Login() {
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"pw" | "2fa">("pw");
-  const [remember, setRemember] = useState(() => matchMedia("(display-mode: standalone)").matches);
+  const [remember, setRemember] = useState(() => isApp() || matchMedia("(display-mode: standalone)").matches);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 

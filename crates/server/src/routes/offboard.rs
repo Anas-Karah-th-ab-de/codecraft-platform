@@ -31,7 +31,8 @@ pub async fn handover_info(State(s): State<AppState>, user: User, Path(id): Path
            (SELECT count(*) FROM leave_requests WHERE user_id = $1 AND status = 'requested'),
            (SELECT count(*) FROM calendar_events WHERE created_by = $1 AND starts_at > now()),
            (SELECT count(*) FROM api_tokens WHERE user_id = $1 AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now())),
-           (SELECT count(*) FROM push_subscriptions WHERE user_id = $1),
+           (SELECT count(*) FROM push_subscriptions WHERE user_id = $1)
+             + (SELECT count(*) FROM devices WHERE owner_user_id = $1 AND revoked_at IS NULL),
            (SELECT count(*) FROM chat_members m JOIN chat_rooms r ON r.id = m.room_id WHERE m.user_id = $1 AND r.kind IN ('group','support','project')),
            (SELECT address FROM mailboxes WHERE user_id = $1),
            (SELECT count(*) FROM time_entries WHERE user_id = $1 AND ended_at IS NULL)",
@@ -133,6 +134,13 @@ pub async fn deactivate(
         .rows_affected();
     sqlx::query("DELETE FROM app_passwords WHERE user_id = $1").bind(id).execute(&mut *tx).await?;
     sqlx::query("DELETE FROM push_subscriptions WHERE user_id = $1").bind(id).execute(&mut *tx).await?;
+    // App-Installationen (Fernwartungs-Agent) widerrufen
+    let app_devices: Vec<Uuid> = sqlx::query_scalar(
+        "UPDATE devices SET revoked_at = now() WHERE owner_user_id = $1 AND revoked_at IS NULL RETURNING id",
+    )
+    .bind(id)
+    .fetch_all(&mut *tx)
+    .await?;
     // laufende Zeiterfassung beenden
     let timers = sqlx::query("UPDATE time_entries SET ended_at = now() WHERE user_id = $1 AND ended_at IS NULL")
         .bind(id)
@@ -252,8 +260,11 @@ pub async fn deactivate(
     .await?;
     tx.commit().await?;
 
-    // sofort trennen (Portal, App, VS Code)
+    // sofort trennen (Portal, App, VS Code, Fernwartungs-Agent der App)
     super::chat::kick_user(id);
+    for d in &app_devices {
+        super::remote::drop_device(*d);
+    }
     // Übernahme-Person informieren
     if let Some((to, _, _)) = &target {
         let mut body = vec![];

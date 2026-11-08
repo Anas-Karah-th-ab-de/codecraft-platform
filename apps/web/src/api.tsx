@@ -211,6 +211,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       /* egal */
     }
     try {
+      const { appLogout } = await import("./native");
+      await appLogout();
+    } catch {
+      /* egal */
+    }
+    try {
       await api("/api/v1/auth/logout", { method: "POST" });
     } catch {
       /* egal */

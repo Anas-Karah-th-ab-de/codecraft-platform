@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="control_label">KM Portal Fernsteuerung</string>
+    <string name="control_description">Erlaubt dem KM Code Craft Support, während einer von Ihnen freigegebenen Bildschirmsitzung zu tippen, zu wischen und Text einzugeben. Ohne aktive Freigabe passiert nichts.</string>
+</resources>

@@ -1,0 +1,10 @@
+/target/
+/gen/schemas/
+/gen/android/.gradle/
+/gen/android/**/build/
+/gen/android/app/src/main/jniLibs/
+/gen/android/local.properties
+/gen/android/app/src/main/java/tech/codecraft/portal/generated/
+*.keystore
+*.jks
+keystore.properties

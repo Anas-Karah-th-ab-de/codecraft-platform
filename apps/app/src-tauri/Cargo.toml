@@ -1,0 +1,47 @@
+[package]
+name = "km-portal"
+version = "0.1.0"
+description = "KM Code Craft Portal – App für Android, Windows und Linux"
+authors = ["Mohamad Anas Kara Mohamad <ak@code-craft.tech>"]
+edition = "2021"
+license = "UNLICENSED"
+rust-version = "1.85"
+
+# Eigener Workspace: Tauri/WebView-Abhängigkeiten bleiben aus dem Server-Build heraus
+[workspace]
+
+[lib]
+name = "km_portal_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-notification = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream", "json"] }
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+uuid = { version = "1", features = ["v4"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+codecraft-agent = { path = "../../../crates/agent" }
+codecraft-protocol = { path = "../../../crates/protocol", features = ["std"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+tauri-plugin-autostart = "2"
+
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+ndk-context = "0.1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+strip = true

@@ -2,11 +2,15 @@
 
 use codecraft_protocol::remote::InputEvent;
 
+#[cfg(target_os = "android")]
+mod android;
 #[cfg(target_os = "linux")]
 mod linux;
 #[cfg(windows)]
 mod windows;
 
+#[cfg(target_os = "android")]
+pub use android::{ask_consent, notify, Desktop};
 #[cfg(target_os = "linux")]
 pub use linux::{ask_consent, notify, Desktop};
 #[cfg(windows)]
