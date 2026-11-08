@@ -23,6 +23,7 @@ import { AnnouncementBanner, Announcements, Bell, NotificationsPage, NotifyProvi
 import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
+import { AppDownload } from "./AppDownload";
 import { isApp } from "../../native";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
@@ -35,7 +36,7 @@ const NAV_ICON: Record<string, string> = {
   "": "home", nachrichten: "chat", mail: "mail", mitteilungen: "bell", ankuendigungen: "megaphone", support: "support",
   "anfragen-entwicklung": "code", projekte: "folder", shop: "cart", kunden: "building", produkte: "box", geraete: "cpu",
   fernzugriff: "key", angebote: "quote", rechnungen: "receipt", arbeit: "clock", stellen: "briefcase", anfragen: "inbox2",
-  benutzer: "users", konto: "account", hilfe: "help", "support-zugriff": "shield",
+  benutzer: "users", konto: "account", hilfe: "help", "support-zugriff": "shield", app: "download",
 };
 
 /** Seitenmenü eingeklappt? Eigene Wahl wird gemerkt; ohne Wahl klappt E-Mail automatisch ein (mehr Platz). */
@@ -93,6 +94,7 @@ export default function Portal() {
     ["benutzer", "p.users", can(me, "users"), 4],
     ["konto", "p.account", true, 4],
     ["support-zugriff", "p.remote_help", isApp(), 4],
+    ["app", "p.app", !isApp(), 4],
     ["hilfe", "p.help", true, 4],
   ];
   const current = items.find((l) => l[0] === seg);
@@ -186,7 +188,8 @@ export default function Portal() {
             <Route path="benutzer" element={<Users />} />
             <Route path="konto" element={<Account />} />
             <Route path="support-zugriff" element={<><h1>{t("p.remote_help")}</h1><AppSupport /></>} />
-            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe", "mitteilungen", "ankuendigungen", "support-zugriff"].includes(l[0])).map((l) => t(l[1]))} />} />
+            <Route path="app" element={<><h1>{t("p.app")}</h1><AppDownload /></>} />
+            <Route path="hilfe" element={<Help areas={visible.filter((l) => !["", "konto", "hilfe", "mitteilungen", "ankuendigungen", "support-zugriff", "app"].includes(l[0])).map((l) => t(l[1]))} />} />
             <Route path="*" element={
               <div className="notfound" style={{ minHeight: "50vh" }}>
                 <div><BrokenTrace /><h1>404</h1><p>{T.nf}</p><Link className="btn" to="/portal">{T.back}</Link></div>
