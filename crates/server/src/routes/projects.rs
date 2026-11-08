@@ -7,10 +7,12 @@ use crate::auth::User;
 use crate::error::{ApiError, ApiResult};
 use crate::AppState;
 use axum::extract::{Path, State};
+use axum::http::StatusCode;
 use axum::Json;
 use chrono::{DateTime, NaiveDate, Utc};
 use codecraft_domain::access::Permission;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
 use uuid::Uuid;
 
 use super::invoices::InvoiceRow;
@@ -47,6 +49,10 @@ pub struct ProjectRow {
     /// Summe ausgestellter, nicht stornierter Rechnungen (EUR-Cent; nur EUR)
     pub invoiced_cents: i64,
     pub open_cents: i64,
+    /// 0–100: Anteil erledigter Meilensteine (ohne Meilensteine: manueller Wert)
+    pub progress: i32,
+    pub milestones_total: i64,
+    pub milestones_done: i64,
 }
 
 const PROJECT_SELECT: &str = "
@@ -59,7 +65,12 @@ const PROJECT_SELECT: &str = "
                AS invoiced_cents,
            COALESCE((SELECT sum(i.gross_cents) FROM invoices i WHERE i.project_id = p.id
                       AND i.kind = 'invoice' AND i.status = 'issued' AND i.currency = 'EUR'), 0)::bigint
-               AS open_cents
+               AS open_cents,
+           (SELECT CASE WHEN count(*) = 0 THEN p.progress::int
+                        ELSE (100 * count(*) FILTER (WHERE m.status = 'done') / count(*))::int END
+              FROM project_milestones m WHERE m.project_id = p.id) AS progress,
+           (SELECT count(*) FROM project_milestones m WHERE m.project_id = p.id) AS milestones_total,
+           (SELECT count(*) FROM project_milestones m WHERE m.project_id = p.id AND m.status = 'done') AS milestones_done
       FROM projects p LEFT JOIN organizations o ON o.id = p.organization_id";
 
 pub async fn list(State(s): State<AppState>, user: User) -> ApiResult<Json<Vec<ProjectRow>>> {
@@ -77,6 +88,28 @@ pub struct ProjectDetail {
     pub project: ProjectRow,
     pub invoices: Vec<InvoiceRow>,
     pub quotes: Vec<QuoteRow>,
+    pub milestones: Vec<MilestoneRow>,
+    pub updates: Vec<UpdateRow>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct MilestoneRow {
+    pub id: Uuid,
+    pub position: i32,
+    pub title: String,
+    pub description: String,
+    pub due_date: Option<NaiveDate>,
+    pub status: String,
+    pub done_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct UpdateRow {
+    pub id: Uuid,
+    pub author: Option<String>,
+    pub body: String,
+    pub for_customer: bool,
+    pub created_at: DateTime<Utc>,
 }
 
 pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<ProjectDetail>> {
@@ -111,7 +144,23 @@ pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) ->
     } else {
         (vec![], vec![])
     };
-    Ok(Json(ProjectDetail { project, invoices, quotes }))
+    let milestones = sqlx::query_as(
+        "SELECT id, position, title, description, due_date, status, done_at FROM project_milestones
+          WHERE project_id = $1 ORDER BY position, created_at",
+    )
+    .bind(id)
+    .fetch_all(&s.db)
+    .await?;
+    let updates = sqlx::query_as(
+        "SELECT x.id, u.display_name AS author, x.body, x.for_customer, x.created_at
+           FROM project_updates x LEFT JOIN users u ON u.id = x.author_id
+          WHERE x.project_id = $1 AND (x.for_customer OR $2) ORDER BY x.created_at DESC LIMIT 200",
+    )
+    .bind(id)
+    .bind(user.role.is_employee())
+    .fetch_all(&s.db)
+    .await?;
+    Ok(Json(ProjectDetail { project, invoices, quotes, milestones, updates }))
 }
 
 // ── Kostenvoranschläge ──────────────────────────────────────────────────────
@@ -287,4 +336,192 @@ pub async fn quote_pdf(
         bytes,
     )
         .into_response())
+}
+
+// ── Fortschritt pflegen (Team) ──────────────────────────────────────────────
+
+const PROJECT_STATUSES: [&str; 5] = ["planning", "active", "on_hold", "completed", "archived"];
+
+async fn project_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<(Option<Uuid>, String)> {
+    user.require(Permission::CustomerWrite, None)?;
+    sqlx::query_as("SELECT organization_id, name FROM projects WHERE id = $1")
+        .bind(id)
+        .fetch_optional(&s.db)
+        .await?
+        .ok_or(ApiError::NotFound)
+}
+
+async fn tell_customer(s: &AppState, org: Option<Uuid>, project: Uuid, name: &str) {
+    if let Some(o) = org {
+        super::shop::notify(&super::shop::org_users(s, o).await, "project", "update", project, "", name);
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ProjectPatch {
+    pub status: Option<String>,
+    pub progress: Option<i16>,
+    pub target_date: Option<NaiveDate>,
+}
+
+pub async fn patch(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<ProjectPatch>,
+) -> ApiResult<StatusCode> {
+    let (org, name) = project_org(&s, &user, id).await?;
+    if b.status.as_deref().is_some_and(|x| !PROJECT_STATUSES.contains(&x))
+        || b.progress.is_some_and(|p| !(0..=100).contains(&p))
+    {
+        return Err(ApiError::BadRequest("Status oder Fortschritt ungültig".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "UPDATE projects SET status = COALESCE($2, status), progress = COALESCE($3, progress),
+                target_date = COALESCE($4, target_date),
+                completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, now()) ELSE completed_at END
+          WHERE id = $1",
+    )
+    .bind(id)
+    .bind(&b.status)
+    .bind(b.progress)
+    .bind(b.target_date)
+    .execute(&mut *tx)
+    .await?;
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "update",
+        "project",
+        id,
+        json!({ "status": b.status, "progress": b.progress }),
+    )
+    .await?;
+    tx.commit().await?;
+    tell_customer(&s, org, id, &name).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub struct NewMilestone {
+    pub title: String,
+    #[serde(default)]
+    pub description: String,
+    pub due_date: Option<NaiveDate>,
+}
+
+pub async fn add_milestone(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<NewMilestone>,
+) -> ApiResult<(StatusCode, Json<serde_json::Value>)> {
+    project_org(&s, &user, id).await?;
+    let title = b.title.trim();
+    if title.is_empty() || title.chars().count() > 200 {
+        return Err(ApiError::BadRequest("Titel 1–200 Zeichen".into()));
+    }
+    let mid = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO project_milestones (id, project_id, position, title, description, due_date)
+         VALUES ($1, $2, (SELECT COALESCE(max(position), 0) + 1 FROM project_milestones WHERE project_id = $2), $3, $4, $5)",
+    )
+    .bind(mid)
+    .bind(id)
+    .bind(title)
+    .bind(b.description.trim())
+    .bind(b.due_date)
+    .execute(&s.db)
+    .await?;
+    Ok((StatusCode::CREATED, Json(json!({ "id": mid }))))
+}
+
+#[derive(Deserialize)]
+pub struct MilestonePatch {
+    pub status: Option<String>,
+    pub title: Option<String>,
+    pub due_date: Option<NaiveDate>,
+}
+
+pub async fn patch_milestone(
+    State(s): State<AppState>,
+    user: User,
+    Path(mid): Path<Uuid>,
+    Json(b): Json<MilestonePatch>,
+) -> ApiResult<StatusCode> {
+    let pid: Uuid = sqlx::query_scalar("SELECT project_id FROM project_milestones WHERE id = $1")
+        .bind(mid)
+        .fetch_optional(&s.db)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    let (org, name) = project_org(&s, &user, pid).await?;
+    if b.status.as_deref().is_some_and(|x| !matches!(x, "planned" | "in_progress" | "done")) {
+        return Err(ApiError::BadRequest("Status ungültig".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "UPDATE project_milestones SET status = COALESCE($2, status), title = COALESCE($3, title),
+                due_date = COALESCE($4, due_date),
+                done_at = CASE WHEN COALESCE($2, status) = 'done' THEN COALESCE(done_at, now()) ELSE NULL END
+          WHERE id = $1",
+    )
+    .bind(mid)
+    .bind(&b.status)
+    .bind(b.title.as_deref().map(str::trim).filter(|t| !t.is_empty()))
+    .bind(b.due_date)
+    .execute(&mut *tx)
+    .await?;
+    super::audit(&mut tx, &user.actor(), "milestone", "project", pid, json!({ "milestone": mid, "status": b.status }))
+        .await?;
+    tx.commit().await?;
+    tell_customer(&s, org, pid, &name).await;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn delete_milestone(State(s): State<AppState>, user: User, Path(mid): Path<Uuid>) -> ApiResult<StatusCode> {
+    let pid: Uuid = sqlx::query_scalar("SELECT project_id FROM project_milestones WHERE id = $1")
+        .bind(mid)
+        .fetch_optional(&s.db)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    project_org(&s, &user, pid).await?;
+    sqlx::query("DELETE FROM project_milestones WHERE id = $1").bind(mid).execute(&s.db).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[derive(Deserialize)]
+pub struct NewUpdate {
+    pub body: String,
+    #[serde(default = "yes")]
+    pub for_customer: bool,
+}
+
+fn yes() -> bool {
+    true
+}
+
+pub async fn add_update(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    Json(b): Json<NewUpdate>,
+) -> ApiResult<StatusCode> {
+    let (org, name) = project_org(&s, &user, id).await?;
+    let body = b.body.trim();
+    if body.is_empty() || body.len() > 20000 {
+        return Err(ApiError::BadRequest("Text fehlt oder ist zu lang".into()));
+    }
+    sqlx::query("INSERT INTO project_updates (id, project_id, author_id, body, for_customer) VALUES ($1,$2,$3,$4,$5)")
+        .bind(Uuid::now_v7())
+        .bind(id)
+        .bind(user.id)
+        .bind(body)
+        .bind(b.for_customer)
+        .execute(&s.db)
+        .await?;
+    if b.for_customer {
+        tell_customer(&s, org, id, &name).await;
+    }
+    Ok(StatusCode::NO_CONTENT)
 }

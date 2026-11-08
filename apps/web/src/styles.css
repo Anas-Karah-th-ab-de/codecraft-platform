@@ -942,3 +942,24 @@ table.tickets tr.overdue td { background: #fef2f2; }
 .tmsg.team { align-self: flex-end; background: #e0f2fe; }
 .tmsg.internal { background: #fef9c3; border: 1px dashed #ca8a04; }
 .tmsg .tbody { white-space: pre-wrap; word-break: break-word; margin-top: 4px; }
+
+/* Fortschritt, Shop, Anfragen */
+.pbar { position: relative; height: 18px; border-radius: 9px; background: #e2e8f0; overflow: hidden; }
+.pbar i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(90deg, #2563eb, #16a34a); border-radius: 9px; transition: width .4s; }
+[dir=rtl] .pbar i { inset: 0 0 0 auto; }
+.pbar span { position: relative; display: block; text-align: center; font-size: .75em; font-weight: 700; line-height: 18px; color: #0f172a; }
+.milestones { list-style: none; padding: 0; margin: 8px 0; }
+.milestones li { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e7eb; }
+.ms-dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: #e2e8f0; font-weight: 700; flex: none; }
+.ms-done .ms-dot { background: #16a34a; color: #fff; } .ms-in_progress .ms-dot { background: #f59e0b; color: #fff; }
+.pupd { padding: 10px 0; border-bottom: 1px solid #e5e7eb; } .pupd.internal { background: #fef9c3; padding: 10px; border-radius: 8px; }
+.shop { display: grid; grid-template-columns: 1fr 320px; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .shop { grid-template-columns: 1fr; } }
+.shop-item img { width: 100%; height: 150px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; }
+.shop-price { padding: 8px 0; border-top: 1px solid #e5e7eb; gap: 8px; }
+.cart { position: sticky; top: 12px; } .cart-line { padding: 6px 0; border-bottom: 1px solid #e5e7eb; gap: 8px; font-size: .9em; }
+.badge.ord-requested, .badge.req-submitted { background: #dbeafe; color: #1e40af; }
+.badge.ord-confirmed, .badge.req-in_review, .badge.req-quoted { background: #fef3c7; color: #92400e; }
+.badge.ord-invoiced, .badge.req-accepted, .badge.req-in_progress { background: #ede9fe; color: #5b21b6; }
+.badge.ord-delivered, .badge.req-done { background: #dcfce7; color: #166534; }
+.badge.ord-cancelled, .badge.req-rejected { background: #f1f5f9; color: #64748b; }

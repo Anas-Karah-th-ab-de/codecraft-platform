@@ -3,6 +3,7 @@ import { Link, Route, Routes, useParams } from "react-router-dom";
 import { openPdf, useApi } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
 import { Badge, Loading } from "../../ui";
+import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
 
 type InvRow = {
   id: string; number: string | null; status: string; kind: string; currency: string; gross_cents: number | null;
@@ -12,6 +13,7 @@ type Project = {
   id: string; organization_id: string | null; organization_name: string | null; name: string; slug: string; code: string | null;
   description: string; status: string; repo_url: string | null; start_date: string | null; target_date: string | null;
   invoice_count: number; quote_count: number; invoiced_cents: number; open_cents: number;
+  progress: number; milestones_total: number; milestones_done: number;
 };
 type QuoteRow = {
   id: string; organization_id: string; organization_name: string; project_id: string | null; project_name: string | null;
@@ -62,6 +64,7 @@ function ProjectList() {
               <div className="row between"><Badge s={p.status} />{p.code && <code className="muted">{p.code}</code>}</div>
               <h3>{p.name}</h3>
               <div className="muted">{p.organization_name ?? t("p.internal")}</div>
+              {(p.milestones_total > 0 || p.progress > 0) && <div style={{ margin: "8px 0" }}><ProgressBar value={p.progress} /></div>}
               <div className="row between proj-num">
                 <span>{p.invoice_count} {t("p.invoices")} · {p.quote_count} {t("p.quotes")}</span>
                 {p.invoiced_cents > 0 && <b>{money(p.invoiced_cents, locale, "EUR")}</b>}
@@ -78,7 +81,7 @@ function ProjectList() {
 function ProjectDetail() {
   const { id } = useParams();
   const { t, locale } = useI18n();
-  const { data: p, error } = useApi<Project & { invoices: InvRow[]; quotes: QuoteRow[] }>(`/api/v1/projects/${id}`, [id]);
+  const { data: p, error, reload } = useApi<Project & { invoices: InvRow[]; quotes: QuoteRow[]; milestones: Milestone[]; updates: Update[] }>(`/api/v1/projects/${id}`, [id]);
   if (!p) return <Loading error={error} />;
   return (
     <>
@@ -87,6 +90,7 @@ function ProjectDetail() {
         <h1 style={{ margin: 0 }}>{p.name}</h1><Badge s={p.status} />
       </div>
       {p.description && <p className="muted" style={{ whiteSpace: "pre-line" }}>{p.description}</p>}
+      <ProjectProgress projectId={p.id} progress={p.progress} milestones={p.milestones} updates={p.updates} onChange={reload} />
       <div className="grid2" style={{ margin: "16px 0" }}>
         <div className="card"><div className="muted">{t("p.customer")}</div><b>{p.organization_name ?? t("p.internal")}</b></div>
         <div className="card"><div className="muted">{t("p.period")}</div><b>{fmtDate(p.start_date, locale)}</b> → {fmtDate(p.target_date, locale)}</div>

@@ -13,6 +13,8 @@ import Mail, { AppPasswords, useMailUnread } from "./Mail";
 import Remote from "./Remote";
 import { CustomerAccess, ForcePassword } from "./Access";
 import Tickets from "./Tickets";
+import Shop from "./Shop";
+import DevRequests from "./DevRequests";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -29,6 +31,8 @@ export default function Portal() {
     ["", "p.dashboard", true],
     ["nachrichten", "p.messages", true],
     ["support", "p.support", true],
+    ["shop", "p.shop", true],
+    ["anfragen-entwicklung", "p.dev", true],
     ["mail", "p.mail", me.is_employee],
     ["projekte", "p.projects", true],
     ["angebote", "p.quotes", true],
@@ -67,6 +71,8 @@ export default function Portal() {
           <Route index element={<Dashboard />} />
           <Route path="nachrichten" element={<Chat />} />
           <Route path="support/*" element={<Tickets />} />
+          <Route path="shop" element={<Shop />} />
+          <Route path="anfragen-entwicklung/*" element={<DevRequests />} />
           <Route path="mail" element={<Mail />} />
           <Route path="projekte/*" element={<Projects />} />
           <Route path="angebote/*" element={<Quotes />} />

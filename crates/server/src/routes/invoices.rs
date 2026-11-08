@@ -382,6 +382,49 @@ pub async fn create_draft(
     Ok((StatusCode::CREATED, Json(d)))
 }
 
+/// Rechnungsentwurf aus Katalogpreisen (z. B. aus einer Shop-Bestellung): `(price_id, Menge)`.
+/// MwSt. 19 % – abweichende Steuerfälle passt die Buchhaltung im Entwurf an.
+pub(crate) async fn draft_from_catalog(
+    conn: &mut PgConnection,
+    actor: &str,
+    organization_id: Uuid,
+    currency: &str,
+    lines: &[(Uuid, i64)],
+    notes: &str,
+) -> ApiResult<Uuid> {
+    let (locale,): (String,) = sqlx::query_as("SELECT locale FROM organizations WHERE id = $1")
+        .bind(organization_id)
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or_else(|| ApiError::BadRequest("Organisation existiert nicht".into()))?;
+    let inputs = lines
+        .iter()
+        .map(|(price_id, qty)| ItemInput {
+            price_id: Some(*price_id),
+            description: None,
+            quantity_milli: qty * 1000,
+            unit: None,
+            unit_price: None,
+            vat_rate_bp: 1900,
+        })
+        .collect();
+    let items = resolve(conn, &locale, currency, inputs).await?;
+    let id = Uuid::now_v7();
+    sqlx::query(
+        "INSERT INTO invoices (id, organization_id, currency, tax_mode, locale, notes) VALUES ($1, $2, $3, 'standard', $4, $5)",
+    )
+    .bind(id)
+    .bind(organization_id)
+    .bind(currency)
+    .bind(&locale)
+    .bind(notes)
+    .execute(&mut *conn)
+    .await?;
+    insert_items(conn, id, &items).await?;
+    super::audit(conn, actor, "create_draft", "invoice", id, json!({ "source": "order" })).await?;
+    Ok(id)
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ListQuery {
     pub status: Option<String>,

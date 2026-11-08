@@ -10,6 +10,8 @@ pub mod media;
 mod organizations;
 mod projects;
 pub mod remote;
+mod requests;
+mod shop;
 pub mod tickets;
 
 use crate::AppState;
@@ -68,7 +70,18 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/invoices/{id}/pdf", get(invoices::pdf))
         // Projekte & Kostenvoranschläge
         .route("/api/v1/projects", get(projects::list))
-        .route("/api/v1/projects/{id}", get(projects::get))
+        .route("/api/v1/projects/{id}", get(projects::get).patch(projects::patch))
+        .route("/api/v1/projects/{id}/milestones", post(projects::add_milestone))
+        .route("/api/v1/projects/{id}/updates", post(projects::add_update))
+        .route("/api/v1/milestones/{id}", patch(projects::patch_milestone).delete(projects::delete_milestone))
+        // Shop & Entwicklungsanfragen
+        .route("/api/v1/orders", get(shop::list).post(shop::create))
+        .route("/api/v1/orders/{id}", patch(shop::patch))
+        .route("/api/v1/orders/{id}/invoice", post(shop::invoice))
+        .route("/api/v1/dev-requests", get(requests::list).post(requests::create))
+        .route("/api/v1/dev-requests/{id}", get(requests::get).patch(requests::patch))
+        .route("/api/v1/dev-requests/{id}/messages", post(requests::reply))
+        .route("/api/v1/dev-requests/{id}/project", post(requests::to_project))
         .route("/api/v1/quotes", get(projects::list_quotes))
         .route("/api/v1/quotes/{id}", get(projects::get_quote))
         .route("/api/v1/quotes/{id}/pdf", get(projects::quote_pdf))
