@@ -1282,3 +1282,8 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .pay-qr { margin: 0; text-align: center; }
 .pay-qr img { width: 150px; max-width: 42vw; height: auto; border-radius: 10px; display: block; margin: 0 auto 4px; }
 .pay-qr figcaption { font-size: .8em; max-width: 170px; }
+
+/* App-Update-Hinweis */
+.update-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--gold, #c9a227); }
+.update-banner small { display: block; }

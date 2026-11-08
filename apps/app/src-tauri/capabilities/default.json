@@ -23,6 +23,7 @@
     "allow-support-stop",
     "allow-support-status",
     "allow-control-settings",
-    "allow-open-file"
+    "allow-open-file",
+    "allow-open-url"
   ]
 }

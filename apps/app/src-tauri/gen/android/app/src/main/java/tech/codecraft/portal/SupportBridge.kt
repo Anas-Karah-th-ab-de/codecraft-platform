@@ -102,6 +102,17 @@ object SupportBridge {
         }
     }
 
+    /** https-Link im Browser öffnen */
+    @JvmStatic fun openUrl(url: String): Boolean {
+        val c = app ?: return false
+        return try {
+            c.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     /** Datei aus dem Cache per FileProvider an eine passende App geben */
     @JvmStatic fun openFile(path: String, mime: String): Boolean {
         val c = app ?: return false

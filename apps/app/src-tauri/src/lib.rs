@@ -144,6 +144,26 @@ fn control_available() -> bool {
 
 // ── Befehle für das Portal ──────────────────────────────────────────────────
 
+/// Link außerhalb der App öffnen (z. B. App-Update) – nur https auf dem eigenen Server
+#[tauri::command]
+fn open_url(state: State<AppState>, url: String) -> Result<(), String> {
+    let server = state.snapshot().server;
+    let base = if server.is_empty() { DEFAULT_SERVER.to_string() } else { server };
+    let ok = url.starts_with("https://") && (url.starts_with(&format!("{}/", base.trim_end_matches('/'))) || url.starts_with("https://code-craft.tech/"));
+    if !ok {
+        return Err("Link nicht erlaubt".into());
+    }
+    #[cfg(target_os = "android")]
+    {
+        if !android::open_url(&url) {
+            return Err("Kein Browser gefunden".into());
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    desktop::open_path(std::path::Path::new(&url));
+    Ok(())
+}
+
 /// Datei aus dem Portal (PDF, Mail-Anhang, Chat-Datei) speichern und mit der passenden App öffnen.
 /// Die WebView kann Blob-Downloads/-Fenster nicht selbst anzeigen.
 #[tauri::command]
@@ -171,6 +191,16 @@ fn open_file(app: AppHandle, name: String, mime: String, data: String) -> Result
         .or_else(|_| app.path().app_cache_dir())
         .map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    #[cfg(target_os = "android")]
+    if let Ok(entries) = std::fs::read_dir(&dir) {
+        // geöffnete Dateien nicht dauerhaft im App-Speicher liegen lassen
+        for e in entries.flatten() {
+            let old = e.metadata().and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|a| a.as_secs() > 24 * 3600);
+            if old {
+                let _ = std::fs::remove_file(e.path());
+            }
+        }
+    }
     let path = dir.join(&safe);
     std::fs::write(&path, &bytes).map_err(|e| e.to_string())?;
     let shown = path.to_string_lossy().to_string();
@@ -194,7 +224,7 @@ fn open_file(app: AppHandle, name: String, mime: String, data: String) -> Result
 struct Info {
     app: bool,
     platform: &'static str,
-    version: &'static str,
+    version: String,
     server: String,
     install_id: String,
     enrolled: bool,
@@ -203,12 +233,12 @@ struct Info {
 }
 
 #[tauri::command]
-fn app_info(state: State<AppState>) -> Info {
+fn app_info(app: AppHandle, state: State<AppState>) -> Info {
     let c = state.snapshot();
     Info {
         app: true,
         platform: platform(),
-        version: env!("CARGO_PKG_VERSION"),
+        version: app.package_info().version.to_string(),
         server: c.server,
         install_id: c.install_id,
         enrolled: c.key.is_some() && c.device_token.is_some(),
@@ -395,7 +425,8 @@ pub fn run() {
             support_stop,
             support_status,
             control_settings,
-            open_file
+            open_file,
+            open_url
         ])
         .run(tauri::generate_context!())
         .expect("App konnte nicht starten");

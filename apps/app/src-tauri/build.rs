@@ -11,6 +11,7 @@ const COMMANDS: &[&str] = &[
     "support_status",
     "control_settings",
     "open_file",
+    "open_url",
 ];
 
 fn main() {

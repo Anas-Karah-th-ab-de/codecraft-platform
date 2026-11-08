@@ -72,3 +72,12 @@ pub fn open_file(path: &str, mime: &str) -> bool {
     })
     .unwrap_or(false)
 }
+
+/// https-Link im Browser öffnen (App-Update: Download startet dort, danach installieren)
+pub fn open_url(url: &str) -> bool {
+    with_bridge(|env, cls| {
+        let u = env.new_string(url)?;
+        env.call_static_method(cls, "openUrl", "(Ljava/lang/String;)Z", &[JValue::Object(&u)])?.z()
+    })
+    .unwrap_or(false)
+}

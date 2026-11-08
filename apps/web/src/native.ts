@@ -87,7 +87,13 @@ const toBase64 = (b: Blob) => new Promise<string>((ok, fail) => {
 /** Datei ausliefern: in der App speichern und mit der passenden App öffnen, im Browser herunterladen */
 export async function deliverBlob(blob: Blob, name: string): Promise<void> {
   if (isApp()) {
-    await native("open_file", { name, mime: blob.type || "application/octet-stream", data: await toBase64(blob) });
+    try {
+      await native("open_file", { name, mime: blob.type || "application/octet-stream", data: await toBase64(blob) });
+    } catch (x) {
+      const m = String((x as Error)?.message ?? x);
+      fetch(`/api/v1/app/diag?file=${encodeURIComponent(m.slice(0, 200))}`).catch(() => {});
+      alert(m.includes("not allowed") ? "Bitte die neueste KM-Portal-App installieren (Portal → App herunterladen)." : m);
+    }
     return;
   }
   const u = URL.createObjectURL(blob);

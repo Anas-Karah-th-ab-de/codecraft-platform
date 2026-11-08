@@ -23,7 +23,7 @@ import { AnnouncementBanner, Announcements, Bell, NotificationsPage, NotifyProvi
 import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
-import { AppDownload } from "./AppDownload";
+import { AppDownload, UpdateBanner } from "./AppDownload";
 import { isApp, useIsApp } from "../../native";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
@@ -166,6 +166,7 @@ export default function Portal() {
         </header>
         <section className={`main ${seg === "mail" ? "wide" : ""}`}>
           <AnnouncementBanner />
+          <UpdateBanner />
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="nachrichten" element={<Chat />} />

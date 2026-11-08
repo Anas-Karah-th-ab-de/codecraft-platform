@@ -57,10 +57,15 @@ as 'cd ~/codecraft-platform/apps/app/src-tauri && cargo tauri icon icons/icon.pn
 # Zwei Varianten: Play Protect blockiert Sideload-Apps mit Bedienungshilfe (BIND_ACCESSIBILITY_SERVICE).
 #  km-portal.apk               – Standard ohne Fernsteuerung (Support sieht nur zu), für alle
 #  km-portal-fernsteuerung.apk – mit Bedienungshilfe (tippen/wischen), gleiche App-ID, ersetzt die Standard-App
+# fortlaufende Build-Nummer → Version 0.1.N (Android-versionCode steigt mit), damit die App Updates erkennt
+N=$(( $(cat $B/build-number 2>/dev/null || echo 1) + 1 )); echo $N > $B/build-number; chown builder: $B/build-number
+VERSION="0.1.$N"
+log "Version $VERSION"
 build() {
-  as 'cd ~/codecraft-platform/apps/app/src-tauri
+  sudo -u builder -H env VERSION="$VERSION" bash -lc 'cd ~/codecraft-platform/apps/app/src-tauri
 cp ~/keys/keystore.properties gen/android/keystore.properties
-nice -n 10 cargo tauri android build --apk --target aarch64 --target armv7 2>&1 | grep -vE "^\s+(Compiling|Downloaded|Downloading)" | grep -E "error|Error|FAIL|Finished|BUILD|went wrong" | tail -15' >&2
+nice -n 10 cargo tauri android build --apk --target aarch64 --target armv7 --config "{\"version\":\"$VERSION\"}" 2>&1 \
+  | grep -vE "^\s+(Compiling|Downloaded|Downloading)" | grep -E "error|Error|FAIL|Finished|BUILD|went wrong" | tail -15' >&2
   ls -t $B/codecraft-platform/apps/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1
 }
 G=$B/codecraft-platform/apps/app/src-tauri/gen/android
@@ -90,4 +95,8 @@ for f in km-portal.apk km-portal-fernsteuerung.apk; do
   echo "$f: $(stat -c %s /var/www/downloads/$f) Bytes, ControlService-Einträge: $n"
   JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 $BT/apksigner verify /var/www/downloads/$f && echo "  Signatur ok"
 done
+# Versionsdatei für das Update-Angebot in der App
+printf '{"android":{"version":"%s","standard":"/downloads/km-portal.apk","control":"/downloads/km-portal-fernsteuerung.apk","sha256":"%s"},"built":"%s"}\n' \
+  "$VERSION" "$(sha256sum /var/www/downloads/km-portal.apk | cut -d" " -f1)" "$(date -u +%FT%TZ)" > /var/www/downloads/app-version.json
+chmod 644 /var/www/downloads/app-version.json; cat /var/www/downloads/app-version.json
 log "fertig"
