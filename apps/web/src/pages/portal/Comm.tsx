@@ -5,6 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ringback, ringtone } from "./Notify";
 import { api, getToken, useAuth } from "../../api";
+import { RemoteScreen } from "./Remote";
+import { native, waitApp, type AppInfo } from "../../native";
 import { useI18n } from "../../i18n";
 
 export const TX = {
@@ -17,7 +19,7 @@ export const TX = {
     hangup: "Auflegen", mute: "Stumm", unmute: "Ton an", camOff: "Kamera aus", camOn: "Kamera an",
     callAudio: "Anruf", callVideo: "Videoanruf", missed: "Verpasster Anruf", declined: "Anruf abgelehnt", busy: "Besetzt",
     noMedia: "Kein Zugriff auf Mikrofon/Kamera. Bitte im Browser erlauben.", conn: "Verbindung wird hergestellt …",
-    mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", remind: "Erinnerung", startsIn: (m: number) => (m <= 0 ? "beginnt jetzt" : m < 60 ? `beginnt in ${m} Minuten` : m < 1440 ? `beginnt in ${Math.round(m / 60)} Std.` : "beginnt morgen"), joinNow: "Meeting beitreten", ok: "OK", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden",
+    mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", remind: "Erinnerung", startsIn: (m: number) => (m <= 0 ? "beginnt jetzt" : m < 60 ? `beginnt in ${m} Minuten` : m < 1440 ? `beginnt in ${Math.round(m / 60)} Std.` : "beginnt morgen"), joinNow: "Meeting beitreten", ok: "OK", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden", ctrlShare: "Steuerung freigeben", ctrlStop: "Freigabe beenden", ctrlView: (n: string) => `${n} steuern`, ctrlOffered: (n: string) => `${n} gibt das Gerät zur Steuerung frei`, ctrlAppOnly: "Steuerung freigeben geht in der KM-Portal-App (Handy/PC).", ctrlFail: "Freigabe nicht möglich", ctrlClose: "Schließen",
   },
   en: {
     title: "Messages", newChat: "New chat", search: "Search …", empty: "Pick a chat on the left or start a new one.",
@@ -28,7 +30,7 @@ export const TX = {
     hangup: "Hang up", mute: "Mute", unmute: "Unmute", camOff: "Camera off", camOn: "Camera on",
     callAudio: "Call", callVideo: "Video call", missed: "Missed call", declined: "Call declined", busy: "Busy",
     noMedia: "No access to microphone/camera. Please allow it in your browser.", conn: "Connecting …",
-    mailbox: "Mailbox", you: "You", groupCall: "Group call", remind: "Reminder", startsIn: (m: number) => (m <= 0 ? "starts now" : m < 60 ? `starts in ${m} minutes` : m < 1440 ? `starts in ${Math.round(m / 60)} h` : "starts tomorrow"), joinNow: "Join meeting", ok: "OK", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing",
+    mailbox: "Mailbox", you: "You", groupCall: "Group call", remind: "Reminder", startsIn: (m: number) => (m <= 0 ? "starts now" : m < 60 ? `starts in ${m} minutes` : m < 1440 ? `starts in ${Math.round(m / 60)} h` : "starts tomorrow"), joinNow: "Join meeting", ok: "OK", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing", ctrlShare: "Allow control", ctrlStop: "Stop control", ctrlView: (n: string) => `Control ${n}`, ctrlOffered: (n: string) => `${n} allows control of their device`, ctrlAppOnly: "Allowing control works in the KM Portal app (phone/PC).", ctrlFail: "Could not allow control", ctrlClose: "Close",
   },
   ar: {
     title: "الرسائل", newChat: "محادثة جديدة", search: "بحث …", empty: "اختر محادثة أو ابدأ محادثة جديدة.",
@@ -39,7 +41,7 @@ export const TX = {
     hangup: "إنهاء", mute: "كتم", unmute: "إلغاء الكتم", camOff: "إيقاف الكاميرا", camOn: "تشغيل الكاميرا",
     callAudio: "مكالمة", callVideo: "مكالمة فيديو", missed: "مكالمة فائتة", declined: "تم رفض المكالمة", busy: "مشغول",
     noMedia: "لا يوجد وصول إلى الميكروفون/الكاميرا. يرجى السماح بذلك في المتصفح.", conn: "جارٍ الاتصال …",
-    mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", remind: "تذكير", startsIn: (m: number) => (m <= 0 ? "يبدأ الآن" : m < 60 ? `يبدأ خلال ${m} دقيقة` : m < 1440 ? `يبدأ خلال ${Math.round(m / 60)} ساعة` : "يبدأ غداً"), joinNow: "الانضمام إلى الاجتماع", ok: "حسناً", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة",
+    mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", remind: "تذكير", startsIn: (m: number) => (m <= 0 ? "يبدأ الآن" : m < 60 ? `يبدأ خلال ${m} دقيقة` : m < 1440 ? `يبدأ خلال ${Math.round(m / 60)} ساعة` : "يبدأ غداً"), joinNow: "الانضمام إلى الاجتماع", ok: "حسناً", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة", ctrlShare: "السماح بالتحكم", ctrlStop: "إيقاف التحكم", ctrlView: (n: string) => `التحكم بجهاز ${n}`, ctrlOffered: (n: string) => `${n} يسمح بالتحكم بجهازه`, ctrlAppOnly: "السماح بالتحكم متاح في تطبيق KM Portal (الهاتف/الحاسوب).", ctrlFail: "تعذّر السماح بالتحكم", ctrlClose: "إغلاق",
   },
 };
 
@@ -95,6 +97,11 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const [camOff, setCamOff] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Gerätesteuerung im Anruf: eigenes freigegebenes Gerät, Angebote der anderen, gerade geöffnete Ansicht
+  const [ctrlMine, setCtrlMine] = useState<string | null>(null);
+  const ctrlRef = useRef<string | null>(null);
+  const [offers, setOffers] = useState<{ from: string; name: string; device: string }[]>([]);
+  const [viewing, setViewing] = useState<string | null>(null);
   const [reminder, setReminder] = useState<{ id: string; title: string; starts_at: string; meeting: string | null } | null>(null);
   const ringTimer = useRef<number | null>(null);
   const myId = me?.id ?? "";
@@ -227,6 +234,8 @@ export function CommProvider({ children }: { children: ReactNode }) {
     pcs.current.forEach((p) => p.close()); pcs.current.clear(); pending.current.clear();
     local.current?.getTracks().forEach((t) => t.stop()); local.current = null;
     setLocalStream(null); setRemotes({}); setSharing(false); setCall(null);
+    if (ctrlRef.current) stopControl(false);
+    setOffers([]); setViewing(null);
   };
   const logCall = (room: string, text: string) =>
     api(`/api/v1/chat/rooms/${room}/messages`, { method: "POST", body: { body: text, kind: "call" } }).catch(() => {});
@@ -327,8 +336,17 @@ export function CommProvider({ children }: { children: ReactNode }) {
         else pending.current.set(from, [...(pending.current.get(from) ?? []), d.candidate]);
         return;
       }
+      case "control_offer":
+        if (!c || c.room !== e.room || typeof d.device !== "string") return;
+        setOffers((o) => [...o.filter((x) => x.from !== from), { from, name: e.name as string, device: d.device }]);
+        setNotice(T.ctrlOffered(e.name as string));
+        return;
+      case "control_end":
+        setOffers((o) => { const gone = o.find((x) => x.from === from); if (gone) setViewing((v) => (v === gone.device ? null : v)); return o.filter((x) => x.from !== from); });
+        return;
       case "hangup":
         if (!c) return;
+        setOffers((o) => o.filter((x) => x.from !== from));
         if (c.state === "incoming" && c.host === from) { cleanup(); return; }
         dropPeer(from);
         return;
@@ -346,6 +364,29 @@ export function CommProvider({ children }: { children: ReactNode }) {
         return;
     }
   }
+
+  const shareControl = async () => {
+    const c = callRef.current;
+    if (!c || c.state !== "live" || c.peers.length === 0) return;
+    if (!(await waitApp())) { setNotice(T.ctrlAppOnly); return; }
+    try {
+      await native("support_start", { minutes: 60, files: false });
+      const info = await native<AppInfo>("app_info");
+      if (!info.device_id) throw new Error("kein Gerät");
+      await api(`/api/v1/devices/${info.device_id}/share`, { body: { users: c.peers.map((p) => p.id), minutes: 60 } });
+      ctrlRef.current = info.device_id; setCtrlMine(info.device_id);
+      c.peers.forEach((p) => signal(c.room, p.id, { kind: "control_offer", device: info.device_id }));
+    } catch (x) { setNotice(`${T.ctrlFail}: ${(x as Error).message}`); }
+  };
+  const stopControl = (notify = true) => {
+    const id = ctrlRef.current;
+    if (!id) return;
+    ctrlRef.current = null; setCtrlMine(null);
+    api(`/api/v1/devices/${id}/share`, { method: "DELETE" }).catch(() => {});
+    native("support_stop").catch(() => {});
+    const c = callRef.current;
+    if (notify && c) c.peers.forEach((p) => signal(c.room, p.id, { kind: "control_end" }));
+  };
 
   const toggleMute = () => { local.current?.getAudioTracks().forEach((t) => (t.enabled = muted)); setMuted(!muted); };
   const toggleCam = () => { local.current?.getVideoTracks().forEach((t) => (t.enabled = camOff)); setCamOff(!camOff); };
@@ -384,7 +425,17 @@ export function CommProvider({ children }: { children: ReactNode }) {
       )}
       {call && (
         <CallView call={call} T={T} local={localStream} remotes={remotes} muted={muted} camOff={camOff} sharing={sharing}
-          onAccept={accept} onDecline={() => end(true)} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} onScreen={toggleScreen} />
+          onAccept={accept} onDecline={() => end(true)} onHangup={() => end(true)} onMute={toggleMute} onCam={toggleCam} onScreen={toggleScreen}
+          ctrlMine={!!ctrlMine} offers={offers} onShareCtrl={shareControl} onStopCtrl={() => stopControl()} onView={setViewing} />
+      )}
+      {call && viewing && (
+        <div className="ctrl-overlay" role="dialog">
+          <div className="row between">
+            <b>{T.ctrlView(offers.find((o) => o.device === viewing)?.name ?? "")}</b>
+            <button className="btn small ghost" onClick={() => setViewing(null)}>✕ {T.ctrlClose}</button>
+          </div>
+          <RemoteScreen id={viewing} />
+        </div>
       )}
     </Ctx.Provider>
   );
@@ -407,6 +458,7 @@ const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).slice(0, 2).join
 function CallView(p: {
   call: Call; T: (typeof TX)["de"]; local: MediaStream | null; remotes: Record<string, MediaStream>; muted: boolean; camOff: boolean; sharing: boolean;
   onAccept: () => void; onDecline: () => void; onHangup: () => void; onMute: () => void; onCam: () => void; onScreen: () => void;
+  ctrlMine: boolean; offers: { from: string; name: string; device: string }[]; onShareCtrl: () => void; onStopCtrl: () => void; onView: (d: string) => void;
 }) {
   const { call, T } = p;
   const [, tick] = useState(0);
@@ -451,6 +503,10 @@ function CallView(p: {
             {video && live && "getDisplayMedia" in (navigator.mediaDevices ?? {}) && (
               <button className={`cv-btn ${p.sharing ? "on" : ""}`} onClick={p.onScreen}>🖥 {p.sharing ? T.screenStop : T.screen}</button>
             )}
+            {live && (p.ctrlMine
+              ? <button className="cv-btn on" onClick={p.onStopCtrl}>🖐 {T.ctrlStop}</button>
+              : <button className="cv-btn" onClick={p.onShareCtrl}>🖐 {T.ctrlShare}</button>)}
+            {live && p.offers.map((o) => <button key={o.from} className="cv-btn ok" onClick={() => p.onView(o.device)}>🖥 {T.ctrlView(o.name)}</button>)}
             <button className="cv-btn end" onClick={p.onHangup}>✕ {T.hangup}</button>
           </>
         )}

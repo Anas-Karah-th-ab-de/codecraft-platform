@@ -123,6 +123,12 @@ function Overview({ id, inv, T, online, onLoaded }: { id: string; inv: Inv | nul
   );
 }
 
+/** Bildschirm eines freigegebenen Geräts (z. B. im Anruf) */
+export function RemoteScreen({ id }: { id: string }) {
+  const { locale } = useI18n();
+  return <Screen id={id} T={RT[locale]} />;
+}
+
 function Screen({ id, T }: { id: string; T: TT }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const ws = useRef<WebSocket | null>(null);

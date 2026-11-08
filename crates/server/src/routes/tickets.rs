@@ -51,12 +51,15 @@ fn is_staff(user: &User) -> bool {
     user.role.is_employee() && user.can(Permission::TicketWork)
 }
 
-/// Sichtbarkeit: Mitarbeiter alles, Kunden nur die eigene Firma
+/// Sichtbarkeit: Support-Team alles, Kunden die eigene Firma, jede/r die selbst angelegten Tickets
 async fn ticket_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<Option<Uuid>> {
-    let org: Option<Option<Uuid>> =
-        sqlx::query_scalar("SELECT organization_id FROM tickets WHERE id = $1").bind(id).fetch_optional(&s.db).await?;
-    let org = org.ok_or(ApiError::NotFound)?;
-    if is_staff(user) || (org.is_some() && org == user.organization_id) {
+    let row: Option<(Option<Uuid>, Option<Uuid>)> =
+        sqlx::query_as("SELECT organization_id, created_by FROM tickets WHERE id = $1")
+            .bind(id)
+            .fetch_optional(&s.db)
+            .await?;
+    let (org, creator) = row.ok_or(ApiError::NotFound)?;
+    if is_staff(user) || (org.is_some() && org == user.organization_id) || creator == Some(user.id) {
         Ok(org)
     } else {
         Err(ApiError::NotFound)
@@ -92,13 +95,17 @@ async fn support_team(s: &AppState) -> Vec<Uuid> {
     .unwrap_or_default()
 }
 
-async fn customer_users(s: &AppState, org: Option<Uuid>) -> Vec<Uuid> {
-    let Some(org) = org else { return vec![] };
-    sqlx::query_scalar("SELECT id FROM users WHERE organization_id = $1 AND is_active")
-        .bind(org)
-        .fetch_all(&s.db)
-        .await
-        .unwrap_or_default()
+/// Anfragende Seite: aktive Benutzer der Firma und wer das Ticket angelegt hat (z. B. interne Anfrage)
+async fn customer_users(s: &AppState, org: Option<Uuid>, ticket: Uuid) -> Vec<Uuid> {
+    sqlx::query_scalar(
+        "SELECT id FROM users WHERE is_active AND ($1::uuid IS NOT NULL AND organization_id = $1)
+         UNION SELECT u.id FROM tickets t JOIN users u ON u.id = t.created_by WHERE t.id = $2 AND u.is_active",
+    )
+    .bind(org)
+    .bind(ticket)
+    .fetch_all(&s.db)
+    .await
+    .unwrap_or_default()
 }
 
 #[derive(Serialize, sqlx::FromRow)]
@@ -153,12 +160,12 @@ pub async fn list(
     Query(q): Query<ListQuery>,
 ) -> ApiResult<Json<Vec<TicketRow>>> {
     let staff = is_staff(&user);
-    if !staff && user.organization_id.is_none() {
-        return Err(ApiError::Forbidden);
-    }
+    // Mitarbeiter ohne Support-Rechte (bzw. Kunden ohne Firma) sehen ihre eigenen Anfragen
+    let own = !staff && (user.role.is_employee() || user.organization_id.is_none());
     let view = q.view.unwrap_or_else(|| "open".into());
     let sql = format!(
         "{SELECT} WHERE ($2::uuid IS NULL OR t.organization_id = $2)
+            AND (NOT $6 OR t.created_by = $5)
             AND ($3 = 'all' OR ($3 = 'open') = (t.status NOT IN ('resolved', 'closed')))
             AND (NOT $4 OR t.assignee_id = $5)
           ORDER BY (t.status IN ('resolved', 'closed')), t.priority, t.response_due_at
@@ -166,10 +173,11 @@ pub async fn list(
     );
     let rows = sqlx::query_as(&sql)
         .bind(staff)
-        .bind(if staff { None } else { user.organization_id })
+        .bind(if staff || own { None } else { user.organization_id })
         .bind(&view)
         .bind(q.mine.unwrap_or(false))
         .bind(user.id)
+        .bind(own)
         .fetch_all(&s.db)
         .await?;
     Ok(Json(rows))
@@ -192,7 +200,13 @@ pub async fn create(
     user: User,
     Json(b): Json<NewTicket>,
 ) -> ApiResult<(StatusCode, Json<Value>)> {
-    let org = if is_staff(&user) { b.organization_id } else { Some(user.organization_id.ok_or(ApiError::Forbidden)?) };
+    let org = if is_staff(&user) {
+        b.organization_id
+    } else if user.role.is_employee() {
+        None // interne Anfrage an das Support-Team
+    } else {
+        Some(user.organization_id.ok_or(ApiError::Forbidden)?)
+    };
     let category = b.category.unwrap_or_else(|| "support".into());
     let urgency = b.urgency.unwrap_or_else(|| "normal".into());
     if !CATEGORIES.contains(&category.as_str()) || !URGENCIES.contains(&urgency.as_str()) {
@@ -351,7 +365,7 @@ pub async fn reply(
         if internal {
             assignee.into_iter().filter(|a| *a != user.id).collect()
         } else {
-            customer_users(&s, org).await
+            customer_users(&s, org, id).await
         }
     } else {
         match assignee {
@@ -457,7 +471,7 @@ pub async fn patch(
     )
     .await?;
     tx.commit().await?;
-    let mut to = customer_users(&s, org).await;
+    let mut to = customer_users(&s, org, id).await;
     if let Some(a) = b.assignee_id {
         to.push(a);
     }

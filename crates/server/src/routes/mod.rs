@@ -202,6 +202,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/access-codes/redeem", post(access::redeem))
         .route("/api/v1/access-codes/{id}/revoke", post(access::revoke))
         .route("/api/v1/devices/{id}/access-policy", put(access::set_policy))
+        .route("/api/v1/devices/{id}/share", post(access::share).delete(access::unshare))
 }
 
 async fn health() -> Json<Value> {

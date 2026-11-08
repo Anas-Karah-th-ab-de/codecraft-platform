@@ -8,6 +8,7 @@ import { useComm } from "./Comm";
 
 const TT = {
   de: {
+    rcTitle: "Fernwartung per App", rcText: "Damit unser Support Ihr Gerät sehen und – nur mit Ihrer Zustimmung – bedienen kann.", rcStd: "KM Portal App", rcCtrl: "Android mit Fernsteuerung", rcNote: "Die Variante mit Fernsteuerung nutzt die Android-Bedienungshilfe. Google Play Protect blockiert sie ggf.: dann in der Play-Store-App → Profil → Play Protect → Einstellungen „Apps scannen“ kurz ausschalten, installieren und wieder einschalten.",
     title: "Support", new: "Neues Ticket", open: "Offen", done: "Erledigt", all: "Alle", mine: "Nur meine", subject: "Betreff", desc: "Beschreibung",
     category: "Kategorie", urgency: "Dringlichkeit", device: "Gerät", project: "Projekt", customer: "Kunde", internal: "intern", none: "—",
     create: "Ticket senden", status: "Status", assignee: "Bearbeiter", prio: "Prio", due: "Reaktion bis", overdue: "überfällig", empty: "Keine Tickets.",
@@ -20,6 +21,7 @@ const TT = {
     l: { basic: "Basis", business: "Business", premium: "Premium" },
   },
   en: {
+    rcTitle: "Remote support via app", rcText: "Lets our support see your device and – only with your consent – operate it.", rcStd: "KM Portal app", rcCtrl: "Android with remote control", rcNote: "The remote-control variant uses Android accessibility. Google Play Protect may block it: in the Play Store app → profile → Play Protect → settings, briefly turn off “Scan apps”, install, then turn it back on.",
     title: "Support", new: "New ticket", open: "Open", done: "Done", all: "All", mine: "Mine only", subject: "Subject", desc: "Description",
     category: "Category", urgency: "Urgency", device: "Device", project: "Project", customer: "Customer", internal: "internal", none: "—",
     create: "Submit ticket", status: "Status", assignee: "Assignee", prio: "Prio", due: "Respond by", overdue: "overdue", empty: "No tickets.",
@@ -32,6 +34,7 @@ const TT = {
     l: { basic: "Basic", business: "Business", premium: "Premium" },
   },
   ar: {
+    rcTitle: "الدعم عن بُعد عبر التطبيق", rcText: "ليتمكن فريق الدعم من رؤية جهازك و– بموافقتك فقط – التحكم به.", rcStd: "تطبيق KM Portal", rcCtrl: "أندرويد مع التحكم عن بُعد", rcNote: "نسخة التحكم عن بُعد تستخدم خدمات الإتاحة في أندرويد. قد يحظرها Google Play Protect: في متجر Play ← الملف الشخصي ← Play Protect ← الإعدادات أوقف «فحص التطبيقات» مؤقتاً، ثبّت التطبيق ثم أعد التفعيل.",
     title: "الدعم الفني", new: "تذكرة جديدة", open: "مفتوحة", done: "منتهية", all: "الكل", mine: "تذاكري فقط", subject: "الموضوع", desc: "الوصف",
     category: "الفئة", urgency: "الأهمية", device: "الجهاز", project: "المشروع", customer: "العميل", internal: "داخلي", none: "—",
     create: "إرسال التذكرة", status: "الحالة", assignee: "المسؤول", prio: "الأولوية", due: "الرد قبل", overdue: "متأخر", empty: "لا توجد تذاكر.",
@@ -92,6 +95,14 @@ function TicketList() {
         <h1>{T.title}</h1>
         <button className="btn" onClick={() => setCreating(true)}>+ {T.new}</button>
       </div>
+      <details className="card" style={{ marginBottom: 12 }}>
+        <summary><b>{T.rcTitle}</b> <span className="muted">– {T.rcText}</span></summary>
+        <div className="row" style={{ flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+          <Link className="btn small" to="/portal/app">{T.rcStd}</Link>
+          <a className="btn small ghost" href="/downloads/km-portal-fernsteuerung.apk" download>{T.rcCtrl}</a>
+        </div>
+        <p className="muted" style={{ marginTop: 8 }}><small>{T.rcNote}</small></p>
+      </details>
       {staff && stats.data && (
         <div className="kpis">
           <div className="card"><div className="muted">{T.kpiOpen}</div><div className="kpi">{stats.data.open}</div></div>

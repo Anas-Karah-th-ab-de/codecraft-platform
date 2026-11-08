@@ -242,7 +242,24 @@ async fn permissions(db: PgPool) {
     assert_eq!(call(&db, "GET", "/api/v1/projects", &sup, None).await.0, StatusCode::FORBIDDEN);
     assert_eq!(call(&db, "GET", "/api/v1/tickets", &sup, None).await.0, StatusCode::OK);
     let acc = user_in(&db, "staff", None, "ACC").await;
-    assert_eq!(call(&db, "GET", "/api/v1/tickets", &acc, None).await.0, StatusCode::FORBIDDEN);
+    // ohne Support-Rechte: nur eigene Anfragen an das Support-Team (hier noch keine)
+    let (st, own) = call(&db, "GET", "/api/v1/tickets", &acc, None).await;
+    assert_eq!(st, StatusCode::OK);
+    assert_eq!(own.as_array().map(Vec::len), Some(0));
+    let (st, _) = call(
+        &db,
+        "POST",
+        "/api/v1/tickets",
+        &acc,
+        Some(serde_json::json!({ "subject": "Laptop startet nicht", "body": "Bitte helfen" })),
+    )
+    .await;
+    assert_eq!(st, StatusCode::CREATED);
+    let (_, own) = call(&db, "GET", "/api/v1/tickets", &acc, None).await;
+    assert_eq!(own.as_array().map(Vec::len), Some(1));
+    // Support-Team sieht die interne Anfrage
+    let (_, all) = call(&db, "GET", "/api/v1/tickets", &sup, None).await;
+    assert!(all.as_array().unwrap().iter().any(|t| t["subject"] == "Laptop startet nicht"));
     assert_eq!(call(&db, "GET", "/api/v1/devices", &acc, None).await.0, StatusCode::FORBIDDEN);
 
     // ohne gültiges Token

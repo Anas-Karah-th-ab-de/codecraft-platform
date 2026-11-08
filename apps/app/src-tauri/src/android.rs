@@ -50,6 +50,10 @@ pub fn control_enabled() -> bool {
     with_bridge(|env, cls| env.call_static_method(cls, "controlEnabled", "()Z", &[])?.z()).unwrap_or(false)
 }
 
+pub fn control_available() -> bool {
+    with_bridge(|env, cls| env.call_static_method(cls, "controlAvailable", "()Z", &[])?.z()).unwrap_or(false)
+}
+
 pub fn open_control_settings() {
     let _ = with_bridge(|env, cls| env.call_static_method(cls, "openControlSettings", "()V", &[])?.v());
 }

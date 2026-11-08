@@ -233,10 +233,10 @@ export function NotifyProvider({ children }: { children: ReactNode }) {
 
   // App: Installation anmelden; Seite aus einer Benachrichtigung öffnen
   useEffect(() => {
-    if (!me || !isApp()) return;
-    ensureEnrolled(me).catch(() => {});
-    const take = () => native<string | null>("app_pending_url").then((u) => { if (u) nav(u); }).catch(() => {});
-    take();
+    if (!me) return;
+    // Die App-Brücke kann auf Android erst kurz nach dem Seitenstart da sein → ensureEnrolled wartet selbst
+    const take = () => { if (isApp()) native<string | null>("app_pending_url").then((u) => { if (u) nav(u); }).catch(() => {}); };
+    ensureEnrolled(me).then(take).catch(() => {});
     const vis = () => { if (document.visibilityState === "visible") take(); };
     window.addEventListener("km-app-open", take);
     document.addEventListener("visibilitychange", vis);

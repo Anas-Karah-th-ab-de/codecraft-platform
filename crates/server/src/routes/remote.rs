@@ -243,7 +243,7 @@ async fn on_device_message(s: &AppState, device: Uuid, msg: FromDevice) {
 type StatusRow = (String, String, Option<Value>, Option<Value>, Option<chrono::DateTime<chrono::Utc>>);
 
 pub async fn status(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<Json<Value>> {
-    access(&s, &user, id).await?;
+    super::access::authorize_screen(&s.db, user.id, user.role, id).await?;
     let row: Option<StatusRow> = sqlx::query_as(
         "SELECT name, kind, remote_hello, remote_inventory, remote_seen_at FROM devices WHERE id = $1 AND revoked_at IS NULL",
     )
@@ -446,7 +446,7 @@ pub async fn screen_ws(
     .await?;
     let (user, name, role) = row.ok_or(ApiError::Unauthorized)?;
     let role = Role::parse(&role).ok_or(ApiError::Forbidden)?;
-    super::access::authorize(&s.db, user, role, id).await?;
+    super::access::authorize_screen(&s.db, user, role, id).await?;
     let caps = caps_of(id)?;
     if !caps.screen {
         return Err(ApiError::BadRequest("Bildschirmzugriff ist auf diesem Gerät nicht erlaubt".into()));
@@ -514,7 +514,7 @@ async fn screen_session(s: AppState, device: Uuid, op: Operator, fps: u8, width:
                 }
             }
             _ = check.tick() => {
-                if super::access::authorize(&s.db, user, role, device).await.is_err() {
+                if super::access::authorize_screen(&s.db, user, role, device).await.is_err() {
                     let _ = tx.send(Message::Text(
                         json!({ "t": "screen_ended", "reason": "Freigabe beendet" }).to_string().into(),
                     ));

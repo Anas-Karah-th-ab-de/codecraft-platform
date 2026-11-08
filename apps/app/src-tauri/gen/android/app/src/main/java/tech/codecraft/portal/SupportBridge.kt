@@ -91,6 +91,17 @@ object SupportBridge {
     @JvmStatic fun text(t: String): Boolean = ControlService.instance?.typeText(t) ?: false
     @JvmStatic fun controlEnabled(): Boolean = ControlService.instance != null
 
+    /** Ist die Bedienungshilfe in dieser APK-Variante deklariert? (Standard-APK: nein, wegen Play Protect) */
+    @JvmStatic fun controlAvailable(): Boolean {
+        val c = app ?: return false
+        return try {
+            c.packageManager.getServiceInfo(android.content.ComponentName(c, ControlService::class.java), 0)
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     @JvmStatic fun openControlSettings() {
         val c = app ?: return
         c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

@@ -78,7 +78,7 @@ export default function Portal() {
     ["mail", "p.mail", me.is_employee, 0],
     ["mitteilungen", "p.notifications", true, 0],
     ["ankuendigungen", "p.announcements", true, 0],
-    ["support", "p.support", !me.is_employee || can(me, "tickets"), 1],
+    ["support", "p.support", true, 1],
     ["anfragen-entwicklung", "p.dev", can(me, "project_read"), 1],
     ["projekte", "p.projects", can(me, "project_read"), 1],
     ["shop", "p.shop", !me.is_employee || can(me, "invoice_read"), 1],

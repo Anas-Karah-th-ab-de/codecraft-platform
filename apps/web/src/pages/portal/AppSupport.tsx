@@ -14,6 +14,7 @@ const ST = {
     staff: "Mitarbeiter mit Geräterechten sehen dieses Gerät jetzt unter „Geräte“.",
     ctrlTitle: "Steuerung am Handy", ctrlOff: "Der Support kann nur zusehen. Damit er tippen und wischen kann, die Bedienungshilfe „KM Portal Fernsteuerung“ einschalten.",
     ctrlOn: "Steuerung ist eingeschaltet (Bedienungshilfe aktiv).", ctrlBtn: "Bedienungshilfe öffnen",
+    ctrlNone: "Diese App-Version enthält keine Fernsteuerung – der Support kann nur zusehen. Für Steuerung die Variante mit Fernsteuerung installieren (ersetzt diese App).", ctrlDl: "Variante mit Fernsteuerung",
     what: "Was passiert?", w1: "Die App verbindet sich mit dem Support-Server (verschlüsselt).", w2: "Möchte ein Techniker den Bildschirm sehen, fragt das Gerät Sie mit seinem Namen.",
     w3: "Sie sehen jederzeit, dass eine Sitzung läuft, und können sie sofort beenden.", w4: "Nach Ablauf der Dauer trennt sich die App automatisch.",
     notApp: "Diese Funktion gibt es in der KM-Portal-App für Android, Windows und Linux.", device: "Gerät",
@@ -26,6 +27,7 @@ const ST = {
     staff: "Staff with device rights now see this device under “Devices”.",
     ctrlTitle: "Control on the phone", ctrlOff: "Support can only watch. To let them tap and swipe, turn on the accessibility service “KM Portal remote control”.",
     ctrlOn: "Control is on (accessibility service active).", ctrlBtn: "Open accessibility",
+    ctrlNone: "This app version has no remote control – support can only watch. For control, install the remote-control variant (replaces this app).", ctrlDl: "Remote-control variant",
     what: "What happens?", w1: "The app connects to the support server (encrypted).", w2: "If a technician wants to see the screen, the device asks you, showing their name.",
     w3: "You always see that a session is running and can end it at once.", w4: "When the time is up, the app disconnects automatically.",
     notApp: "This feature is available in the KM Portal app for Android, Windows and Linux.", device: "Device",
@@ -38,6 +40,7 @@ const ST = {
     staff: "يرى الموظفون أصحاب صلاحية الأجهزة هذا الجهاز الآن في «الأجهزة».",
     ctrlTitle: "التحكم في الهاتف", ctrlOff: "يمكن للدعم المشاهدة فقط. للسماح باللمس والسحب فعّل خدمة الإتاحة «KM Portal Fernsteuerung».",
     ctrlOn: "التحكم مفعّل (خدمة الإتاحة نشطة).", ctrlBtn: "فتح إعدادات الإتاحة",
+    ctrlNone: "هذه النسخة لا تتضمن التحكم عن بُعد – يمكن للدعم المشاهدة فقط. للتحكم ثبّت النسخة مع التحكم عن بُعد (تحل محل هذا التطبيق).", ctrlDl: "النسخة مع التحكم عن بُعد",
     what: "ماذا يحدث؟", w1: "يتصل التطبيق بخادم الدعم (مشفّر).", w2: "إذا أراد فني رؤية الشاشة يسألك الجهاز مع ذكر اسمه.",
     w3: "ترى دائماً أن جلسة تعمل ويمكنك إنهاؤها فوراً.", w4: "عند انتهاء المدة ينقطع التطبيق تلقائياً.",
     notApp: "هذه الميزة متوفرة في تطبيق KM Portal لأندرويد وويندوز ولينكس.", device: "الجهاز",
@@ -115,8 +118,17 @@ export function AppSupport() {
         {info?.platform === "android" && (
           <>
             <h3><Icon name="device" /> {T.ctrlTitle}</h3>
-            <p className={st?.control ? "ok-t" : "muted"}>{st?.control ? T.ctrlOn : T.ctrlOff}</p>
-            {!st?.control && <button className="btn small ghost" onClick={() => native("control_settings")}><Icon name="settings" size={16} /> {T.ctrlBtn}</button>}
+            {st?.control_available === false ? (
+              <>
+                <p className="muted">{T.ctrlNone}</p>
+                <a className="btn small ghost" href="/downloads/km-portal-fernsteuerung.apk" download><Icon name="download" size={16} /> {T.ctrlDl}</a>
+              </>
+            ) : (
+              <>
+                <p className={st?.control ? "ok-t" : "muted"}>{st?.control ? T.ctrlOn : T.ctrlOff}</p>
+                {!st?.control && <button className="btn small ghost" onClick={() => native("control_settings")}><Icon name="settings" size={16} /> {T.ctrlBtn}</button>}
+              </>
+            )}
             <hr />
           </>
         )}

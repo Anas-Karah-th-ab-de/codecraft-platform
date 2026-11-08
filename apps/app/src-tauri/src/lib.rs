@@ -104,6 +104,8 @@ struct SupportStatus {
     files: bool,
     /// Android: Bedienungshilfe zum Steuern aktiv?
     control: bool,
+    /// Android: enthält diese App-Variante die Fernsteuerung überhaupt? (Standard-APK nicht – Play Protect)
+    control_available: bool,
 }
 
 fn support_status_of(state: &AppState) -> SupportStatus {
@@ -119,6 +121,7 @@ fn support_status_of(state: &AppState) -> SupportStatus {
         until: g.as_ref().map(|s| s.until),
         files: g.as_ref().is_some_and(|s| s.files),
         control: control_enabled(),
+        control_available: control_available(),
     }
 }
 
@@ -128,6 +131,14 @@ fn control_enabled() -> bool {
 }
 #[cfg(not(target_os = "android"))]
 fn control_enabled() -> bool {
+    true
+}
+#[cfg(target_os = "android")]
+fn control_available() -> bool {
+    android::control_available()
+}
+#[cfg(not(target_os = "android"))]
+fn control_available() -> bool {
     true
 }
 

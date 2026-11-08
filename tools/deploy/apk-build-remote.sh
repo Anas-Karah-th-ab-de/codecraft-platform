@@ -51,11 +51,43 @@ if [ ! -f ~/keys/km-portal.jks ]; then
   chmod 600 ~/keys/*
 fi'
 
-log "APK bauen"
-as 'cd ~/codecraft-platform/apps/app/src-tauri
-cp ~/keys/keystore.properties gen/android/keystore.properties
-nice -n 10 cargo tauri android build --apk --target aarch64 --target armv7 2>&1 | grep -vE "^\s+(Compiling|Downloaded|Downloading)" | tail -40'
+log "App-Icons (Android-Mipmaps aus icons/icon.png)"
+as 'cd ~/codecraft-platform/apps/app/src-tauri && cargo tauri icon icons/icon.png >/dev/null 2>&1 || echo "Icon-Erzeugung fehlgeschlagen"'
 
-APK=$(ls -t $B/codecraft-platform/apps/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1)
-log "fertig: $APK"
-ls -lh "$APK"
+# Zwei Varianten: Play Protect blockiert Sideload-Apps mit Bedienungshilfe (BIND_ACCESSIBILITY_SERVICE).
+#  km-portal.apk               – Standard ohne Fernsteuerung (Support sieht nur zu), für alle
+#  km-portal-fernsteuerung.apk – mit Bedienungshilfe (tippen/wischen), gleiche App-ID, ersetzt die Standard-App
+build() {
+  as 'cd ~/codecraft-platform/apps/app/src-tauri
+cp ~/keys/keystore.properties gen/android/keystore.properties
+nice -n 10 cargo tauri android build --apk --target aarch64 --target armv7 2>&1 | grep -vE "^\s+(Compiling|Downloaded|Downloading)" | grep -E "error|Error|FAIL|Finished|BUILD|went wrong" | tail -15' >&2
+  ls -t $B/codecraft-platform/apps/app/src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk | head -1
+}
+G=$B/codecraft-platform/apps/app/src-tauri/gen/android
+# lokal erzeugte Tauri-Dateien enthalten Pfade des Entwickler-PCs → neu erzeugen lassen
+rm -rf $G/tauri.settings.gradle $G/.tauri $G/app/tauri.build.gradle.kts $G/.gradle
+M=$G/app/src/main/AndroidManifest.xml
+cp $M /tmp/AndroidManifest.full.xml
+mkdir -p /var/www/downloads
+
+log "APK mit Fernsteuerung bauen"
+A=$(build); install -m 644 "$A" /var/www/downloads/km-portal-fernsteuerung.apk
+
+log "Standard-APK ohne Bedienungshilfe bauen"
+python3 - "$M" <<'PY'
+import re, sys
+p = sys.argv[1]; s = open(p).read()
+s2 = re.sub(r'\s*<service android:name="\.ControlService".*?</service>', '', s, flags=re.S)
+assert s2 != s, "ControlService nicht gefunden"
+open(p, "w").write(s2)
+PY
+A=$(build); install -m 644 "$A" /var/www/downloads/km-portal.apk
+cp /tmp/AndroidManifest.full.xml $M; chown builder: $M
+
+BT=$(ls -d $B/android/build-tools/* | sort -V | tail -1)
+for f in km-portal.apk km-portal-fernsteuerung.apk; do
+  n=$(unzip -p /var/www/downloads/$f AndroidManifest.xml | strings | grep -c ControlService || true)
+  echo "$f: $(stat -c %s /var/www/downloads/$f) Bytes, ControlService-Einträge: $n"
+  JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 $BT/apksigner verify /var/www/downloads/$f && echo "  Signatur ok"
+done
+log "fertig"

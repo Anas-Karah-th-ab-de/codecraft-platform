@@ -130,3 +130,59 @@ async fn app_enroll_and_support_code(db: PgPool) {
     let t2 = v2["device_token"].as_str().unwrap();
     assert_eq!(call(&db, "POST", "/api/v1/devices/report", t2, Some(rep)).await.0, StatusCode::UNAUTHORIZED);
 }
+
+async fn employee(db: &PgPool, email: &str, role: &str, dept: &str) -> String {
+    let id = Uuid::now_v7();
+    sqlx::query("INSERT INTO users (id, email, display_name, role, password_hash) VALUES ($1, $2, $2, $3, $4)")
+        .bind(id)
+        .bind(email)
+        .bind(role)
+        .bind(auth::hash_password("mitarbeiter-pw-1").unwrap())
+        .execute(db)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO user_departments (user_id, department_id) SELECT $1, id FROM departments WHERE code = $2")
+        .bind(id)
+        .bind(dept)
+        .execute(db)
+        .await
+        .unwrap();
+    login(db, email, "mitarbeiter-pw-1").await
+}
+
+/// Anruf unter Kollegen: eigenes App-Gerät für bestimmte Mitarbeiter freigeben – nur Bildschirm, zeitlich begrenzt
+#[sqlx::test(migrator = "codecraft_server::MIGRATOR")]
+async fn share_own_device_in_call(db: PgPool) {
+    std::env::set_var("PUSH_DISABLED", "1");
+    let owner = employee(&db, "lu@code-craft.tech", "staff", "ACC").await;
+    let colleague = employee(&db, "ah@code-craft.tech", "staff", "ACC").await;
+    let other = employee(&db, "x@code-craft.tech", "staff", "ACC").await;
+    let body =
+        json!({ "install_id": "11111111-aaaa-4bbb-8ccc-123456789abc", "name": "Android-App", "platform": "android" });
+    let (s, v) = call(&db, "POST", "/api/v1/app/enroll", &owner, Some(body)).await;
+    assert_eq!(s, StatusCode::CREATED, "{v}");
+    let device = v["device_id"].as_str().unwrap().to_owned();
+    let colleague_id: Uuid =
+        sqlx::query_scalar("SELECT id FROM users WHERE email = 'ah@code-craft.tech'").fetch_one(&db).await.unwrap();
+    let remote = format!("/api/v1/devices/{device}/remote");
+    let share = format!("/api/v1/devices/{device}/share");
+
+    // ohne Freigabe kein Zugriff (Buchhaltung hat keine Geräterechte)
+    assert_eq!(call(&db, "GET", &remote, &colleague, None).await.0, StatusCode::FORBIDDEN);
+    // nur der Besitzer darf freigeben
+    let (s, _) = call(&db, "POST", &share, &colleague, Some(json!({ "users": [colleague_id] }))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    let (s, v) = call(&db, "POST", &share, &owner, Some(json!({ "users": [colleague_id], "minutes": 30 }))).await;
+    assert_eq!(s, StatusCode::OK, "{v}");
+
+    // Kollege: Bildschirm-Status ja, Befehle nein; andere weiterhin nicht
+    assert_eq!(call(&db, "GET", &remote, &colleague, None).await.0, StatusCode::OK);
+    let exec = format!("/api/v1/devices/{device}/exec");
+    let (s, _) = call(&db, "POST", &exec, &colleague, Some(json!({ "program": "id", "args": [] }))).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    assert_eq!(call(&db, "GET", &remote, &other, None).await.0, StatusCode::FORBIDDEN);
+
+    // Freigabe beenden → kein Zugriff mehr
+    assert_eq!(call(&db, "DELETE", &share, &owner, None).await.0, StatusCode::NO_CONTENT);
+    assert_eq!(call(&db, "GET", &remote, &colleague, None).await.0, StatusCode::FORBIDDEN);
+}

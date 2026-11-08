@@ -10,12 +10,24 @@ import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 
 class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         SupportBridge.app = applicationContext
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        // Randlos zeichnen, aber das Portal nicht unter Statusleiste, Navigationsleiste, Kamera-Aussparung
+        // oder Tastatur legen: Abstände als Innenrand der Inhaltsfläche
+        val root = findViewById<android.view.View>(android.R.id.content)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val b = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or WindowInsetsCompat.Type.ime()
+            )
+            v.setPadding(b.left, b.top, b.right, b.bottom)
+            WindowInsetsCompat.CONSUMED
+        }
         NotifyService.channels(this)
         handle(intent)
         // Mitteilungen + Mikrofon/Kamera für Anrufe

@@ -96,6 +96,105 @@ pub async fn authorize(db: &PgPool, user: Uuid, role: Role, device: Uuid) -> Api
     }
 }
 
+/// Bildschirm sehen/steuern: wie `authorize`, zusätzlich mit gültiger persönlicher Freigabe des Geräte-Besitzers
+/// (z. B. im Anruf). Befehle und Dateien bleiben bei `authorize`.
+pub async fn authorize_screen(db: &PgPool, user: Uuid, role: Role, device: Uuid) -> ApiResult<()> {
+    if has_share(db, user, device).await? {
+        return Ok(());
+    }
+    authorize(db, user, role, device).await
+}
+
+async fn has_share(db: &PgPool, user: Uuid, device: Uuid) -> ApiResult<bool> {
+    Ok(sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM device_shares s JOIN devices d ON d.id = s.device_id
+                         JOIN users o ON o.id = s.owner_id
+                         WHERE s.device_id = $1 AND s.grantee_id = $2 AND s.revoked_at IS NULL
+                           AND s.expires_at > now() AND d.revoked_at IS NULL AND o.is_active)",
+    )
+    .bind(device)
+    .bind(user)
+    .fetch_one(db)
+    .await?)
+}
+
+#[derive(Deserialize)]
+pub struct NewShare {
+    /// Kolleginnen/Kollegen (nur Mitarbeiter), die den Bildschirm sehen und steuern dürfen
+    pub users: Vec<Uuid>,
+    /// Dauer 5–240 Minuten, Standard 60
+    pub minutes: Option<i32>,
+}
+
+/// Eigenes Gerät (App) für bestimmte Mitarbeiter freigeben – z. B. im laufenden Anruf
+pub async fn share(
+    State(s): State<AppState>,
+    user: User,
+    Path(device): Path<Uuid>,
+    Json(b): Json<NewShare>,
+) -> ApiResult<Json<Value>> {
+    let owner: Option<Option<Uuid>> =
+        sqlx::query_scalar("SELECT owner_user_id FROM devices WHERE id = $1 AND revoked_at IS NULL")
+            .bind(device)
+            .fetch_optional(&s.db)
+            .await?;
+    if owner.flatten() != Some(user.id) {
+        return Err(ApiError::Forbidden);
+    }
+    let minutes = b.minutes.unwrap_or(60).clamp(5, 240);
+    let grantees: Vec<Uuid> =
+        sqlx::query_scalar("SELECT id FROM users WHERE id = ANY($1) AND id <> $2 AND is_active AND role <> 'customer'")
+            .bind(&b.users)
+            .bind(user.id)
+            .fetch_all(&s.db)
+            .await?;
+    if grantees.is_empty() {
+        return Err(ApiError::BadRequest("Freigabe nur für Mitarbeiter möglich".into()));
+    }
+    let mut tx = s.db.begin().await?;
+    for g in &grantees {
+        sqlx::query(
+            "UPDATE device_shares SET revoked_at = now() WHERE device_id = $1 AND grantee_id = $2 AND revoked_at IS NULL",
+        )
+        .bind(device)
+        .bind(g)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO device_shares (id, device_id, owner_id, grantee_id, expires_at)
+             VALUES ($1, $2, $3, $4, now() + make_interval(mins => $5))",
+        )
+        .bind(Uuid::now_v7())
+        .bind(device)
+        .bind(user.id)
+        .bind(g)
+        .bind(minutes)
+        .execute(&mut *tx)
+        .await?;
+    }
+    super::audit(&mut tx, &user.actor(), "share", "device", device, json!({ "users": grantees, "minutes": minutes }))
+        .await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "users": grantees, "minutes": minutes })))
+}
+
+/// Alle Freigaben des eigenen Geräts beenden (laufende Bildschirm-Sitzungen enden binnen 15 s)
+pub async fn unshare(State(s): State<AppState>, user: User, Path(device): Path<Uuid>) -> ApiResult<StatusCode> {
+    let n = sqlx::query(
+        "UPDATE device_shares SET revoked_at = now() WHERE device_id = $1 AND owner_id = $2 AND revoked_at IS NULL",
+    )
+    .bind(device)
+    .bind(user.id)
+    .execute(&s.db)
+    .await?
+    .rows_affected();
+    if n > 0 {
+        let mut c = s.db.acquire().await?;
+        super::audit(&mut c, &user.actor(), "unshare", "device", device, json!({ "count": n })).await?;
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
+
 fn customer_org(user: &User) -> ApiResult<Uuid> {
     if user.role != Role::Customer {
         return Err(ApiError::Forbidden);

@@ -1259,3 +1259,13 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .support-card .note-ok { display: grid; gap: 6px; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 8px transparent; } }
 @media (prefers-reduced-motion: reduce) { .support-state.on .dot { animation: none; } }
+
+/* Gerätesteuerung im Anruf: freigegebener Bildschirm über dem Anruf */
+.ctrl-overlay { position: fixed; z-index: 85; inset: 16px; display: flex; flex-direction: column; gap: 10px; padding: 14px;
+  background: var(--paper, #fff); border-radius: 16px; box-shadow: var(--sh-3); overflow: auto; }
+.ctrl-overlay .screen-card { margin: 0; }
+.cv-controls { flex-wrap: wrap; justify-content: center; }
+@media (max-width: 520px) {
+  .callview { inset-inline-end: 12px; bottom: 12px; width: calc(100vw - 24px); }
+  .ctrl-overlay { inset: 0; border-radius: 0; padding: 10px; }
+}
