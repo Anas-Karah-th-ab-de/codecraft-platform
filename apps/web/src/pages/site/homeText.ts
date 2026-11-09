@@ -111,6 +111,7 @@ const de = {
     list: [
       ["medizzconnect.com", "Weltweite Plattform, auf der Patienten über Profilfilme Ärzte ihres Vertrauens wählen", "https://medizzconnect.com"],
       ["9am.store", "Layout-Optimierung für den Onlineshop", "https://9am.store"],
+      ["maps.code-craft.tech", "Eigene Kartenplattform für Syrien: Karten, Routenplanung und Adresssuche, selbst gehostet", "https://maps.code-craft.tech"],
       ["Code Craft Ökosystem", "Eigenes Portal- und App-Ökosystem, seit 1. Januar 2026", ""],
     ],
   },
@@ -234,6 +235,7 @@ const en: T = {
     list: [
       ["medizzconnect.com", "A worldwide platform where patients choose doctors they trust, through profile films", "https://medizzconnect.com"],
       ["9am.store", "Layout optimisation for the online store", "https://9am.store"],
+      ["maps.code-craft.tech", "Our own map platform for Syria: maps, routing and address search, self-hosted", "https://maps.code-craft.tech"],
       ["Code Craft Eco system", "Our own portal and app ecosystem, since 1 January 2026", ""],
     ],
   },
@@ -357,6 +359,7 @@ const ar: T = {
     list: [
       ["medizzconnect.com", "منصة عالمية يختار فيها المرضى أطباء يثقون بهم عبر أفلام تعريفية", "https://medizzconnect.com"],
       ["9am.store", "تحسين تصميم المتجر الإلكتروني", "https://9am.store"],
+      ["maps.code-craft.tech", "منصة خرائط خاصة بسوريا: خرائط وتخطيط مسارات وبحث عن العناوين، على خوادمنا", "https://maps.code-craft.tech"],
       ["منظومة Code Craft", "بوابتنا ومنظومة تطبيقاتنا الخاصة منذ 1 كانون الثاني 2026", ""],
     ],
   },
