@@ -78,3 +78,16 @@ tools/legacy/export.sh                        # Altsystem lesend sichern (~/prod
 python3 tools/legacy/import.py ~/prod-export > /tmp/import.sql && psql -d codecraft -f /tmp/import.sql
 ```
 Ohne Node fällt der Server auf die eigene HTML-Vorlage (Chromium) zurück.
+
+## Kassensystem (KM POS) im Kundenportal
+
+Kunden mit verknüpfter Kasse sehen im Portal den Bereich **Kasse** (Lizenzen, verbundene Geräte, verschlüsselte Backups, Lizenz anfragen). Alle anderen sehen nichts Neues. Mitarbeiter mit `customer_write` legen Lizenzen pro Kunde an, verlängern oder sperren sie.
+
+| Variable | Zweck |
+|---|---|
+| `KMPOS_LICENSE_PRIVKEY` | Ed25519-Privatschlüssel (Base64, 32 Byte) – passend zu `KMPOS_LICENSE_PUBKEY` beim Bau der Kasse |
+| `KMPOS_RELAY_URL` | Relay für Fernzugriff (Standard `wss://relay.code-craft.tech/agent`) |
+| `KMPOS_TUNNEL_DOMAIN` | Subdomain-Basis (Standard `pos.code-craft.tech`) |
+| `POS_BACKUP_DIR` | Ablage der E2E-verschlüsselten Backups, z. B. `/var/lib/codecraft/pos-backups` (30 je Kasse) |
+
+Ablauf an der Kasse: Einstellungen → *Kundenportal* → mit Portal-Zugang anmelden → freie Lizenz/Backup wird angeboten. Backups sind mit dem Wiederherstellungscode der Kasse verschlüsselt; der Server kann sie nicht lesen.

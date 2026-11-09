@@ -15,6 +15,7 @@ pub mod notify;
 mod offboard;
 mod organizations;
 mod payments;
+pub mod pos;
 mod projects;
 mod quotes;
 pub mod remote;
@@ -93,6 +94,22 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/applications", get(jobs::applications))
         .route("/api/v1/contact-requests", get(jobs::contact_requests))
         // Kunden & Rechnungen
+        // Kassensystem (universal-pos-erp)
+        .route("/api/v1/pos/overview", get(pos::overview))
+        .route("/api/v1/pos/registers/{id}/revoke", post(pos::revoke_register))
+        .route("/api/v1/pos/admin/licenses", post(pos::create_license))
+        .route("/api/v1/pos/admin/licenses/{id}/extend", post(pos::extend_license))
+        .route("/api/v1/pos/admin/licenses/{id}/revoke", post(pos::revoke_license))
+        .route("/api/v1/pos/link", post(pos::link))
+        .route("/api/v1/pos/register/offers", get(pos::offers))
+        .route("/api/v1/pos/register/activate", post(pos::activate))
+        .route("/api/v1/pos/register/license", get(pos::current_license))
+        .route("/api/v1/pos/register/unlink", post(pos::unlink))
+        .route(
+            "/api/v1/pos/register/backups",
+            post(pos::upload_backup).layer(DefaultBodyLimit::max(pos::MAX_BACKUP + 1024)),
+        )
+        .route("/api/v1/pos/register/backups/{id}", get(pos::download_backup))
         .route("/api/v1/organizations", get(organizations::list).post(organizations::create))
         .route("/api/v1/organizations/{id}", get(organizations::get))
         .route("/api/v1/invoices", get(invoices::list).post(invoices::create_draft))

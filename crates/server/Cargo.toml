@@ -45,6 +45,7 @@ rustls-pemfile = "2.2.0"
 base64 = "0.23.1"
 p256 = { version = "0.13", features = ["ecdh", "ecdsa"] }
 hkdf = "0.12"
+ed25519-dalek = "2"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 
 [dev-dependencies]

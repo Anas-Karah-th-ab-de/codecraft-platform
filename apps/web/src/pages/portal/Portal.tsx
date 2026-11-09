@@ -11,6 +11,7 @@ import { CommProvider } from "./Comm";
 import Chat, { useUnread } from "./Chat";
 import Mail, { AppPasswords, useMailUnread } from "./Mail";
 import Remote from "./Remote";
+import Pos from "./Pos";
 import { CustomerAccess, ForcePassword } from "./Access";
 import Tickets from "./Tickets";
 import Shop from "./Shop";
@@ -35,7 +36,7 @@ const AnnBadge = () => <Badge n={useNotify().annUnread} />;
 const NAV_ICON: Record<string, string> = {
   "": "home", nachrichten: "chat", mail: "mail", mitteilungen: "bell", ankuendigungen: "megaphone", support: "support",
   "anfragen-entwicklung": "code", projekte: "folder", shop: "cart", kunden: "building", produkte: "box", geraete: "cpu",
-  fernzugriff: "key", angebote: "quote", rechnungen: "receipt", arbeit: "clock", stellen: "briefcase", anfragen: "inbox2",
+  fernzugriff: "key", kasse: "receipt", angebote: "quote", rechnungen: "receipt", arbeit: "clock", stellen: "briefcase", anfragen: "inbox2",
   benutzer: "users", konto: "account", hilfe: "help", "support-zugriff": "shield", app: "download",
 };
 
@@ -87,6 +88,8 @@ export default function Portal() {
     ["produkte", "p.products", me.is_employee && can(me, "catalog_read"), 1],
     ["geraete", "p.devices", can(me, "devices"), 1],
     ["fernzugriff", "p.access", me.role === "customer", 1],
+    // Nur für Kunden mit Kassen-Lizenz/-Gerät; Mitarbeiter mit Kundenrechten verwalten Lizenzen
+    ["kasse", "p.pos", !!me.has_pos || (me.is_employee && can(me, "customer_write")), 1],
     ["angebote", "p.quotes", can(me, "invoice_read"), 2],
     ["rechnungen", "p.invoices", can(me, "invoice_read"), 2],
     ["arbeit", "p.work", me.is_employee, 3],
@@ -186,6 +189,7 @@ export default function Portal() {
             <Route path="geraete" element={<Devices />} />
             <Route path="geraete/:id" element={<Remote />} />
             <Route path="fernzugriff" element={<CustomerAccess />} />
+            <Route path="kasse" element={<Pos />} />
             <Route path="benutzer" element={<Users />} />
             <Route path="konto" element={<Account />} />
             <Route path="support-zugriff" element={<><h1>{t("p.remote_help")}</h1><AppSupport /></>} />

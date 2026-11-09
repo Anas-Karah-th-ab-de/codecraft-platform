@@ -23,7 +23,7 @@ const REMEMBER_HOURS: i64 = 30 * 24;
 /// Einfaches Rate-Limit gegen Passwort-Raten (pro E-Mail): 5 Fehlversuche / 10 Minuten
 static FAILS: Mutex<Option<HashMap<String, (u32, Instant)>>> = Mutex::new(None);
 
-fn too_many(key: &str) -> bool {
+pub(crate) fn too_many(key: &str) -> bool {
     let mut g = FAILS.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
     match m.get(key) {
@@ -32,7 +32,7 @@ fn too_many(key: &str) -> bool {
     }
 }
 
-fn record_fail(key: &str) {
+pub(crate) fn record_fail(key: &str) {
     let mut g = FAILS.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
     let e = m.entry(key.to_owned()).or_insert((0, Instant::now()));
@@ -42,7 +42,7 @@ fn record_fail(key: &str) {
     e.0 += 1;
 }
 
-fn clear_fails(key: &str) {
+pub(crate) fn clear_fails(key: &str) {
     if let Some(m) = FAILS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
         m.remove(key);
     }
@@ -141,6 +141,7 @@ pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>>
         "organization_id": user.organization_id, "two_factor": totp, "departments": depts,
         "is_employee": user.role.is_employee(), "must_change_password": must_change, "locale": locale,
         "may_announce": super::announce::may_publish(&user),
+        "has_pos": super::pos::has_pos(&s.db, user.organization_id).await,
     })))
 }
 
