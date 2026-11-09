@@ -1287,3 +1287,39 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .update-banner { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
   margin: 0 0 12px; padding: 12px 14px; border-radius: 12px; background: var(--card); border: 1px solid var(--gold, #c9a227); }
 .update-banner small { display: block; }
+
+/* ── Webseite auf dem Handy: kompakter, weniger Scrollen ───────────────── */
+@media (max-width: 640px) {
+  .hx-craft, .hx-till, .hx-ai, .hx-services, .hx-story, .hx-contact { padding: var(--s-7) 0; }
+  .hx-work { padding: var(--s-6) 0 var(--s-7); }
+  /* Startfläche: Text zuerst, Platine kleiner */
+  .hx-hero-grid { gap: var(--s-4); padding-block: var(--s-6) var(--s-6); }
+  .hx-hero h1 { margin-bottom: var(--s-4); }
+  .hx-hero-sub { margin-bottom: var(--s-5); }
+  .hx-made { margin-top: var(--s-5); }
+  .board { max-width: 300px; margin-inline: auto; }
+  .board-list { margin-top: var(--s-3); }
+  /* Kasse: Pakete als wischbare Karten statt untereinander */
+  .pos-tiers { display: grid; grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 84%; overflow-x: auto;
+    scroll-snap-type: x mandatory; gap: 10px; background: none; border: 0; border-radius: 0; padding-bottom: 6px; scrollbar-width: thin; }
+  .tier { scroll-snap-align: start; border: 1px solid var(--ink-line); border-radius: var(--r-3); padding: var(--s-4); }
+  .tier-price { font-size: 1.8rem; margin-bottom: var(--s-3); }
+  .till-demo { margin-top: var(--s-5); gap: var(--s-4); }
+  .till-items button { min-height: 64px; padding: 10px; }
+  .till-cart { min-height: 0; }
+  .queue { display: none; }
+  .specs { font-size: .85rem; }
+  .specs > div { grid-template-columns: 7.5em 1fr; gap: 8px; padding: 6px 0; }
+  /* KI-Server */
+  .hx-ai-grid { gap: var(--s-5); }
+  .hx-uses li { padding: 10px 0; }
+  .ai-plan { padding: 12px 14px; }
+  /* Geschichte */
+  .hx-mission { margin-top: var(--s-6); }
+  .timeline li { padding-bottom: var(--s-3); }
+  /* Kontakt */
+  .hx-cdetails > div { grid-template-columns: 6.5em 1fr; gap: var(--s-3); padding: 10px 0; }
+  /* Fußzeile: Linkgruppen zweispaltig */
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: var(--s-5) var(--s-4); }
+  .footer-brand { grid-column: 1 / -1; }
+}
