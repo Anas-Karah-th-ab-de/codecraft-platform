@@ -112,6 +112,7 @@ const de = {
       ["medizzconnect.com", "Weltweite Plattform, auf der Patienten über Profilfilme Ärzte ihres Vertrauens wählen", "https://medizzconnect.com"],
       ["9am.store", "Layout-Optimierung für den Onlineshop", "https://9am.store"],
       ["Code Craft Ökosystem", "Eigenes Portal- und App-Ökosystem, seit 1. Januar 2026", ""],
+      ["Universal POS & Lager", "Offline-Kasse für Handel, Gastronomie und Werkstatt – Rust, Android-Tablet als Server, DE/EN/AR", "#kasse"],
     ],
   },
   contact: {
@@ -235,6 +236,7 @@ const en: T = {
       ["medizzconnect.com", "A worldwide platform where patients choose doctors they trust, through profile films", "https://medizzconnect.com"],
       ["9am.store", "Layout optimisation for the online store", "https://9am.store"],
       ["Code Craft Eco system", "Our own portal and app ecosystem, since 1 January 2026", ""],
+      ["Universal POS & Stock", "Offline till for retail, restaurants and workshops – Rust, Android tablet as server, DE/EN/AR", "#kasse"],
     ],
   },
   contact: {
@@ -358,6 +360,7 @@ const ar: T = {
       ["medizzconnect.com", "منصة عالمية يختار فيها المرضى أطباء يثقون بهم عبر أفلام تعريفية", "https://medizzconnect.com"],
       ["9am.store", "تحسين تصميم المتجر الإلكتروني", "https://9am.store"],
       ["منظومة Code Craft", "بوابتنا ومنظومة تطبيقاتنا الخاصة منذ 1 كانون الثاني 2026", ""],
+      ["نظام نقاط البيع والمستودع", "كاشير يعمل دون إنترنت للمتاجر والمطاعم والورش – Rust، والتابلت أندرويد كخادم، بثلاث لغات", "#kasse"],
     ],
   },
   contact: {
