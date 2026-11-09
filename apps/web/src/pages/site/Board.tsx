@@ -22,6 +22,7 @@ export function Board({ items, label }: { items: BoardItem[]; label: string }) {
   const [lit, setLit] = useState(-1);
   return (
     <div className="board draw">
+      <div className="board-art">
       <svg viewBox="0 0 600 480" role="img" aria-label={label}>
         <defs>
           <pattern id="dots" width="16" height="16" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1.1" className="b-dots" /></pattern>
@@ -62,6 +63,7 @@ export function Board({ items, label }: { items: BoardItem[]; label: string }) {
           </Link>
         );
       })}
+      </div>
       <ul className="board-list">
         {items.map((it) => <li key={it.t}><Link to={it.to}><b>{it.t}</b><span>{it.d}</span></Link></li>)}
       </ul>

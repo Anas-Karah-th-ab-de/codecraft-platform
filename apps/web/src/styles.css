@@ -311,6 +311,7 @@ tr.blk td { background: var(--paper-2); color: var(--text); font-weight: 600; }
 .hx-made::before { content: ""; width: 28px; height: 1px; background: var(--gold); }
 
 .board { position: relative; width: 100%; }
+.board-art { position: relative; }
 .board svg { display: block; width: 100%; height: auto; overflow: visible; }
 .b-edge { fill: var(--white); stroke: var(--line-2); stroke-width: 1.5; }
 .b-dots { fill: var(--line); }
@@ -553,7 +554,9 @@ tr.blk td { background: var(--paper-2); color: var(--text); font-weight: 600; }
   .acc-d { display: none; }
   .hx-work li > a, .hx-work li > div { grid-template-columns: 1fr 1.6em; gap: var(--s-2); }
   .hx-work span { grid-column: 1; grid-row: 2; }
-  .b-label { display: none; }
+  .b-label { padding: 3px 7px; }
+  .b-label b { font-size: clamp(.66rem, 2.6vw, .85rem); }
+  .b-label span { display: none; }
   .board-list { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); list-style: none; padding: 0; margin: var(--s-4) 0 0; }
   .board-list a { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-2); background: var(--white); color: var(--text); }
   .board-list b { font-weight: 600; }
@@ -1297,7 +1300,6 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
   .hx-hero h1 { margin-bottom: var(--s-4); }
   .hx-hero-sub { margin-bottom: var(--s-5); }
   .hx-made { margin-top: var(--s-5); }
-  .board { max-width: 300px; margin-inline: auto; }
   .board-list { margin-top: var(--s-3); }
   /* Kasse: Pakete als wischbare Karten statt untereinander */
   .pos-tiers { display: grid; grid-auto-flow: column; grid-template-columns: none; grid-auto-columns: 84%; overflow-x: auto;
