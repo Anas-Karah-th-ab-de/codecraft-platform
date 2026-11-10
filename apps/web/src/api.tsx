@@ -154,6 +154,7 @@ export type Me = {
   must_change_password: boolean;
   locale?: "de" | "en" | "ar";
   may_announce?: boolean;
+  has_pos?: boolean;
 };
 
 type AuthCtx = {

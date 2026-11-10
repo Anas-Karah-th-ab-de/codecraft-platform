@@ -52,7 +52,8 @@ export function Home() {
           <ul>
             {T.work.list.map(([name, desc, url]) => (
               <li key={name}>
-                {url ? <a href={url} target="_blank" rel="noopener noreferrer"><b>{name}</b><span>{desc}</span><i aria-hidden="true">↗</i></a>
+                {url.startsWith("#") ? <a href={url}><b>{name}</b><span>{desc}</span><i aria-hidden="true">↓</i></a>
+                  : url ? <a href={url} target="_blank" rel="noopener noreferrer"><b>{name}</b><span>{desc}</span><i aria-hidden="true">↗</i></a>
                   : <div><b>{name}</b><span>{desc}</span><i /></div>}
               </li>
             ))}

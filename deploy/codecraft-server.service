@@ -11,6 +11,8 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
+# /var/lib/codecraft beschreibbar (POS_BACKUP_DIR=/var/lib/codecraft/pos-backups)
+StateDirectory=codecraft
 
 [Install]
 WantedBy=multi-user.target

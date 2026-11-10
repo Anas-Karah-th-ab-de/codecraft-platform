@@ -83,21 +83,44 @@ pub struct LoginBody {
 
 type LoginRow = (Uuid, String, String, String, Option<Uuid>, Option<String>, Option<String>, bool);
 
+/// Bremse für eine Passwort-Anmeldung (Portal, Kasse): zählt Fehlversuche je E-Mail+Adresse,
+/// je Adresse und je E-Mail – siehe `FAILS`.
+pub(crate) struct LoginGuard {
+    pair: String,
+    ip: String,
+    email: String,
+}
+
+impl LoginGuard {
+    /// `Err(TooManyRequests)`, wenn eine der Grenzen erreicht ist; zu lange Eingaben → `Unauthorized`
+    pub(crate) fn check(email: &str, password: &str, headers: &HeaderMap) -> Result<Self, ApiError> {
+        if email.len() > 254 || password.len() > 1024 {
+            return Err(ApiError::Unauthorized);
+        }
+        let ip = format!("ip:{}", client_ip(headers));
+        let g = LoginGuard { pair: format!("{email}|{ip}"), ip, email: email.to_owned() };
+        if too_many(&g.pair) || too_many_n(&g.ip, 30) || too_many_n(&g.email, 50) {
+            return Err(ApiError::TooManyRequests);
+        }
+        Ok(g)
+    }
+
+    pub(crate) fn fail(&self) {
+        record_fail(&self.pair);
+        record_fail(&self.ip);
+        record_fail(&self.email);
+    }
+
+    pub(crate) fn ok(&self) {
+        clear_fails(&self.pair);
+        clear_fails(&self.email);
+    }
+}
+
 pub async fn login(State(s): State<AppState>, headers: HeaderMap, Json(b): Json<LoginBody>) -> ApiResult<Json<Value>> {
     let email = b.email.trim().to_lowercase();
-    if email.len() > 254 || b.password.len() > 1024 {
-        return Err(ApiError::Unauthorized);
-    }
-    let ip = format!("ip:{}", client_ip(&headers));
-    let pair = format!("{email}|{ip}");
-    if too_many(&pair) || too_many_n(&ip, 30) || too_many_n(&email, 50) {
-        return Err(ApiError::TooManyRequests);
-    }
-    let fail = || {
-        record_fail(&pair);
-        record_fail(&ip);
-        record_fail(&email);
-    };
+    let guard = LoginGuard::check(&email, &b.password, &headers)?;
+    let fail = || guard.fail();
     let row: Option<LoginRow> = sqlx::query_as(
         "SELECT id, email, display_name, role, organization_id, password_hash, totp_secret, must_change_password
            FROM users WHERE lower(email) = $1 AND is_active",
@@ -125,8 +148,7 @@ pub async fn login(State(s): State<AppState>, headers: HeaderMap, Json(b): Json<
             }
         }
     }
-    clear_fails(&pair);
-    clear_fails(&email);
+    guard.ok();
     let token = new_token("cc_s_");
     let hours = if b.remember { REMEMBER_HOURS } else { SESSION_HOURS };
     let mut tx = s.db.begin().await?;
@@ -175,6 +197,7 @@ pub async fn me(State(s): State<AppState>, user: User) -> ApiResult<Json<Value>>
         "organization_id": user.organization_id, "two_factor": totp, "departments": depts,
         "is_employee": user.role.is_employee(), "must_change_password": must_change, "locale": locale,
         "may_announce": super::announce::may_publish(&user),
+        "has_pos": super::pos::has_pos(&s.db, user.organization_id).await,
     })))
 }
 

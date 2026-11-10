@@ -113,6 +113,7 @@ const de = {
       ["9am.store", "Layout-Optimierung für den Onlineshop", "https://9am.store"],
       ["maps.code-craft.tech", "Eigene Navigationsplattform für Syrien: App mit Live-Verkehr, KI-Straßenerkennung aus Satellitenbildern und 3D-Karten", "https://maps.code-craft.tech"],
       ["Code Craft Ökosystem", "Eigenes Portal- und App-Ökosystem, seit 1. Januar 2026", ""],
+      ["Universal POS & Lager", "Offline-Kasse für Handel, Gastronomie und Werkstatt – Rust, Android-Tablet als Server, DE/EN/AR", "#kasse"],
     ],
   },
   contact: {
@@ -237,6 +238,7 @@ const en: T = {
       ["9am.store", "Layout optimisation for the online store", "https://9am.store"],
       ["maps.code-craft.tech", "Our own navigation platform for Syria: app with live traffic, AI road detection from satellite imagery and 3D maps", "https://maps.code-craft.tech"],
       ["Code Craft Eco system", "Our own portal and app ecosystem, since 1 January 2026", ""],
+      ["Universal POS & Stock", "Offline till for retail, restaurants and workshops – Rust, Android tablet as server, DE/EN/AR", "#kasse"],
     ],
   },
   contact: {
@@ -361,6 +363,7 @@ const ar: T = {
       ["9am.store", "تحسين تصميم المتجر الإلكتروني", "https://9am.store"],
       ["maps.code-craft.tech", "منصة ملاحة خاصة بسوريا: تطبيق مع حركة مرور مباشرة، وكشف الطرق من صور الأقمار الصناعية بالذكاء الاصطناعي، وخرائط ثلاثية الأبعاد", "https://maps.code-craft.tech"],
       ["منظومة Code Craft", "بوابتنا ومنظومة تطبيقاتنا الخاصة منذ 1 كانون الثاني 2026", ""],
+      ["نظام نقاط البيع والمستودع", "كاشير يعمل دون إنترنت للمتاجر والمطاعم والورش – Rust، والتابلت أندرويد كخادم، بثلاث لغات", "#kasse"],
     ],
   },
   contact: {
