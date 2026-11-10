@@ -16,6 +16,7 @@ mod offboard;
 mod organizations;
 mod payments;
 pub mod pos;
+pub mod pos_keys;
 mod projects;
 mod quotes;
 pub mod remote;
@@ -114,6 +115,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/pos/admin/ai-credits", post(pos::create_ai_credit))
         .route("/api/v1/pos/register/ai-credits", get(pos::register_ai_credits))
         .route("/api/v1/pos/register/assistant", post(pos::register_assistant))
+        .route("/api/v1/pos/admin/keys", get(pos_keys::list_keys).post(pos_keys::create_keys))
+        .route("/api/v1/pos/admin/keys/{id}/revoke", post(pos_keys::revoke_key))
+        .route("/api/v1/pos/redeem", post(pos_keys::redeem))
+        .route("/api/v1/pos/register/redeem", post(pos_keys::redeem_register))
+        .route("/api/v1/pos/report", post(pos_keys::report))
+        .route("/api/v1/pos/register/report", post(pos_keys::report_register))
         .route("/api/v1/organizations", get(organizations::list).post(organizations::create))
         .route("/api/v1/organizations/{id}", get(organizations::get))
         .route("/api/v1/invoices", get(invoices::list).post(invoices::create_draft))

@@ -67,7 +67,7 @@ async fn ticket_org(s: &AppState, user: &User, id: Uuid) -> ApiResult<Option<Uui
 }
 
 /// Echtzeit-Hinweis an Benutzer (Portal/App)
-fn notify(db: &sqlx::PgPool, actor: Uuid, users: &[Uuid], event: &str, ticket: Uuid, number: &str, subject: &str) {
+pub(crate) fn notify(db: &sqlx::PgPool, actor: Uuid, users: &[Uuid], event: &str, ticket: Uuid, number: &str, subject: &str) {
     let msg =
         json!({ "type": "ticket", "event": event, "id": ticket, "number": number, "subject": subject }).to_string();
     for u in users {
@@ -83,7 +83,7 @@ fn notify(db: &sqlx::PgPool, actor: Uuid, users: &[Uuid], event: &str, ticket: U
 }
 
 /// Support-Team: Abteilung SUP, Leitung und Admins
-async fn support_team(s: &AppState) -> Vec<Uuid> {
+pub(crate) async fn support_team(s: &AppState) -> Vec<Uuid> {
     sqlx::query_scalar(
         "SELECT DISTINCT u.id FROM users u
            LEFT JOIN user_departments ud ON ud.user_id = u.id

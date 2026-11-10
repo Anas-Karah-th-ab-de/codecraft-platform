@@ -7,6 +7,7 @@ import { Field, Loading, useSubmit } from "../../ui";
 
 const PT = {
   de: {
+    keys: "Paket-Schlüssel", keysIntro: "Schlüssel erzeugen und an Kunden/Händler weitergeben. In der Kasse: Einstellungen → Abo → „Schlüssel einlösen“ – auch ohne Portal-Konto (die Firma wird dann aus dem Ladennamen angelegt).", kind: "Art", kLicense: "Abo-Paket", kAi: "KI-Einheiten", count: "Anzahl", generate: "Erzeugen", copy: "Kopieren", copied: "Kopiert", print: "Drucken", status: "Status", sOpen: "offen", sRedeemed: "eingelöst", sRevoked: "gesperrt", all: "Alle", revokeKeyQ: "Schlüssel sperren?", redeemedBy: "eingelöst von", reports: "Fehlerberichte aus Kassen erscheinen als Ticket unter Support (Quelle: Kasse).",
     ai: "KI-Einheiten (Assistent)", aiIntro: "Der KI-Assistent der Kasse beantwortet Fragen und erledigt kleine Änderungen. Nach {trial} Test-Antworten werden Einheiten benötigt – lokal auf dem Gerät oder über unsere API.", bought: "gekauft", apiUsed: "über API genutzt", delivered: "an Kasse übertragen", pending: "wird bei der nächsten Verbindung übertragen", units: "Einheiten", aiRequest: "Einheiten anfragen", aiAdd: "Einheiten gutschreiben", aiPacks: "Paket",
     title: "Kasse", intro: "Lizenzen, verbundene Kassen und Backups Ihres KM-Code-Craft-Kassensystems.",
     licenses: "Lizenzen", registers: "Verbundene Kassen", backups: "Backups", none: "Noch nichts vorhanden.",
@@ -19,6 +20,7 @@ const PT = {
     customer: "Kunde", create: "Lizenz anlegen", plan: "Plan", slug: "Subdomain", days: "Laufzeit (Tage)", extend: "Verlängern", extendQ: "Um wie viele Tage verlängern?", revokeLic: "Sperren", revokeLicQ: "Lizenz sperren? Die Kasse fällt nach der Kulanzzeit auf Free zurück.",
   },
   en: {
+    keys: "Package keys", keysIntro: "Generate keys and hand them to customers/resellers. On the register: Settings → Subscription → “Redeem key” – works without a portal account too (the company is created from the shop name).", kind: "Type", kLicense: "Subscription package", kAi: "AI units", count: "Count", generate: "Generate", copy: "Copy", copied: "Copied", print: "Print", status: "Status", sOpen: "open", sRedeemed: "redeemed", sRevoked: "revoked", all: "All", revokeKeyQ: "Revoke key?", redeemedBy: "redeemed by", reports: "Error reports from registers appear as tickets under Support (source: POS).",
     ai: "AI units (assistant)", aiIntro: "The register's AI assistant answers questions and makes small changes. After {trial} trial answers units are needed – locally on the device or via our API.", bought: "bought", apiUsed: "used via API", delivered: "delivered to register", pending: "will be delivered on next connection", units: "units", aiRequest: "Request units", aiAdd: "Credit units", aiPacks: "Pack",
     title: "POS", intro: "Licences, connected registers and backups of your KM Code Craft POS.",
     licenses: "Licences", registers: "Connected registers", backups: "Backups", none: "Nothing yet.",
@@ -31,6 +33,7 @@ const PT = {
     customer: "Customer", create: "Create licence", plan: "Plan", slug: "Subdomain", days: "Duration (days)", extend: "Extend", extendQ: "Extend by how many days?", revokeLic: "Revoke", revokeLicQ: "Revoke licence? The register falls back to Free after the grace period.",
   },
   ar: {
+    keys: "مفاتيح الباقات", keysIntro: "أنشئ مفاتيح وسلّمها للعملاء أو الموزعين. في الكاشير: الإعدادات ← الاشتراك ← «تفعيل مفتاح» – يعمل أيضاً بدون حساب في البوابة (تُنشأ الشركة من اسم المتجر).", kind: "النوع", kLicense: "باقة اشتراك", kAi: "وحدات الذكاء", count: "العدد", generate: "إنشاء", copy: "نسخ", copied: "تم النسخ", print: "طباعة", status: "الحالة", sOpen: "متاح", sRedeemed: "مُفعّل", sRevoked: "موقوف", all: "الكل", revokeKeyQ: "إيقاف المفتاح؟", redeemedBy: "فعّله", reports: "تظهر تقارير الأعطال من أجهزة الكاشير كتذاكر في قسم الدعم (المصدر: الكاشير).",
     ai: "وحدات الذكاء (المساعد)", aiIntro: "يجيب المساعد الذكي في الكاشير عن الأسئلة وينفذ تغييرات صغيرة. بعد {trial} إجابة تجريبية تحتاج إلى وحدات – محلياً على الجهاز أو عبر واجهتنا.", bought: "مشتراة", apiUsed: "مستخدمة عبر الواجهة", delivered: "أُرسلت إلى الكاشير", pending: "ستُرسل عند الاتصال التالي", units: "وحدة", aiRequest: "طلب وحدات", aiAdd: "إضافة وحدات", aiPacks: "باقة",
     title: "نظام الكاشير", intro: "التراخيص والأجهزة المتصلة والنسخ الاحتياطية لنظام الكاشير من KM Code Craft.",
     licenses: "التراخيص", registers: "الأجهزة المتصلة", backups: "النسخ الاحتياطية", none: "لا يوجد شيء بعد.",
@@ -77,6 +80,7 @@ export default function Pos() {
       {path && !ov.data && <Loading error={ov.error} />}
       {ov.data && <Content ov={ov.data} reload={ov.reload} staff={staff} org={org} />}
       {(!staff || org) && <AiUnits staff={staff} org={org} />}
+      {staff && me && can(me, "customer_write") && <Keys />}
       {!staff && <RequestLicense />}
     </div>
   );
@@ -274,6 +278,94 @@ function AiUnits({ staff, org }: { staff: boolean; org: string }) {
           {error && <p className="error">{error}</p>}
         </form>
       ))}
+    </section>
+  );
+}
+
+type Key = { id: string; code: string; kind: "license" | "ai"; plan: string | null; days: number | null; units: number | null; note: string | null; status: string; created_at: string; redeemed_at: string | null; business_name: string | null };
+
+/** Admin: Schlüssel für Pakete (Abo/KI) erzeugen, weitergeben, sperren. */
+function Keys() {
+  const { locale } = useI18n();
+  const T = PT[locale];
+  const [filter, setFilter] = useState("open");
+  const path = `/api/v1/pos/admin/keys${filter ? `?status=${filter}` : ""}`;
+  const keys = useApi<Key[]>(path, [path]);
+  const [f, setF] = useState({ kind: "license", plan: "basic", days: "365", units: "500", count: "1", note: "" });
+  const [fresh, setFresh] = useState<Key[]>([]);
+  const { busy, error, run } = useSubmit();
+  const label = (k: Key) => (k.kind === "license" ? `${k.plan?.toUpperCase()} · ${k.days} d` : `${k.units} ${T.units}`);
+  const print = (list: Key[]) => {
+    const w = window.open("", "_blank");
+    if (!w) return;
+    const esc = (x: string) => x.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+    w.document.write(`<html dir="${locale === "ar" ? "rtl" : "ltr"}"><head><title>KM Code Craft</title><style>body{font-family:sans-serif}.k{border:1px dashed #999;padding:14px;margin:8px;display:inline-block;width:300px}.c{font:700 18px monospace;letter-spacing:1px}img{height:28px}</style></head><body>${list.map((k) => `<div class="k"><img src="${location.origin}/brand/logo.png" alt=""><p>${esc(label(k))}</p><p class="c" dir="ltr">${esc(k.code)}</p><small>code-craft.tech</small></div>`).join("")}</body></html>`);
+    w.document.close();
+    setTimeout(() => w.print(), 400);
+  };
+  return (
+    <section className="card">
+      <h2>🔑 {T.keys}</h2>
+      <p className="muted">{T.keysIntro}</p>
+      <form className="row wrap" onSubmit={run(async () => {
+        const body = f.kind === "license" ? { kind: "license", plan: f.plan, days: Number(f.days) } : { kind: "ai", units: Number(f.units) };
+        const r = await api<Key[]>("/api/v1/pos/admin/keys", { method: "POST", body: { ...body, count: Number(f.count), note: f.note || null } });
+        setFresh(r);
+        keys.reload();
+      })}>
+        <Field label={T.kind}>
+          <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value })}>
+            <option value="license">{T.kLicense}</option>
+            <option value="ai">{T.kAi}</option>
+          </select>
+        </Field>
+        {f.kind === "license" ? (
+          <>
+            <Field label={T.plan}>
+              <select value={f.plan} onChange={(e) => setF({ ...f, plan: e.target.value })}>
+                {Object.entries(T.plans).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+              </select>
+            </Field>
+            <Field label={T.days}><input type="number" min={1} max={3660} value={f.days} onChange={(e) => setF({ ...f, days: e.target.value })} /></Field>
+          </>
+        ) : (
+          <Field label={T.units}><input type="number" min={1} max={1000000} value={f.units} onChange={(e) => setF({ ...f, units: e.target.value })} /></Field>
+        )}
+        <Field label={T.count}><input type="number" min={1} max={200} value={f.count} onChange={(e) => setF({ ...f, count: e.target.value })} /></Field>
+        <Field label={T.note}><input value={f.note} onChange={(e) => setF({ ...f, note: e.target.value })} /></Field>
+        <button className="btn" disabled={busy}>{T.generate}</button>
+        {error && <p className="error">{error}</p>}
+      </form>
+      {fresh.length > 0 && (
+        <div className="stack">
+          <pre dir="ltr" style={{ userSelect: "all" }}>{fresh.map((k) => `${k.code}  ${label(k)}`).join("\n")}</pre>
+          <div className="row">
+            <button className="btn small ghost" onClick={() => navigator.clipboard?.writeText(fresh.map((k) => k.code).join("\n"))}>{T.copy}</button>
+            <button className="btn small ghost" onClick={() => print(fresh)}>{T.print}</button>
+          </div>
+        </div>
+      )}
+      <div className="row wrap">
+        {[["open", T.sOpen], ["redeemed", T.sRedeemed], ["revoked", T.sRevoked], ["", T.all]].map(([v, l]) => (
+          <button key={v} className={`btn small ${filter === v ? "" : "ghost"}`} onClick={() => setFilter(v)}>{l}</button>
+        ))}
+      </div>
+      {!keys.data ? <Loading error={keys.error} /> : keys.data.length === 0 ? <p className="muted">{T.none}</p> : (
+        <table className="table">
+          <tbody>
+            {keys.data.map((k) => (
+              <tr key={k.id}>
+                <td dir="ltr"><code>{k.code}</code></td>
+                <td>{label(k)}</td>
+                <td>{k.status === "open" ? T.sOpen : k.status === "redeemed" ? T.sRedeemed : T.sRevoked}</td>
+                <td className="muted">{k.business_name ? `${T.redeemedBy} ${k.business_name} · ${dt(k.redeemed_at, locale)}` : dt(k.created_at, locale)}{k.note ? ` · ${k.note}` : ""}</td>
+                <td>{k.status === "open" && <button className="btn small ghost" onClick={async () => { if (confirm(T.revokeKeyQ)) { await api(`/api/v1/pos/admin/keys/${k.id}/revoke`, { method: "POST" }); keys.reload(); } }}>{T.revokeLic}</button>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <p className="muted">ℹ️ {T.reports}</p>
     </section>
   );
 }

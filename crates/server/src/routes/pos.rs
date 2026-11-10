@@ -31,10 +31,10 @@ fn backup_dir() -> PathBuf {
     PathBuf::from(std::env::var("POS_BACKUP_DIR").unwrap_or_else(|_| "data/pos-backups".into()))
 }
 fn relay_url() -> String {
-    std::env::var("KMPOS_RELAY_URL").unwrap_or_else(|_| "wss://relay.code-craft.tech/agent".into())
+    std::env::var("KMPOS_RELAY_URL").unwrap_or_else(|_| "wss://poskm.code-craft.tech/agent".into())
 }
-fn tunnel_domain() -> String {
-    std::env::var("KMPOS_TUNNEL_DOMAIN").unwrap_or_else(|_| "pos.code-craft.tech".into())
+pub(crate) fn tunnel_domain() -> String {
+    std::env::var("KMPOS_TUNNEL_DOMAIN").unwrap_or_else(|_| "poskm.code-craft.tech".into())
 }
 
 // ── Lizenz signieren (kompatibel zu pos_core::license) ──────────────────────
@@ -54,7 +54,7 @@ struct LicensePayload<'a> {
     expires_at: String,
 }
 
-fn signing_key() -> ApiResult<ed25519_dalek::SigningKey> {
+pub(crate) fn signing_key() -> ApiResult<ed25519_dalek::SigningKey> {
     let b64 = std::env::var("KMPOS_LICENSE_PRIVKEY")
         .map_err(|_| ApiError::Conflict("Lizenzschlüssel des Servers fehlt (KMPOS_LICENSE_PRIVKEY)".into()))?;
     let bytes: [u8; 32] = base64::engine::general_purpose::STANDARD
@@ -65,7 +65,7 @@ fn signing_key() -> ApiResult<ed25519_dalek::SigningKey> {
     Ok(ed25519_dalek::SigningKey::from_bytes(&bytes))
 }
 
-fn sign_license(
+pub(crate) fn sign_license(
     id: Uuid,
     tenant_id: &str,
     customer: &str,
@@ -365,7 +365,7 @@ pub async fn revoke_license(State(s): State<AppState>, user: User, Path(id): Pat
     Ok(StatusCode::NO_CONTENT)
 }
 
-async fn customer_name(s: &AppState, org: Uuid) -> ApiResult<String> {
+pub(crate) async fn customer_name(s: &AppState, org: Uuid) -> ApiResult<String> {
     Ok(sqlx::query_scalar("SELECT name FROM organizations WHERE id = $1").bind(org).fetch_one(&s.db).await?)
 }
 
