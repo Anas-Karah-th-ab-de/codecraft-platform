@@ -92,6 +92,8 @@ Kunden mit verknüpfter Kasse sehen im Portal den Bereich **Kasse** (Lizenzen, v
 | `KMPOS_AI_KEY` / `KMPOS_AI_MODEL` | optional: API-Schlüssel und Modellname des Endpunkts |
 | `POS_BACKUP_DIR` | Ablage der E2E-verschlüsselten Backups, z. B. `/var/lib/codecraft/pos-backups` (30 je Kasse) |
 
+Der Lizenzschlüssel ist eingerichtet (10. November 2026). Den öffentlichen Teil, den die Kassen-App beim Bauen braucht, steht in `deploy/kmpos-license.pub`. Der private Teil liegt nur auf dem Server (`/etc/codecraft/server.env`, `/etc/codecraft/kmpos-license.pem`); eine Sicherungskopie hat der Inhaber. Geht er verloren, werden alle ausgestellten Lizenzen ungültig.
+
 **KI-Einheiten:** Mitarbeiter schreiben im Portal unter *Kasse → KI-Einheiten* Einheiten gut; die verbundene Hauptkasse holt sie beim stündlichen Abgleich als signierten Code (`KMAI1.`, an den Betrieb gebunden) ab. Antworten über `/api/v1/pos/register/assistant` werden serverseitig gezählt (100 Test-Antworten je Firma, danach 402).
 
 Ablauf an der Kasse: Einstellungen → *Kundenportal* → mit Portal-Zugang anmelden → freie Lizenz/Backup wird angeboten. Backups sind mit dem Wiederherstellungscode der Kasse verschlüsselt; der Server kann sie nicht lesen.

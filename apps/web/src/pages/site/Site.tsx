@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "
 import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
 import { Field, LangSwitch, useSubmit } from "../../ui";
+import { TEASER } from "./productText";
 import { CONTACT, HOME } from "./homeText";
 import { BrokenTrace } from "./Board";
 
@@ -61,8 +62,8 @@ export function SiteLayout() {
           <nav id="hauptmenue" className={`nav ${menu ? "open" : ""}`} aria-label={t("nav.products")}>
             <NavLink to="/produkte">{t("nav.products")}</NavLink>
             <Link to="/#leistungen">{H.nav.services}</Link>
-            <Link to="/#kasse">{H.nav.till}</Link>
-            <Link to="/#ki">{H.nav.ai}</Link>
+            <NavLink to="/kasse">{H.nav.till}</NavLink>
+            <NavLink to="/ki-server">{H.nav.ai}</NavLink>
             <NavLink to="/karriere" onMouseEnter={() => prefetch(`/api/v1/public/jobs?locale=${locale}`)}>{t("nav.careers")}</NavLink>
             <NavLink to="/kontakt">{t("nav.contact")}</NavLink>
             <Link to="/portal" className="portal-link"><i aria-hidden="true" />{t("nav.portal")}</Link>
@@ -88,8 +89,9 @@ export function SiteLayout() {
           <div>
             <b>{H.foot.offer}</b>
             <Link to="/produkte">{t("products.all")}</Link>
-            <Link to="/#kasse">{H.nav.till}</Link>
-            <Link to="/#ki">{H.nav.ai}</Link>
+            <NavLink to="/kasse">{H.nav.till}</NavLink>
+            <NavLink to="/ki-server">{H.nav.ai}</NavLink>
+            <Link to="/karten">{TEASER[locale].karten[0]}</Link>
             <Link to="/#leistungen">{H.nav.services}</Link>
           </div>
           <div>

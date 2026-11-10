@@ -1325,3 +1325,87 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
   .footer-grid { grid-template-columns: 1fr 1fr; gap: var(--s-5) var(--s-4); }
   .footer-brand { grid-column: 1 / -1; }
 }
+
+/* ── Produktseiten (/kasse, /ki-server, /karten) ───────────────────────── */
+.pp-hero { background: var(--paper); border-bottom: 1px solid var(--line); padding: var(--s-8) 0 var(--s-9); }
+.pp-hero-grid { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--s-8); align-items: start; }
+.pp-crumbs { font-size: .88rem; color: var(--text-3); margin-bottom: var(--s-6); display: flex; gap: 8px; flex-wrap: wrap; }
+.pp-crumbs a { color: var(--text-2); }
+.pp h1 { font: 600 clamp(2.2rem, 4.6vw, 3.9rem)/1.04 var(--f-display); letter-spacing: -.035em; margin: 0 0 var(--s-5); color: var(--ink); max-width: 15em; }
+[dir="rtl"] .pp h1 { letter-spacing: 0; line-height: 1.25; }
+.pp-sub { font-size: 1.15rem; color: var(--text-2); max-width: 34em; margin: 0 0 var(--s-6); }
+.pp-sheet { background: var(--white); border: 1px solid var(--line); border-radius: var(--r-3); padding: var(--s-5); box-shadow: var(--sh-2);
+  border-top: 3px solid var(--gold); margin-top: var(--s-8); }
+.pp-sheet-h { font: 600 .9rem var(--f-text); color: var(--gold-text); margin: 0 0 var(--s-3); }
+.pp-sheet dl { margin: 0; }
+.pp-sheet dl > div { display: grid; grid-template-columns: 7.5em 1fr; gap: var(--s-3); padding: 10px 0; border-top: 1px solid var(--line); font-size: .93rem; }
+.pp-sheet dt { color: var(--text-3); }
+.pp-sheet dd { margin: 0; font-weight: 500; }
+.pp-block { padding: var(--s-9) 0; background: var(--paper); }
+.pp-block.pp-alt { background: var(--white); border-block: 1px solid var(--line); }
+.pp-block.pp-dark { background: var(--ink); color: var(--on-ink); }
+.pp-dark h2 { color: #fff; }
+.pp-dark .hx-intro { color: var(--on-ink-2); }
+.pp-feat { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 var(--s-6); margin-top: var(--s-6); }
+.pp-feat > div { border-top: 1px solid var(--line-2); padding: var(--s-4) 0 var(--s-5); }
+.pp-feat h3 { font: 600 1.08rem var(--f-text); margin: 0 0 6px; color: var(--ink); }
+.pp-feat p { margin: 0; color: var(--text-2); font-size: .97rem; }
+.pp-points { list-style: none; padding: 0; margin: var(--s-6) 0 0; max-width: 52em; border-top: 1px solid var(--line); }
+.pp-points li { padding: 14px 0; padding-inline-start: 28px; border-bottom: 1px solid var(--line); position: relative; }
+.pp-points li::before { content: ""; position: absolute; inset-inline-start: 0; top: 1.45em; width: 14px; height: 2px; background: var(--gold); }
+.pp-dark .pp-points, .pp-dark .pp-points li { border-color: var(--ink-line); }
+.pp-dark .pp-points li { color: var(--on-ink); }
+.pp-dark .pp-points li::before { background: var(--gold-hi); }
+.pp-tag { margin: -6px 0 var(--s-4); font-size: .85rem; color: var(--gold-hi); }
+.tier-price.ask { font: 600 1.3rem var(--f-text); letter-spacing: 0; color: var(--gold-hi); }
+.pp-table { width: 100%; max-width: 60em; border-collapse: collapse; margin-top: var(--s-6); font-size: .95rem; }
+.pp-table th, .pp-table td { text-align: start; padding: 12px var(--s-4) 12px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+[dir="rtl"] .pp-table th, [dir="rtl"] .pp-table td { padding: 12px 0 12px var(--s-4); }
+.pp-table thead th { font-size: .82rem; font-weight: 600; color: var(--text-3); border-bottom-color: var(--line-2); }
+.pp-table tbody th { font: 600 .95rem var(--f-text); color: var(--text); text-transform: none; letter-spacing: 0; width: 34%; }
+.pp-feat.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.pp-table td { color: var(--text-2); }
+.pp-steps { grid-template-columns: repeat(4, 1fr); margin-top: var(--s-6); }
+.pp-catalog { margin-top: var(--s-6); max-width: 46em; }
+.pp-close { background: var(--ink); color: var(--on-ink); padding: var(--s-8) 0; }
+.pp-close-grid { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-6); align-items: center; }
+.pp-close h2 { color: #fff; margin-bottom: .3em; }
+.pp-close p { color: var(--on-ink-2); max-width: 38em; margin: 0; }
+.pp-others { padding: var(--s-8) 0 var(--s-9); background: var(--paper); }
+.pp-others ul { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.pp-others li a { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 6fr) 2em; gap: var(--s-5); align-items: center; padding: var(--s-5) 0;
+  border-bottom: 1px solid var(--line); color: var(--text); }
+.pp-others b { font: 600 clamp(1.15rem, 2vw, 1.6rem) var(--f-display); letter-spacing: -.02em; transition: color var(--t); }
+.pp-others span { color: var(--text-2); }
+.pp-others i { font-style: normal; color: var(--gold); justify-self: end; font-size: 1.2rem; }
+.pp-others a:hover { text-decoration: none; }
+.pp-others a:hover b { color: var(--gold-text); }
+.till-more { margin-top: var(--s-5); }
+.till-more .hx-link.dark { margin-top: 0; }
+.ai-more { display: inline-block; margin-top: var(--s-5); }
+@media (max-width: 980px) {
+  .pp-hero-grid { grid-template-columns: 1fr; gap: var(--s-6); }
+  .pp-sheet { margin-top: 0; }
+  .pp-feat, .pp-feat.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pp-steps { grid-template-columns: repeat(2, 1fr); row-gap: var(--s-5); }
+  .pp-steps::before { display: none; }
+}
+@media (max-width: 640px) {
+  .pp-hero { padding: var(--s-6) 0 var(--s-7); }
+  .pp-crumbs { margin-bottom: var(--s-4); }
+  .pp-sub { font-size: 1.02rem; margin-bottom: var(--s-5); }
+  .pp-block { padding: var(--s-7) 0; }
+  .pp-feat, .pp-feat.four { grid-template-columns: 1fr; margin-top: var(--s-4); }
+  .pp-feat > div { padding: var(--s-3) 0 var(--s-4); }
+  .pp-steps { grid-template-columns: 1fr; }
+  /* Tabelle auf dem Handy: Bezeichnung über dem Wert statt zwei enger Spalten */
+  .pp-table thead { display: none; }
+  .pp-table tr { display: block; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .pp-table tbody th, .pp-table td { display: block; width: auto; padding: 0; border: 0; }
+  .pp-table td { margin-top: 2px; }
+  .pp-close { padding: var(--s-7) 0; }
+  .pp-close-grid { grid-template-columns: 1fr; }
+  .pp-others li a { grid-template-columns: 1fr 1.5em; gap: 4px var(--s-3); }
+  .pp-others span { grid-column: 1; grid-row: 2; }
+  .pp-others i { grid-row: 1 / span 2; grid-column: 2; }
+}

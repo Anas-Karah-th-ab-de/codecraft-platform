@@ -1,0 +1,4 @@
+# Öffentlicher Lizenzschlüssel der Kasse (KM POS) – darf veröffentlicht werden.
+# Beim Bauen der Kasse setzen: export KMPOS_LICENSE_PUBKEY=<Wert>; Relay: RELAY_PUBKEY=<Wert>.
+# Gegenstück KMPOS_LICENSE_PRIVKEY liegt nur auf dem Server (/etc/codecraft/server.env, kmpos-license.pem).
+KMPOS_LICENSE_PUBKEY=LJpP1mSFZowHgkrDsru3Dji8XQFWB2eY8pVfIEBCXLQ=

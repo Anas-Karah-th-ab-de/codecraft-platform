@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { I18nProvider } from "./i18n";
 import { AuthProvider } from "./api";
 import { Home } from "./pages/site/Home";
+import { ProductPage } from "./pages/site/Product";
 import { SiteLayout, Products, ProductDetail, Careers, JobDetail, Contact, NotFound } from "./pages/site/Site";
 import "@fontsource/unbounded/latin-500.css";
 import "@fontsource/unbounded/latin-600.css";
@@ -35,6 +36,9 @@ createRoot(document.getElementById("root")!).render(
                 <Route index element={<Home />} />
                 <Route path="produkte" element={<Products />} />
                 <Route path="produkte/:slug" element={<ProductDetail />} />
+                <Route path="kasse" element={<ProductPage k="kasse" />} />
+                <Route path="ki-server" element={<ProductPage k="ki-server" />} />
+                <Route path="karten" element={<ProductPage k="karten" />} />
                 <Route path="karriere" element={<Careers />} />
                 <Route path="karriere/:slug" element={<JobDetail />} />
                 <Route path="kontakt" element={<Contact />} />

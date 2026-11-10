@@ -52,7 +52,8 @@ export function Home() {
           <ul>
             {T.work.list.map(([name, desc, url]) => (
               <li key={name}>
-                {url.startsWith("#") ? <a href={url}><b>{name}</b><span>{desc}</span><i aria-hidden="true">↓</i></a>
+                {url.startsWith("/") ? <Link to={url}><b>{name}</b><span>{desc}</span><i aria-hidden="true">{locale === "ar" ? "←" : "→"}</i></Link>
+                  : url.startsWith("#") ? <a href={url}><b>{name}</b><span>{desc}</span><i aria-hidden="true">↓</i></a>
                   : url ? <a href={url} target="_blank" rel="noopener noreferrer"><b>{name}</b><span>{desc}</span><i aria-hidden="true">↗</i></a>
                   : <div><b>{name}</b><span>{desc}</span><i /></div>}
               </li>
@@ -204,9 +205,11 @@ function Till() {
         <h2 className="hx-h2-small">{T.pricesH}</h2>
         <div className="pos-tiers">
           {(pos.data?.prices ?? []).map((p) => (
-            <div key={p.id} className={`tier ${p.code === "professional" ? "pop" : ""}`}>
-              <p className="tier-name">{p.name}{p.code === "professional" && <em>{T.popular}</em>}</p>
-              <p className="tier-price" dir="ltr">{fmt((p.amount_cents ?? 0) / 100, p.currency, locale, 0)}{(p.amount_cents ?? 0) > 0 && <small> {T.once}</small>}</p>
+            <div key={p.id} className={`tier ${p.code === "basic" ? "pop" : ""}`}>
+              <p className="tier-name">{p.name}{p.code === "basic" && <em>{T.popular}</em>}</p>
+              <p className={`tier-price ${p.amount_cents == null ? "ask" : ""}`} dir={p.amount_cents == null ? undefined : "ltr"}>
+                {p.amount_cents == null ? T.request : <>{fmt(p.amount_cents / 100, p.currency, locale, 0)}{p.amount_cents > 0 && <small> {T.once}</small>}</>}
+              </p>
               <ul>{p.features.map((f) => <li key={f}>{f}</li>)}</ul>
             </div>
           ))}
@@ -214,7 +217,10 @@ function Till() {
         <dl className="specs">
           {T.specs.map(([k, v]) => (<div key={k}><dt>{k}</dt><dd>{v}</dd></div>))}
         </dl>
-        <a className="hx-link dark" href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">{T.ask}</a>
+        <div className="hx-actions till-more">
+          <Link className="hx-btn" to="/kasse">{T.more}</Link>
+          <a className="hx-link dark" href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">{T.ask}</a>
+        </div>
       </div>
     </section>
   );
@@ -232,6 +238,7 @@ function Ai() {
           <h2>{T.h2}</h2>
           <p className="hx-intro">{T.text}</p>
           <ul className="hx-uses">{T.uses.map((u) => <li key={u}>{u}</li>)}</ul>
+          <Link className="hx-link ai-more" to="/ki-server">{T.more}</Link>
         </div>
         <div className="ai-plans">
           {(ai.data?.prices ?? []).map((p, i) => (

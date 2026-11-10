@@ -85,7 +85,10 @@ async fn seeded_catalog_is_consistent(db: PgPool) {
     assert_eq!(price("PROJECT-PACKAGE", "core")["amount_cents"], 750_000);
     assert_eq!(price("DEV-HOURLY", "senior")["amount_cents"], 12_000);
     assert_eq!(price("CONSULTING", "consulting")["amount_cents"], 18_000);
-    assert_eq!(price("CC-POS-V3", "enterprise")["amount_cents"], 59_900);
+    // Kasse: Abo-Pakete, Free kostenlos, alle anderen auf Anfrage (Migration 0028)
+    assert_eq!(price("CC-POS-V3", "free")["amount_cents"], 0);
+    assert_eq!(price("CC-POS-V3", "business")["amount_cents"], Value::Null);
+    assert_eq!(price("CC-POS-V3", "business")["billing"], "on_request");
 
     // Produktverantwortung: Beratung → Management, Agent → Support, Rest → Entwicklung
     let dept = |sku: &str| products.iter().find(|p| p["sku"] == sku).unwrap()["department"].clone();
