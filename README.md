@@ -78,3 +78,63 @@ tools/legacy/export.sh                        # Altsystem lesend sichern (~/prod
 python3 tools/legacy/import.py ~/prod-export > /tmp/import.sql && psql -d codecraft -f /tmp/import.sql
 ```
 Ohne Node fällt der Server auf die eigene HTML-Vorlage (Chromium) zurück.
+
+
+## Datensicherung
+
+Der Produktionsserver sichert sich täglich um 02:30 UTC selbst: Datenbank (`pg_dump`) und Medien
+landen in `/var/backups/codecraft` und bleiben 14 Tage. Das Skript ist `tools/deploy/backup.sh`
+(auf dem Server `/usr/local/sbin/codecraft-backup`), gestartet vom Timer `codecraft-backup.timer`.
+
+Solange kein Backup-Server eingetragen ist, liegt die Sicherung **nur auf demselben Server**. Das
+schützt vor Bedienfehlern und defekten Daten, nicht vor dem Verlust des Servers.
+
+### Backup-Server anschließen
+
+Alles ist vorbereitet; es fehlen nur das Ziel und die Freigabe des Schlüssels.
+
+1. Auf dem Backup-Server einen eigenen Benutzer und Ordner anlegen:
+
+   ```bash
+   adduser --disabled-password backup-cc
+   install -d -m 700 -o backup-cc -g backup-cc /srv/backups/codecraft
+   ```
+
+2. Den öffentlichen Schlüssel des Produktionsservers dort eintragen. Er liegt auf dem
+   Produktionsserver in `/root/.ssh/codecraft_backup.pub` und gehört in
+   `/home/backup-cc/.ssh/authorized_keys` auf dem Backup-Server.
+
+3. Auf dem Produktionsserver den Backup-Server einmal als bekannt bestätigen (Fingerabdruck prüfen):
+
+   ```bash
+   ssh -i /root/.ssh/codecraft_backup backup-cc@BACKUP-SERVER true
+   ```
+
+4. Ziel eintragen: `deploy/backup.env.example` nach `/etc/codecraft/backup.env` kopieren
+   (`chmod 600`) und `BACKUP_REMOTE` setzen, zum Beispiel
+   `backup-cc@BACKUP-SERVER:/srv/backups/codecraft`.
+
+5. Probelauf und Kontrolle:
+
+   ```bash
+   systemctl start codecraft-backup.service
+   journalctl -u codecraft-backup.service -n 5   # „Sicherung übertragen nach …“
+   ```
+
+Der Produktionsserver löscht auf dem Backup-Server nichts. Dort alte Sicherungen selbst aufräumen,
+zum Beispiel täglich mit `find /srv/backups/codecraft -type f -mtime +90 -delete`.
+
+### Wiederherstellen
+
+```bash
+# Datenbank (überschreibt den aktuellen Stand – Dienst vorher anhalten)
+systemctl stop codecraft
+export PGPASSWORD=$(cat /etc/codecraft/db.pass)
+pg_restore -h 127.0.0.1 -p 5434 -U codecraft -d codecraft --clean --if-exists /var/backups/codecraft/db-JJJJMMTT-HHMM.dump
+systemctl start codecraft
+
+# Medien
+tar -xzf /var/backups/codecraft/media-JJJJMMTT-HHMM.tar.gz -C "$(grep '^MEDIA_DIR=' /etc/codecraft/server.env | cut -d= -f2-)"
+```
+
+Nicht in der Sicherung: `/etc/codecraft` (Schlüssel, Passwörter), die Zertifikate und die Maps-Datenbank.
