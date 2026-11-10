@@ -88,6 +88,10 @@ Kunden mit verknüpfter Kasse sehen im Portal den Bereich **Kasse** (Lizenzen, v
 | `KMPOS_LICENSE_PRIVKEY` | Ed25519-Privatschlüssel (Base64, 32 Byte) – passend zu `KMPOS_LICENSE_PUBKEY` beim Bau der Kasse |
 | `KMPOS_RELAY_URL` | Relay für Fernzugriff (Standard `wss://relay.code-craft.tech/agent`) |
 | `KMPOS_TUNNEL_DOMAIN` | Subdomain-Basis (Standard `pos.code-craft.tech`) |
+| `KMPOS_AI_URL` | OpenAI-kompatibler Endpunkt für den Kassen-Assistenten (z. B. llama.cpp-Server `http://127.0.0.1:8081/v1`); ohne → API meldet „noch nicht verfügbar“ |
+| `KMPOS_AI_KEY` / `KMPOS_AI_MODEL` | optional: API-Schlüssel und Modellname des Endpunkts |
 | `POS_BACKUP_DIR` | Ablage der E2E-verschlüsselten Backups, z. B. `/var/lib/codecraft/pos-backups` (30 je Kasse) |
+
+**KI-Einheiten:** Mitarbeiter schreiben im Portal unter *Kasse → KI-Einheiten* Einheiten gut; die verbundene Hauptkasse holt sie beim stündlichen Abgleich als signierten Code (`KMAI1.`, an den Betrieb gebunden) ab. Antworten über `/api/v1/pos/register/assistant` werden serverseitig gezählt (100 Test-Antworten je Firma, danach 402).
 
 Ablauf an der Kasse: Einstellungen → *Kundenportal* → mit Portal-Zugang anmelden → freie Lizenz/Backup wird angeboten. Backups sind mit dem Wiederherstellungscode der Kasse verschlüsselt; der Server kann sie nicht lesen.

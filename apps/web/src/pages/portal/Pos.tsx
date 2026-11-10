@@ -7,6 +7,7 @@ import { Field, Loading, useSubmit } from "../../ui";
 
 const PT = {
   de: {
+    ai: "KI-Einheiten (Assistent)", aiIntro: "Der KI-Assistent der Kasse beantwortet Fragen und erledigt kleine Änderungen. Nach {trial} Test-Antworten werden Einheiten benötigt – lokal auf dem Gerät oder über unsere API.", bought: "gekauft", apiUsed: "über API genutzt", delivered: "an Kasse übertragen", pending: "wird bei der nächsten Verbindung übertragen", units: "Einheiten", aiRequest: "Einheiten anfragen", aiAdd: "Einheiten gutschreiben", aiPacks: "Paket",
     title: "Kasse", intro: "Lizenzen, verbundene Kassen und Backups Ihres KM-Code-Craft-Kassensystems.",
     licenses: "Lizenzen", registers: "Verbundene Kassen", backups: "Backups", none: "Noch nichts vorhanden.",
     available: "nicht genutzt", active: "aktiv", until: "gültig bis", address: "Fernzugriff",
@@ -18,6 +19,7 @@ const PT = {
     customer: "Kunde", create: "Lizenz anlegen", plan: "Plan", slug: "Subdomain", days: "Laufzeit (Tage)", extend: "Verlängern", extendQ: "Um wie viele Tage verlängern?", revokeLic: "Sperren", revokeLicQ: "Lizenz sperren? Die Kasse fällt nach der Kulanzzeit auf Free zurück.",
   },
   en: {
+    ai: "AI units (assistant)", aiIntro: "The register's AI assistant answers questions and makes small changes. After {trial} trial answers units are needed – locally on the device or via our API.", bought: "bought", apiUsed: "used via API", delivered: "delivered to register", pending: "will be delivered on next connection", units: "units", aiRequest: "Request units", aiAdd: "Credit units", aiPacks: "Pack",
     title: "POS", intro: "Licences, connected registers and backups of your KM Code Craft POS.",
     licenses: "Licences", registers: "Connected registers", backups: "Backups", none: "Nothing yet.",
     available: "unused", active: "active", until: "valid until", address: "Remote access",
@@ -29,6 +31,7 @@ const PT = {
     customer: "Customer", create: "Create licence", plan: "Plan", slug: "Subdomain", days: "Duration (days)", extend: "Extend", extendQ: "Extend by how many days?", revokeLic: "Revoke", revokeLicQ: "Revoke licence? The register falls back to Free after the grace period.",
   },
   ar: {
+    ai: "وحدات الذكاء (المساعد)", aiIntro: "يجيب المساعد الذكي في الكاشير عن الأسئلة وينفذ تغييرات صغيرة. بعد {trial} إجابة تجريبية تحتاج إلى وحدات – محلياً على الجهاز أو عبر واجهتنا.", bought: "مشتراة", apiUsed: "مستخدمة عبر الواجهة", delivered: "أُرسلت إلى الكاشير", pending: "ستُرسل عند الاتصال التالي", units: "وحدة", aiRequest: "طلب وحدات", aiAdd: "إضافة وحدات", aiPacks: "باقة",
     title: "نظام الكاشير", intro: "التراخيص والأجهزة المتصلة والنسخ الاحتياطية لنظام الكاشير من KM Code Craft.",
     licenses: "التراخيص", registers: "الأجهزة المتصلة", backups: "النسخ الاحتياطية", none: "لا يوجد شيء بعد.",
     available: "غير مستخدم", active: "نشط", until: "صالح حتى", address: "الوصول عن بُعد",
@@ -73,6 +76,7 @@ export default function Pos() {
       )}
       {path && !ov.data && <Loading error={ov.error} />}
       {ov.data && <Content ov={ov.data} reload={ov.reload} staff={staff} org={org} />}
+      {(!staff || org) && <AiUnits staff={staff} org={org} />}
       {!staff && <RequestLicense />}
     </div>
   );
@@ -208,6 +212,68 @@ function RequestLicense() {
         <button className="btn" disabled={busy}>{T.send}</button>
         {error && <p className="error">{error}</p>}
       </form>
+    </section>
+  );
+}
+
+type AiOverview = { credits: { id: string; units: number; note: string | null; created_at: string; tenant_id: string | null; delivered_at: string | null }[]; bought: number; api_used: number; trial: number };
+
+/** KI-Einheiten: Kunde sieht Käufe/Übertragung und fragt an; Mitarbeiter schreiben gut. */
+function AiUnits({ staff, org }: { staff: boolean; org: string }) {
+  const { me } = useAuth();
+  const { locale } = useI18n();
+  const T = PT[locale];
+  const path = staff ? `/api/v1/pos/ai?organization_id=${org}` : "/api/v1/pos/ai";
+  const ai = useApi<AiOverview>(path, [path]);
+  const [units, setUnits] = useState("500");
+  const [note, setNote] = useState("");
+  const [sent, setSent] = useState(false);
+  const { busy, error, run } = useSubmit();
+  const manage = staff && me && can(me, "customer_write");
+  if (!ai.data) return <Loading error={ai.error} />;
+  const d = ai.data;
+  return (
+    <section className="card">
+      <h2>✨ {T.ai}</h2>
+      <p className="muted">{T.aiIntro.replace("{trial}", String(d.trial))}</p>
+      <p><b>{d.bought}</b> {T.bought} · <b>{d.api_used}</b> {T.apiUsed}</p>
+      {d.credits.length > 0 && (
+        <table className="table">
+          <tbody>
+            {d.credits.map((c) => (
+              <tr key={c.id}>
+                <td>{dt(c.created_at, locale)}</td>
+                <td>{c.units} {T.units}</td>
+                <td className="muted">{c.delivered_at ? `${T.delivered} ${dt(c.delivered_at, locale)}` : T.pending}</td>
+                <td className="muted">{c.note ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {manage && (
+        <form className="row wrap" onSubmit={run(async () => { await api("/api/v1/pos/admin/ai-credits", { method: "POST", body: { organization_id: org, units: Number(units), note: note || null } }); setNote(""); ai.reload(); })}>
+          <Field label={T.units}><input type="number" min={1} max={1000000} value={units} onChange={(e) => setUnits(e.target.value)} /></Field>
+          <Field label="Notiz"><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <button className="btn" disabled={busy || !org}>{T.aiAdd}</button>
+          {error && <p className="error">{error}</p>}
+        </form>
+      )}
+      {!staff && (sent ? <p>{T.sent}</p> : (
+        <form className="row wrap" onSubmit={run(async () => {
+          await api("/api/v1/tickets", { method: "POST", body: { subject: `KI-Einheiten anfragen: ${units}`, body: `${units} ${T.units}\n\n${note}`.trim(), category: "billing", urgency: "normal" } });
+          setSent(true);
+        })}>
+          <Field label={T.aiPacks}>
+            <select value={units} onChange={(e) => setUnits(e.target.value)}>
+              {["500", "2000", "10000"].map((u) => <option key={u} value={u}>{u} {T.units}</option>)}
+            </select>
+          </Field>
+          <Field label={T.note}><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+          <button className="btn" disabled={busy}>{T.aiRequest}</button>
+          {error && <p className="error">{error}</p>}
+        </form>
+      ))}
     </section>
   );
 }

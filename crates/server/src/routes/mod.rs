@@ -110,6 +110,10 @@ pub fn router() -> Router<AppState> {
             post(pos::upload_backup).layer(DefaultBodyLimit::max(pos::MAX_BACKUP + 1024)),
         )
         .route("/api/v1/pos/register/backups/{id}", get(pos::download_backup))
+        .route("/api/v1/pos/ai", get(pos::ai_overview))
+        .route("/api/v1/pos/admin/ai-credits", post(pos::create_ai_credit))
+        .route("/api/v1/pos/register/ai-credits", get(pos::register_ai_credits))
+        .route("/api/v1/pos/register/assistant", post(pos::register_assistant))
         .route("/api/v1/organizations", get(organizations::list).post(organizations::create))
         .route("/api/v1/organizations/{id}", get(organizations::get))
         .route("/api/v1/invoices", get(invoices::list).post(invoices::create_draft))

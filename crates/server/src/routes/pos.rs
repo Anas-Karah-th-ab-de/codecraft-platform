@@ -603,3 +603,169 @@ mod pct_tests {
         assert_eq!(super::pct_decode("100%"), "100%");
     }
 }
+
+// ── KI-Einheiten & Assistent-API ────────────────────────────────────────────
+
+/// Kostenloses Testkontingent je Firma (wie in der Kasse)
+const AI_TRIAL: i64 = 100;
+
+#[derive(Serialize, sqlx::FromRow)]
+pub struct AiCreditRow {
+    pub id: Uuid,
+    pub units: i32,
+    pub note: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub tenant_id: Option<String>,
+    pub delivered_at: Option<DateTime<Utc>>,
+}
+
+async fn ai_summary(s: &AppState, org: Uuid) -> ApiResult<Value> {
+    let credits: Vec<AiCreditRow> =
+        sqlx::query_as("SELECT id, units, note, created_at, tenant_id, delivered_at FROM pos_ai_credits WHERE organization_id = $1 ORDER BY created_at DESC")
+            .bind(org)
+            .fetch_all(&s.db)
+            .await?;
+    let api_used: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pos_ai_usage WHERE organization_id = $1").bind(org).fetch_one(&s.db).await?;
+    let bought: i64 = credits.iter().map(|c| c.units as i64).sum();
+    Ok(json!({ "credits": credits, "bought": bought, "api_used": api_used, "trial": AI_TRIAL }))
+}
+
+pub async fn ai_overview(State(s): State<AppState>, user: User, Query(q): Query<OrgQuery>) -> ApiResult<Json<Value>> {
+    let org = org_of(&user, q.organization_id)?;
+    Ok(Json(ai_summary(&s, org).await?))
+}
+
+#[derive(Deserialize)]
+pub struct NewAiCredit {
+    pub organization_id: Uuid,
+    pub units: i32,
+    pub note: Option<String>,
+}
+
+/// KI-Einheiten gutschreiben (nach Zahlung). Die Kasse holt sie beim nächsten Abgleich ab.
+pub async fn create_ai_credit(State(s): State<AppState>, user: User, Json(b): Json<NewAiCredit>) -> ApiResult<(StatusCode, Json<AiCreditRow>)> {
+    user.require(Permission::CustomerWrite, None)?;
+    if !(1..=1_000_000).contains(&b.units) {
+        return Err(ApiError::BadRequest("Einheiten: 1–1.000.000".into()));
+    }
+    let id = Uuid::now_v7();
+    let mut tx = s.db.begin().await?;
+    let row: AiCreditRow = sqlx::query_as(
+        "INSERT INTO pos_ai_credits (id, organization_id, units, note, created_by) VALUES ($1, $2, $3, $4, $5)
+         RETURNING id, units, note, created_at, tenant_id, delivered_at",
+    )
+    .bind(id)
+    .bind(b.organization_id)
+    .bind(b.units)
+    .bind(b.note.as_deref())
+    .bind(user.id)
+    .fetch_one(&mut *tx)
+    .await?;
+    super::audit(&mut tx, &user.actor(), "pos_ai_credit", "pos_ai_credit", id, json!({"units": b.units})).await?;
+    tx.commit().await?;
+    Ok((StatusCode::CREATED, Json(row)))
+}
+
+#[derive(Serialize)]
+struct AiCreditPayload<'a> {
+    credit_id: String,
+    tenant_id: &'a str,
+    units: i64,
+    issued_at: String,
+}
+
+/// Kasse holt ihre KI-Einheiten: offene Gutschriften werden an ihren Betrieb gebunden und signiert
+/// (Format `KMAI1.`, geprüft mit demselben Schlüssel wie Lizenzen). Bereits gelieferte kommen erneut mit.
+pub async fn register_ai_credits(State(s): State<AppState>, r: Register) -> ApiResult<Json<Value>> {
+    use ed25519_dalek::Signer;
+    let b64 = base64::engine::general_purpose::URL_SAFE_NO_PAD;
+    let mut tx = s.db.begin().await?;
+    let open: Vec<(Uuid, i32)> =
+        sqlx::query_as("SELECT id, units FROM pos_ai_credits WHERE organization_id = $1 AND tenant_id IS NULL ORDER BY created_at FOR UPDATE")
+            .bind(r.organization_id)
+            .fetch_all(&mut *tx)
+            .await?;
+    if !open.is_empty() {
+        let key = signing_key()?;
+        for (id, units) in open {
+            let p = AiCreditPayload { credit_id: id.to_string(), tenant_id: &r.tenant_id, units: units as i64, issued_at: Utc::now().to_rfc3339() };
+            let payload = b64.encode(serde_json::to_vec(&p).map_err(|e| ApiError::BadRequest(e.to_string()))?);
+            let code = format!("KMAI1.{payload}.{}", b64.encode(key.sign(payload.as_bytes()).to_bytes()));
+            sqlx::query("UPDATE pos_ai_credits SET tenant_id = $2, delivered_at = now(), code = $3 WHERE id = $1").bind(id).bind(&r.tenant_id).bind(code).execute(&mut *tx).await?;
+        }
+    }
+    let codes: Vec<String> = sqlx::query_scalar("SELECT code FROM pos_ai_credits WHERE organization_id = $1 AND tenant_id = $2 AND code IS NOT NULL")
+        .bind(r.organization_id)
+        .bind(&r.tenant_id)
+        .fetch_all(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(Json(json!({ "codes": codes })))
+}
+
+#[derive(Deserialize)]
+pub struct AssistBody {
+    pub prompt: String,
+    pub grammar: Option<String>,
+    pub max_tokens: Option<u32>,
+}
+
+/// Assistent über die code-craft.tech-API. Leitet an ein OpenAI-kompatibles Modell weiter
+/// (`KMPOS_AI_URL`, `KMPOS_AI_KEY`, `KMPOS_AI_MODEL`) und zählt je Antwort eine Einheit.
+/// 402 = Einheiten aufgebraucht, 503 = Dienst (noch) nicht eingerichtet.
+pub async fn register_assistant(State(s): State<AppState>, r: Register, Json(b): Json<AssistBody>) -> ApiResult<Response> {
+    let Ok(url) = std::env::var("KMPOS_AI_URL") else {
+        return Ok((StatusCode::SERVICE_UNAVAILABLE, Json(json!({"error": "KI-API noch nicht verfügbar"}))).into_response());
+    };
+    if b.prompt.len() > 24_000 {
+        return Err(ApiError::BadRequest("Anfrage zu lang".into()));
+    }
+    let bought: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(units), 0)::BIGINT FROM pos_ai_credits WHERE organization_id = $1").bind(r.organization_id).fetch_one(&s.db).await?;
+    let used: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pos_ai_usage WHERE organization_id = $1").bind(r.organization_id).fetch_one(&s.db).await?;
+    if used >= bought + AI_TRIAL {
+        return Ok((StatusCode::PAYMENT_REQUIRED, Json(json!({"error": "KI-Einheiten aufgebraucht"}))).into_response());
+    }
+    let recent: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM pos_ai_usage WHERE register_id = $1 AND created_at > now() - interval '1 minute'").bind(r.id).fetch_one(&s.db).await?;
+    if recent >= 20 {
+        return Err(ApiError::TooManyRequests);
+    }
+    // Prompt kommt im ChatML-Format der Kasse → in Nachrichten zerlegen
+    let mut messages = vec![];
+    for part in b.prompt.split("<|im_start|>").skip(1) {
+        let part = part.split("<|im_end|>").next().unwrap_or_default();
+        if let Some((role, content)) = part.split_once('\n') {
+            if !content.trim().is_empty() && matches!(role.trim(), "system" | "user") {
+                messages.push(json!({"role": role.trim(), "content": content.trim()}));
+            }
+        }
+    }
+    if messages.is_empty() {
+        return Err(ApiError::BadRequest("Leere Anfrage".into()));
+    }
+    let model = std::env::var("KMPOS_AI_MODEL").unwrap_or_else(|_| "gpt-4o-mini".into());
+    let mut req = json!({
+        "model": model, "messages": messages, "max_tokens": b.max_tokens.unwrap_or(220).min(400), "temperature": 0.2,
+        "response_format": {"type": "json_object"},
+    });
+    if let Some(g) = &b.grammar {
+        req["grammar"] = json!(g); // llama.cpp-Server versteht GBNF direkt
+    }
+    let client = reqwest::Client::builder().timeout(std::time::Duration::from_secs(45)).build().map_err(|e| ApiError::Conflict(e.to_string()))?;
+    let mut call = client
+        .post(format!("{}/chat/completions", url.trim_end_matches('/')))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(serde_json::to_vec(&req).map_err(|e| ApiError::BadRequest(e.to_string()))?);
+    if let Ok(k) = std::env::var("KMPOS_AI_KEY") {
+        call = call.bearer_auth(k);
+    }
+    let resp = call.send().await.map_err(|e| ApiError::Conflict(format!("KI-Dienst nicht erreichbar: {e}")))?;
+    if !resp.status().is_success() {
+        tracing::warn!("KI-Dienst HTTP {}", resp.status());
+        return Ok((StatusCode::BAD_GATEWAY, Json(json!({"error": "KI-Dienst antwortet nicht"}))).into_response());
+    }
+    let bytes = resp.bytes().await.map_err(|e| ApiError::Conflict(e.to_string()))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| ApiError::Conflict(e.to_string()))?;
+    let content = v["choices"][0]["message"]["content"].as_str().unwrap_or_default().to_string();
+    sqlx::query("INSERT INTO pos_ai_usage (organization_id, register_id) VALUES ($1, $2)").bind(r.organization_id).bind(r.id).execute(&s.db).await?;
+    Ok(Json(json!({ "content": content, "units_left": bought + AI_TRIAL - used - 1 })).into_response())
+}
