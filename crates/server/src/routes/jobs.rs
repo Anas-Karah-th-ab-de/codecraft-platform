@@ -23,6 +23,10 @@ static SUBMITS: Mutex<Option<HashMap<String, (u32, Instant)>>> = Mutex::new(None
 fn allow_submit(ip: &str) -> bool {
     let mut g = SUBMITS.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
+    // Speicher begrenzen: abgelaufene Einträge entfernen, sobald es viele werden
+    if m.len() >= 20_000 {
+        m.retain(|_, v| v.1.elapsed() < Duration::from_secs(3600));
+    }
     let e = m.entry(ip.to_owned()).or_insert((0, Instant::now()));
     if e.1.elapsed() >= Duration::from_secs(3600) {
         *e = (0, Instant::now());

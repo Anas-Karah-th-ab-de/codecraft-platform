@@ -6,7 +6,7 @@
     "build": "tsc -p ."
   },
   "dependencies": {
-    "jspdf": "4.2.0"
+    "jspdf": "4.2.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

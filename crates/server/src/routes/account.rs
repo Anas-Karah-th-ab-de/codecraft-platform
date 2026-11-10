@@ -20,31 +20,54 @@ use uuid::Uuid;
 const SESSION_HOURS: i64 = 12;
 const REMEMBER_HOURS: i64 = 30 * 24;
 
-/// Einfaches Rate-Limit gegen Passwort-Raten (pro E-Mail): 5 Fehlversuche / 10 Minuten
+/// Rate-Limit gegen Passwort-Raten im 10-Minuten-Fenster (Fehlversuche):
+/// 5 je E-Mail und Adresse, 30 je Adresse (viele Konten durchprobieren), 50 je E-Mail insgesamt
+/// (verteiltes Raten). Ein Fremder kann ein Konto damit nicht mehr mit 5 Versuchen aussperren.
 static FAILS: Mutex<Option<HashMap<String, (u32, Instant)>>> = Mutex::new(None);
+const FAIL_WINDOW: Duration = Duration::from_secs(600);
+/// Obergrenze der gemerkten Schlüssel – schützt den Arbeitsspeicher vor massenhaft erfundenen E-Mails
+const MAX_FAIL_KEYS: usize = 20_000;
 
-fn too_many(key: &str) -> bool {
+/// Schlüssel begrenzen: frei wählbare Eingaben dürfen den Speicher nicht füllen
+fn fail_key(key: &str) -> &str {
+    match key.char_indices().nth(320) {
+        Some((i, _)) => &key[..i],
+        None => key,
+    }
+}
+
+pub(crate) fn too_many(key: &str) -> bool {
+    too_many_n(key, 5)
+}
+
+pub(crate) fn too_many_n(key: &str, limit: u32) -> bool {
     let mut g = FAILS.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
-    match m.get(key) {
-        Some((n, t)) if t.elapsed() < Duration::from_secs(600) => *n >= 5,
+    match m.get(fail_key(key)) {
+        Some((n, t)) if t.elapsed() < FAIL_WINDOW => *n >= limit,
         _ => false,
     }
 }
 
-fn record_fail(key: &str) {
+pub(crate) fn record_fail(key: &str) {
     let mut g = FAILS.lock().unwrap_or_else(|e| e.into_inner());
     let m = g.get_or_insert_with(HashMap::new);
-    let e = m.entry(key.to_owned()).or_insert((0, Instant::now()));
-    if e.1.elapsed() >= Duration::from_secs(600) {
+    if m.len() >= MAX_FAIL_KEYS {
+        m.retain(|_, v| v.1.elapsed() < FAIL_WINDOW);
+        if m.len() >= MAX_FAIL_KEYS {
+            m.clear();
+        }
+    }
+    let e = m.entry(fail_key(key).to_owned()).or_insert((0, Instant::now()));
+    if e.1.elapsed() >= FAIL_WINDOW {
         *e = (0, Instant::now());
     }
     e.0 += 1;
 }
 
-fn clear_fails(key: &str) {
+pub(crate) fn clear_fails(key: &str) {
     if let Some(m) = FAILS.lock().unwrap_or_else(|e| e.into_inner()).as_mut() {
-        m.remove(key);
+        m.remove(fail_key(key));
     }
 }
 
@@ -60,11 +83,21 @@ pub struct LoginBody {
 
 type LoginRow = (Uuid, String, String, String, Option<Uuid>, Option<String>, Option<String>, bool);
 
-pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiResult<Json<Value>> {
+pub async fn login(State(s): State<AppState>, headers: HeaderMap, Json(b): Json<LoginBody>) -> ApiResult<Json<Value>> {
     let email = b.email.trim().to_lowercase();
-    if too_many(&email) {
+    if email.len() > 254 || b.password.len() > 1024 {
+        return Err(ApiError::Unauthorized);
+    }
+    let ip = format!("ip:{}", client_ip(&headers));
+    let pair = format!("{email}|{ip}");
+    if too_many(&pair) || too_many_n(&ip, 30) || too_many_n(&email, 50) {
         return Err(ApiError::TooManyRequests);
     }
+    let fail = || {
+        record_fail(&pair);
+        record_fail(&ip);
+        record_fail(&email);
+    };
     let row: Option<LoginRow> = sqlx::query_as(
         "SELECT id, email, display_name, role, organization_id, password_hash, totp_secret, must_change_password
            FROM users WHERE lower(email) = $1 AND is_active",
@@ -75,11 +108,11 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
     let Some((id, email_db, name, role, org, Some(hash), totp, must_change)) = row else {
         // gleiche Laufzeit wie bei existierendem Benutzer
         let _ = verify_password(&b.password, "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHQ$AAAAAAAAAAAAAAAAAAAAAA");
-        record_fail(&email);
+        fail();
         return Err(ApiError::Unauthorized);
     };
     if !verify_password(&b.password, &hash) {
-        record_fail(&email);
+        fail();
         return Err(ApiError::Unauthorized);
     }
     if let Some(secret) = totp {
@@ -87,11 +120,12 @@ pub async fn login(State(s): State<AppState>, Json(b): Json<LoginBody>) -> ApiRe
             None => return Ok(Json(json!({ "two_factor_required": true }))),
             Some(code) if check_totp(&secret, &email_db, code) => {}
             Some(_) => {
-                record_fail(&email);
+                fail();
                 return Err(ApiError::BadRequest("2FA-Code ist falsch".into()));
             }
         }
     }
+    clear_fails(&pair);
     clear_fails(&email);
     let token = new_token("cc_s_");
     let hours = if b.remember { REMEMBER_HOURS } else { SESSION_HOURS };
@@ -439,11 +473,15 @@ pub async fn reset_password(
 }
 
 /// Header-Helfer für Logs (IP hinter Proxy)
+/// Maßgeblich ist der letzte Eintrag: den setzt unser eigener Proxy. Frühere Einträge kann der
+/// Aufrufer frei erfinden – sie dürfen weder Rate-Limits noch Protokolle steuern.
 pub fn client_ip(h: &HeaderMap) -> String {
     h.get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.split(',').next())
+        .and_then(|v| v.rsplit(',').next())
         .unwrap_or("local")
         .trim()
-        .to_owned()
+        .chars()
+        .take(64)
+        .collect()
 }

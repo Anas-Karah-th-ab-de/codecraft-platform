@@ -333,16 +333,18 @@ async fn detail(conn: &mut PgConnection, id: Uuid) -> ApiResult<InvoiceDetail> {
 /// Übernommene Altrechnungen (mit Original-Druckdaten) wurden per Banküberweisung bezahlt – die beim
 /// Import zugeordnete Zahlungsart gilt für sie nicht (sie sind festgeschrieben und bleiben unverändert).
 async fn payment_of(conn: &mut PgConnection, id: Uuid) -> ApiResult<Option<serde_json::Value>> {
-    let (method, snapshot, legacy): (Option<Uuid>, Option<serde_json::Value>, bool) =
-        sqlx::query_as("SELECT payment_method_id, payment_snapshot, pdf_snapshot IS NOT NULL FROM invoices WHERE id = $1")
-            .bind(id)
-            .fetch_one(&mut *conn)
-            .await?;
+    let (method, snapshot, legacy): (Option<Uuid>, Option<serde_json::Value>, bool) = sqlx::query_as(
+        "SELECT payment_method_id, payment_snapshot, pdf_snapshot IS NOT NULL FROM invoices WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_one(&mut *conn)
+    .await?;
     if legacy {
-        let bank: Option<Uuid> =
-            sqlx::query_scalar("SELECT id FROM payment_methods WHERE kind = 'bank' ORDER BY is_default DESC, sort LIMIT 1")
-                .fetch_optional(&mut *conn)
-                .await?;
+        let bank: Option<Uuid> = sqlx::query_scalar(
+            "SELECT id FROM payment_methods WHERE kind = 'bank' ORDER BY is_default DESC, sort LIMIT 1",
+        )
+        .fetch_optional(&mut *conn)
+        .await?;
         return super::payments::info(conn, bank).await;
     }
     if let Some(mut s) = snapshot {
