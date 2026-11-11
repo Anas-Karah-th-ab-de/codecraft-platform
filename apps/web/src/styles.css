@@ -1409,3 +1409,18 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
   .pp-others span { grid-column: 1; grid-row: 2; }
   .pp-others i { grid-row: 1 / span 2; grid-column: 2; }
 }
+
+/* ── Selbstregistrierung (/portal/registrieren) ─────────────────────────── */
+.login-side { align-self: center; justify-self: center; width: 100%; max-width: 420px; padding: var(--s-6); }
+.login-side form { padding: 0; max-width: none; }
+.login-side .btn { width: 100%; justify-content: center; min-height: 46px; }
+.login-side .btn.ghost { margin-top: var(--s-2); }
+.reg-form fieldset { border: 0; padding: 0; margin: 0 0 var(--s-3); min-width: 0; }
+.reg-form legend { font: 600 .88rem var(--f-text); color: var(--gold-text); margin-bottom: var(--s-2); padding: 0; }
+.reg-form textarea { resize: vertical; }
+.hp { position: absolute; inset-inline-start: -9999px; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.login-note { color: var(--text-2); margin: calc(-1 * var(--s-3)) 0 var(--s-5); }
+.login-alt { margin: var(--s-4) 0 0; text-align: center; font-size: .93rem; color: var(--text-2); }
+.login-alt a { font-weight: 600; }
+.login-fine { margin: var(--s-3) 0 0; text-align: center; font-size: .8rem; color: var(--text-3); }
+@media (max-width: 640px) { .login-side { padding: var(--s-5) var(--s-4); } }

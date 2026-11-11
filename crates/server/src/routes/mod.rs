@@ -22,6 +22,7 @@ mod quotes;
 pub mod remote;
 mod requests;
 mod shop;
+mod signup;
 pub mod tickets;
 
 use crate::AppState;
@@ -40,6 +41,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/public/jobs/{slug}", get(jobs::public_job_detail))
         .route("/api/v1/public/jobs/{slug}/apply", post(jobs::apply))
         .route("/api/v1/public/contact", post(jobs::contact))
+        .route("/api/v1/public/register", post(signup::register))
+        .route("/api/v1/public/register/confirm", post(signup::confirm))
         // Konto
         .route("/api/v1/auth/login", post(account::login))
         .route("/api/v1/auth/logout", post(account::logout))

@@ -26,6 +26,7 @@ import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
 import { AppDownload, UpdateBanner } from "./AppDownload";
 import { isApp, useIsApp } from "../../native";
+import Register, { RegisterLink } from "./Register";
 
 const Badge = ({ n }: { n: number }) => (n > 0 ? <span className="badge-n">{n > 99 ? "99+" : n}</span> : null);
 const UnreadBadge = () => <Badge n={useUnread()} />;
@@ -105,7 +106,7 @@ export default function Portal() {
   const title = current ? t(current[1]) : "404";
   useEffect(() => { if (me) document.title = `${title} · KM Code Craft`; }, [title, me]);
   if (!ready) return <Loading />;
-  if (!me) return <Login />;
+  if (!me) return seg === "registrieren" ? <Register art={<LoginArt />} /> : <Login />;
   if (me.must_change_password) return <ForcePassword />;
 
   const visible = items.filter((l) => l[2]);
@@ -289,6 +290,7 @@ function Login() {
         <button className="btn" style={{ width: "100%", justifyContent: "center" }} disabled={busy}>
           {step === "pw" ? t("login.submit") : t("login.verify")}
         </button>
+        {step === "pw" && <RegisterLink />}
       </form>
     </div>
   );
