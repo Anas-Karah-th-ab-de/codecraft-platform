@@ -2,8 +2,9 @@
 // Quellen: Repos universal-pos-erp (README, docs/), km-code-craft-ai (README), maps-sy-1 (web/index.html).
 // Preise kommen aus dem Katalog (KI-Server) bzw. stehen bewusst nicht hier (Kasse: Preis auf Anfrage).
 import type { Locale } from "../../i18n";
+import { RADIOLOGIE, RADIOLOGIE_TEASER } from "./radiologieText";
 
-export type ProductKey = "kasse" | "ki-server" | "karten";
+export type ProductKey = "kasse" | "ki-server" | "karten" | "radiologie";
 
 export type Block =
   | { kind: "features"; id?: string; h: string; lead?: string; items: [string, string][] }
@@ -11,7 +12,8 @@ export type Block =
   | { kind: "plans"; id?: string; h: string; lead: string; plans: { n: string; tag: string; items: string[]; hl?: boolean }[] }
   | { kind: "catalog"; id?: string; h: string; lead: string; slug: string; month: string; custom: string }
   | { kind: "table"; id?: string; h: string; lead?: string; head: [string, string]; rows: [string, string][] }
-  | { kind: "steps"; id?: string; h: string; lead?: string; items: string[] };
+  | { kind: "steps"; id?: string; h: string; lead?: string; items: string[] }
+  | { kind: "gallery"; id?: string; h: string; lead?: string; items: [string, string][] };
 
 export type ProductPage = {
   title: string;
@@ -37,16 +39,19 @@ export const TEASER: Record<Locale, Record<ProductKey, [string, string]>> = {
     kasse: ["POS Code Craft v3", "Kasse, Lager und Kunden-App – läuft auch ohne Internet."],
     "ki-server": ["KI-Server", "Ihre eigene KI im eigenen Haus, ohne Cloud."],
     karten: ["Maps Syria", "Karten und Navigation für Syrien, betrieben in Syrien."],
+    radiologie: RADIOLOGIE_TEASER.de,
   },
   en: {
     kasse: ["POS Code Craft v3", "POS, stock and customer app – works without internet."],
     "ki-server": ["AI server", "Your own AI in your own building, no cloud."],
     karten: ["Maps Syria", "Maps and navigation for Syria, run in Syria."],
+    radiologie: RADIOLOGIE_TEASER.en,
   },
   ar: {
     kasse: ["POS Code Craft v3", "كاشير ومستودع وتطبيق للزبائن – يعمل بدون إنترنت."],
     "ki-server": ["خادم الذكاء الاصطناعي", "ذكاء اصطناعي خاص بك داخل منشأتك، بدون سحابة."],
     karten: ["خرائط سوريا", "خرائط وملاحة لسوريا، تُدار من داخل سوريا."],
+    radiologie: RADIOLOGIE_TEASER.ar,
   },
 };
 
@@ -528,6 +533,7 @@ export const PRODUCTS: Record<ProductKey, Record<Locale, ProductPage>> = {
   kasse: { de: kasseDe, en: kasseEn, ar: kasseAr },
   "ki-server": { de: kiDe, en: kiEn, ar: kiAr },
   karten: { de: mapsDe, en: mapsEn, ar: mapsAr },
+  radiologie: RADIOLOGIE,
 };
 
-export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten" };
+export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/radiologie" };

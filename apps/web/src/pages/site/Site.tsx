@@ -92,6 +92,7 @@ export function SiteLayout() {
             <NavLink to="/kasse">{H.nav.till}</NavLink>
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
             <Link to="/karten">{TEASER[locale].karten[0]}</Link>
+            <Link to="/radiologie">{TEASER[locale].radiologie[0]}</Link>
             <Link to="/#leistungen">{H.nav.services}</Link>
           </div>
           <div>

@@ -15,6 +15,8 @@ const money = (cents: number, currency: string, locale: string) =>
 
 /** Interne Ziele als Link, externe als neuer Tab */
 function Go({ to, className, children }: { to: string; className: string; children: React.ReactNode }) {
+  // Dateien (PDF) sind keine Seiten der Anwendung: normaler Link statt Router
+  if (to.startsWith("/downloads/")) return <a className={className} href={to}>{children}</a>;
   return to.startsWith("http")
     ? <a className={className} href={to} target="_blank" rel="noopener noreferrer">{children}</a>
     : <Link className={className} to={to}>{children}</Link>;
@@ -103,6 +105,11 @@ function BlockView({ b, alt }: { b: Block; alt: boolean }) {
             <thead><tr><th>{b.head[0]}</th><th>{b.head[1]}</th></tr></thead>
             <tbody>{b.rows.map(([a, c]) => <tr key={a}><th scope="row">{a}</th><td>{c}</td></tr>)}</tbody>
           </table>
+        )}
+        {b.kind === "gallery" && (
+          <div className="pp-gallery">{b.items.map(([src, cap]) => (
+            <figure key={src}><a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={cap} loading="lazy" width={1280} height={800} /></a><figcaption>{cap}</figcaption></figure>
+          ))}</div>
         )}
         {b.kind === "steps" && (
           <ol className="steps pp-steps">{b.items.map((s, i) => <li key={s}><span dir="ltr">{i + 1}</span>{s}</li>)}</ol>

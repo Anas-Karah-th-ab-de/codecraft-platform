@@ -39,6 +39,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="kasse" element={<ProductPage k="kasse" />} />
                 <Route path="ki-server" element={<ProductPage k="ki-server" />} />
                 <Route path="karten" element={<ProductPage k="karten" />} />
+                <Route path="radiologie" element={<ProductPage k="radiologie" />} />
                 <Route path="karriere" element={<Careers />} />
                 <Route path="karriere/:slug" element={<JobDetail />} />
                 <Route path="kontakt" element={<Contact />} />
