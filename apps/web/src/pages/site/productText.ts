@@ -536,4 +536,4 @@ export const PRODUCTS: Record<ProductKey, Record<Locale, ProductPage>> = {
   radiologie: RADIOLOGIE,
 };
 
-export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/radiologie" };
+export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/e-health" };

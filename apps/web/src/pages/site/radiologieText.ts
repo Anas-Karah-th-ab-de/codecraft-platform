@@ -40,8 +40,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt"
     },
     "secondary": {
-      "label": "Produktmappe (PDF)",
-      "to": "/downloads/radiologie/dossier-de.pdf"
+      "label": "Ausführliche Seite mit allen Unterlagen",
+      "to": "/radiology/index.html?lang=de"
     },
     "blocks": [
       {
@@ -340,8 +340,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt"
     },
     "secondary": {
-      "label": "Product dossier (PDF)",
-      "to": "/downloads/radiologie/dossier-en.pdf"
+      "label": "Full page with all documents",
+      "to": "/radiology/index.html?lang=en"
     },
     "blocks": [
       {
@@ -640,8 +640,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt"
     },
     "secondary": {
-      "label": "ملف المنتج (PDF)",
-      "to": "/downloads/radiologie/dossier-ar.pdf"
+      "label": "الصفحة الكاملة مع كل الوثائق",
+      "to": "/radiology/index.html?lang=ar"
     },
     "blocks": [
       {

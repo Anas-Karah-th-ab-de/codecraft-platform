@@ -64,6 +64,7 @@ export function SiteLayout() {
             <Link to="/#leistungen">{H.nav.services}</Link>
             <NavLink to="/kasse">{H.nav.till}</NavLink>
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
+            <NavLink to="/e-health">{H.nav.health}</NavLink>
             <NavLink to="/karriere" onMouseEnter={() => prefetch(`/api/v1/public/jobs?locale=${locale}`)}>{t("nav.careers")}</NavLink>
             <NavLink to="/kontakt">{t("nav.contact")}</NavLink>
             <Link to="/portal" className="portal-link"><i aria-hidden="true" />{t("nav.portal")}</Link>
@@ -92,7 +93,7 @@ export function SiteLayout() {
             <NavLink to="/kasse">{H.nav.till}</NavLink>
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
             <Link to="/karten">{TEASER[locale].karten[0]}</Link>
-            <Link to="/radiologie">{TEASER[locale].radiologie[0]}</Link>
+            <Link to="/e-health">{TEASER[locale].radiologie[0]}</Link>
             <Link to="/#leistungen">{H.nav.services}</Link>
           </div>
           <div>

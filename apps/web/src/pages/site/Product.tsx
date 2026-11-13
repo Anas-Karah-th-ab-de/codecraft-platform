@@ -16,7 +16,7 @@ const money = (cents: number, currency: string, locale: string) =>
 /** Interne Ziele als Link, externe als neuer Tab */
 function Go({ to, className, children }: { to: string; className: string; children: React.ReactNode }) {
   // Dateien (PDF) sind keine Seiten der Anwendung: normaler Link statt Router
-  if (to.startsWith("/downloads/")) return <a className={className} href={to}>{children}</a>;
+  if (to.startsWith("/downloads/") || to.startsWith("/radiology/")) return <a className={className} href={to}>{children}</a>;
   return to.startsWith("http")
     ? <a className={className} href={to} target="_blank" rel="noopener noreferrer">{children}</a>
     : <Link className={className} to={to}>{children}</Link>;
