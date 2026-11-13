@@ -20,7 +20,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       ],
       [
         "Sprachen",
-        "Arabisch (RTL), Englisch, Deutsch"
+        "Arabisch als Hauptsprache (RTL), dazu Englisch und Deutsch"
       ],
       [
         "Geräte",
@@ -98,6 +98,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "Verwaltung",
             "Übersicht über Systemzustand, wartende Arbeit und eingeschaltete Funktionen. Benutzer, Rollen und zweiter Faktor in einer eigenen Verwaltungsoberfläche."
+          ],
+          [
+            "KI-Assistent (Zusatzmodul)",
+            "Auf Wunsch zuschaltbar und an einen KI-Server im eigenen Haus angebunden, etwa KM Code Craft AI: übersetzt Texte zwischen Arabisch, Englisch und Deutsch, prüft die Rechtschreibung im Befund und schlägt eine Reihenfolge der wartenden Arbeit vor. Er macht nur Vorschläge; übernommen wird nichts ohne einen Menschen."
           ]
         ]
       },
@@ -316,7 +320,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       ],
       [
         "Languages",
-        "Arabic (RTL), English, German"
+        "Arabic first (RTL), plus English and German"
       ],
       [
         "Modalities",
@@ -394,6 +398,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "Administration",
             "Overview of system state, waiting work and enabled functions. Users, roles and second factor in a dedicated administration console."
+          ],
+          [
+            "AI assistant (add-on module)",
+            "Can be switched on and connected to an AI server in your own building, such as KM Code Craft AI: translates texts between Arabic, English and German, checks the spelling of a report and suggests an order for the waiting work. It only suggests; nothing is taken over without a person."
           ]
         ]
       },
@@ -612,7 +620,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       ],
       [
         "اللغات",
-        "العربية (من اليمين إلى اليسار)، الإنجليزية، الألمانية"
+        "العربية هي اللغة الأساسية، مع الإنجليزية والألمانية"
       ],
       [
         "الأجهزة",
@@ -690,6 +698,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "الإدارة",
             "نظرة على حالة النظام والعمل المنتظر والوظائف المفعّلة. المستخدمون والأدوار وعامل التحقق الثاني في واجهة إدارة خاصة."
+          ],
+          [
+            "المساعد الذكي (وحدة إضافية)",
+            "يُفعَّل عند الرغبة ويُربط بخادم ذكاء اصطناعي داخل منشأتك مثل KM Code Craft AI: يترجم النصوص بين العربية والإنجليزية والألمانية، ويدقّق إملاء التقرير، ويقترح ترتيباً للعمل المنتظر. يقدّم اقتراحات فقط؛ لا يُعتمد شيء بدون إنسان."
           ]
         ]
       },
