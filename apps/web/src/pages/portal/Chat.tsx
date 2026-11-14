@@ -114,7 +114,7 @@ export default function Chat() {
     }
   }), [comm, loadRooms]);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ block: "end" }); }, [msgs]);
+  useEffect(() => { const box = endRef.current?.parentElement; if (box) box.scrollTop = box.scrollHeight; }, [msgs]);
 
   const room = rooms.find((r) => r.id === active);
   const title = (r: Room) => r.peer_name ?? r.name ?? (r.kind === "support" ? T.support : "–");

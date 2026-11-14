@@ -49,6 +49,7 @@ export function AppDownload() {
       <div className="card">
         <p>{T.intro}</p>
         {inApp && <p className="note-ok">{T.inApp}</p>}
+        <p className="muted"><small><BuildInfo /></small></p>
         <div className="dev-row">
           <Icon name="phone" />
           <div><b>{T.android}</b><small className="muted">{T.androidSub}</small></div>
@@ -77,6 +78,16 @@ const UT = {
   en: { avail: (v: string) => `New app version ${v} available`, now: "Update now", later: "Later", copied: "Link copied – please open it in the browser, download and install.", hint: "The download starts in the browser – then open the file and install. You stay signed in." },
   ar: { avail: (v: string) => `يتوفر إصدار جديد للتطبيق ${v}`, now: "تحديث الآن", later: "لاحقاً", copied: "تم نسخ الرابط – افتحه في المتصفح ونزّل التطبيق وثبّته.", hint: "يبدأ التنزيل في المتصفح – ثم افتح الملف وثبّته. يبقى تسجيل دخولك محفوظاً." },
 };
+
+/** Welche Version läuft? App (falls in der App) und Stand der Oberfläche – für Rückfragen beim Support */
+export function BuildInfo() {
+  const inApp = useIsApp();
+  const [app, setApp] = useState<string | null>(null);
+  useEffect(() => {
+    if (inApp) native<AppInfo>("app_info").then((i) => setApp(`${i.version} (${i.platform})`)).catch(() => {});
+  }, [inApp]);
+  return <span dir="ltr">{app ? `App ${app} · ` : ""}Web {__BUILD__}</span>;
+}
 
 /** semver-artiger Vergleich „0.1.12“ > „0.1.9“ */
 const newer = (a: string, b: string) => {

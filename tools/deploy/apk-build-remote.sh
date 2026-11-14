@@ -91,7 +91,7 @@ cp /tmp/AndroidManifest.full.xml $M; chown builder: $M
 
 BT=$(ls -d $B/android/build-tools/* | sort -V | tail -1)
 for f in km-portal.apk km-portal-fernsteuerung.apk; do
-  n=$(unzip -p /var/www/downloads/$f AndroidManifest.xml | strings | grep -c ControlService || true)
+  n=$($BT/aapt2 dump xmltree --file AndroidManifest.xml /var/www/downloads/$f | grep -c ControlService || true)
   echo "$f: $(stat -c %s /var/www/downloads/$f) Bytes, ControlService-Einträge: $n"
   JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 $BT/apksigner verify /var/www/downloads/$f && echo "  Signatur ok"
 done

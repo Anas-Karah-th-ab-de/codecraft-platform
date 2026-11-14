@@ -24,7 +24,7 @@ import { AnnouncementBanner, Announcements, Bell, NotificationsPage, NotifyProvi
 import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
-import { AppDownload, UpdateBanner } from "./AppDownload";
+import { AppDownload, BuildInfo, UpdateBanner } from "./AppDownload";
 import { isApp, useIsApp } from "../../native";
 import Register, { RegisterLink } from "./Register";
 
@@ -146,6 +146,7 @@ export default function Portal() {
             <button className="btn small ghost" onClick={logout}>{t("login.logout")}</button>
           </div>
           <span>KM Code Craft Portal</span>
+          <small className="build"><BuildInfo /></small>
         </div>
       </aside>
       <div className="scrim" onClick={() => setMenu(false)} />

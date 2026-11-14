@@ -82,9 +82,17 @@ pub fn open_url(url: &str) -> bool {
     .unwrap_or(false)
 }
 
-/// Anruf läuft (Mikrofon-Dienst, Näherungssensor) bzw. ist beendet
-pub fn call_active(on: bool) {
-    let _ = with_bridge(|env, cls| env.call_static_method(cls, "callActive", "(Z)V", &[JValue::Bool(on as u8)])?.v());
+/// Anrufzustand aus dem Portal: läuft (Mikrofon-Dienst), klingelt (Portal zeigt ihn selbst), Video (Bildschirm bleibt an)
+pub fn call_state(active: bool, ringing: bool, video: bool) {
+    let _ = with_bridge(|env, cls| {
+        env.call_static_method(
+            cls,
+            "callState",
+            "(ZZZ)V",
+            &[JValue::Bool(active as u8), JValue::Bool(ringing as u8), JValue::Bool(video as u8)],
+        )?
+        .v()
+    });
 }
 
 /// Mikrofon (und Kamera) bei Bedarf erfragen; blockiert bis zur Antwort

@@ -24,6 +24,7 @@ if "NotifyService" not in m:
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -36,8 +37,10 @@ if "NotifyService" not in m:
     <uses-feature android:name="android.hardware.microphone" android:required="false" />
 """
     m = m.replace('    <uses-permission android:name="android.permission.INTERNET" />\n', perms, 1)
-    m = m.replace('android:launchMode="singleTask"', 'android:launchMode="singleTask"\n            android:showWhenLocked="true"\n            android:turnScreenOn="true"', 1)
+    # Hauptfenster bewusst NICHT dauerhaft über dem Sperrbildschirm (showWhenLocked): Das Portal wäre sonst ohne
+    # Entsperren zugänglich. MainActivity schaltet es nur während eines klingelnden/laufenden Anrufs ein.
     comps = """
+        <service android:name=".CallService" android:exported="false" android:foregroundServiceType="microphone" />
         <service android:name=".NotifyService" android:exported="false"
             android:foregroundServiceType="remoteMessaging" />
         <service android:name=".ProjectionService" android:exported="false"

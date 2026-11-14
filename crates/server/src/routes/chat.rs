@@ -123,8 +123,19 @@ pub fn pending_rings(user: Uuid) -> Vec<String> {
     r.retain(|_, v| v.at.elapsed().as_secs() < RING_SECS + 15);
     r.iter()
         .filter(|((_, to), v)| *to == user && v.at.elapsed().as_secs() < RING_SECS)
-        .map(|(_, v)| v.ev.clone())
+        .map(|(_, v)| with_age(&v.ev, v.at.elapsed().as_secs()))
         .collect()
+}
+
+/// Ereignis um `age` (Sekunden seit dem ersten Klingeln) ergänzen – das Gerät klingelt dann nur die Restzeit
+fn with_age(ev: &str, age: u64) -> String {
+    match serde_json::from_str::<Value>(ev) {
+        Ok(Value::Object(mut m)) => {
+            m.insert("age".into(), json!(age));
+            Value::Object(m).to_string()
+        }
+        _ => ev.to_owned(),
+    }
 }
 
 pub fn online_users() -> Vec<Uuid> {
@@ -750,6 +761,9 @@ pub async fn ws(State(s): State<AppState>, Query(q): Query<WsQuery>, up: WebSock
     Ok(up.max_message_size(256 * 1024).on_upgrade(move |socket| session(s, user, token, name, socket)))
 }
 
+const PING: &str = r#"{"type":"ping"}"#;
+const PONG: &str = r#"{"type":"pong"}"#;
+
 async fn session(s: AppState, user: Uuid, token: Uuid, name: String, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
     let mut reg = Registration::new(user, token);
@@ -776,6 +790,13 @@ async fn session(s: AppState, user: Uuid, token: Uuid, name: String, socket: Web
             inc = stream.next() => {
                 let Some(Ok(msg)) = inc else { break };
                 if let Message::Text(text) = msg {
+                    // Lebenszeichen: Das Portal erkennt so eine tote Verbindung (z. B. nach WLAN ↔ Mobilfunk)
+                    if text.as_str() == PING {
+                        if sink.send(Message::Text(PONG.into())).await.is_err() {
+                            break;
+                        }
+                        continue;
+                    }
                     handle(&s, user, &name, &text).await;
                 }
             }
@@ -898,7 +919,8 @@ pub struct SignalIn {
     pub data: Value,
 }
 
-/// Anruf-Signal per REST (z. B. „Ablehnen“ aus VS Code oder der Push-Benachrichtigung)
+/// Anruf-Signal per REST: Klingeln, Annehmen, Ablehnen, Auflegen. Diese Signale dürfen nicht verloren gehen,
+/// auch wenn der WebSocket des Geräts gerade neu aufgebaut wird (Verbindungsdaten laufen weiter über WebSocket).
 pub async fn signal(
     State(s): State<AppState>,
     user: User,
@@ -906,8 +928,8 @@ pub async fn signal(
     Json(b): Json<SignalIn>,
 ) -> ApiResult<StatusCode> {
     let kind = b.data.get("kind").and_then(|k| k.as_str()).unwrap_or_default();
-    if !["decline", "busy"].contains(&kind) {
-        return Err(ApiError::BadRequest("Nur Ablehnen per REST".into()));
+    if !["ring", "accept", "decline", "busy", "hangup"].contains(&kind) {
+        return Err(ApiError::BadRequest("Dieses Signal geht nur über die Live-Verbindung".into()));
     }
     let name: String =
         sqlx::query_scalar("SELECT display_name FROM users WHERE id = $1").bind(user.id).fetch_one(&s.db).await?;

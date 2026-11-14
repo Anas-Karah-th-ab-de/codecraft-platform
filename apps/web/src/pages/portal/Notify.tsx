@@ -122,11 +122,11 @@ function tone(freqs: number[], dur: number, at = 0, vol = 0.08) {
 export const chime = () => { tone([880], 0.12, 0, 0.06); tone([1320], 0.18, 0.13, 0.06); };
 
 /** Klingelton für eingehende Anrufe (bis stop) */
-export function ringtone(): () => void {
+export function ringtone(vol = 0.09): () => void {
   let on = true;
   const ring = () => {
     if (!on) return;
-    tone([440, 480], 0.4, 0, 0.09); tone([440, 480], 0.4, 0.5, 0.09);
+    tone([440, 480], 0.4, 0, vol); tone([440, 480], 0.4, 0.5, vol);
     navigator.vibrate?.([400, 200, 400]);
   };
   ring();

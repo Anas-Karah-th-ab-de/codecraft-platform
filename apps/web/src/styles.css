@@ -1431,3 +1431,26 @@ kbd { display: inline-block; min-width: 22px; padding: 1px 6px; border: 1px soli
 .pp-gallery img { width: 100%; height: auto; display: block; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 18px 44px rgb(0 0 0 / .18); }
 .pp-gallery figcaption { margin-top: 10px; color: var(--text-2); font-size: .92rem; }
 @media (max-width: 760px) { .pp-gallery { grid-template-columns: 1fr; } }
+
+/* Laufender Anruf: Hinweise, Mitteilungen und Erinnerungen lagen genau über der Anrufleiste (unten) und
+   verdeckten Annehmen/Auflegen – solange ein Anruf angezeigt wird, erscheinen sie oben. */
+body:has(.callview) .toasts, body:has(.callview) .reminder { bottom: auto; top: 72px; }
+body:has(.callview) .toast { bottom: auto; top: 72px; }
+
+/* Chat-Kasten: feste Höhe muss auch für die Zeile gelten. Ohne das wuchs die Spalte mit den Nachrichten über den
+   Kasten hinaus (ab etwa einem Dutzend Nachrichten): Kopfzeile mit den Anruf-Knöpfen und das Eingabefeld
+   wurden abgeschnitten, die Liste ließ sich nicht rollen. */
+.chat { grid-template-rows: minmax(0, 1fr); }
+.chat-list, .chat-room { min-height: 0; }
+.chat-room { overflow: hidden; }
+.room-head, .composer { flex: none; }
+.room-msgs { min-height: 0; overscroll-behavior: contain; }
+@media (max-width: 900px) {
+  /* Handy: Höhe folgt der sichtbaren Fläche (Tastatur!), Kopfzeile bricht um statt Knöpfe abzuschneiden */
+  .chat { height: calc(100vh - 60px - 32px); height: calc(100dvh - 60px - 32px); min-height: 280px; }
+  .room-head { flex-wrap: wrap; padding: 10px 12px; gap: 8px; }
+  .room-head .row { margin-inline-start: auto; }
+}
+.side-foot .build { display: block; margin-top: 2px; font-size: 10.5px; opacity: .75; direction: ltr; unicode-bidi: isolate; }
+.side-mini .side-foot .build { display: none; }
+.crash { min-height: 100vh; display: grid; place-content: center; gap: 14px; padding: 24px; text-align: center; background: var(--paper, #f4f3ef); color: var(--text, #16191d); }

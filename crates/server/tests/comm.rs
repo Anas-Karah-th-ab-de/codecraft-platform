@@ -200,6 +200,78 @@ async fn realtime_messages_and_call_signals(db: PgPool) {
     let (_, msgs) = call(&db, "GET", &format!("/api/v1/chat/rooms/{room}/messages"), &jana, None).await;
     assert_eq!(msgs["messages"].as_array().unwrap().len(), 1);
     assert_eq!(msgs["members"].as_array().unwrap().len(), 2);
+
+    // Lebenszeichen wird beantwortet
+    ws_jana.send(Message::Text(r#"{"type":"ping"}"#.into())).await.unwrap();
+    next_of(&mut ws_jana, "pong").await;
+
+    // Verbindung war beim Klingeln weg → nach dem Neuaufbau kommt der Anruf trotzdem, mit Alter
+    drop(ws_jana);
+    let (mut ws_jana, _) =
+        tokio_tungstenite::connect_async(format!("ws://{addr}/api/v1/ws?token={jana}")).await.unwrap();
+    let again = next_of(&mut ws_jana, "call").await;
+    assert_eq!(again["data"]["kind"], "ring");
+    assert!(again["age"].is_u64(), "{again}");
+
+    // Annehmen per REST: Anrufer bekommt es, das Klingeln ist damit erledigt
+    let (s, _) = call(
+        &db,
+        "POST",
+        &format!("/api/v1/chat/rooms/{room}/signal"),
+        &jana,
+        Some(json!({ "to": admin_id, "data": { "kind": "accept" } })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(next_of(&mut ws_admin, "call").await["data"]["kind"], "accept");
+    drop(ws_jana);
+    let (mut ws_jana, _) =
+        tokio_tungstenite::connect_async(format!("ws://{addr}/api/v1/ws?token={jana}")).await.unwrap();
+    ws_jana.send(Message::Text(r#"{"type":"ping"}"#.into())).await.unwrap();
+    let first = loop {
+        let v = next_any(&mut ws_jana).await;
+        if v["type"] == "call" || v["type"] == "pong" {
+            break v;
+        }
+    };
+    assert_eq!(first["type"], "pong", "kein erneutes Klingeln nach dem Annehmen: {first}");
+
+    // Klingeln per REST; Verbindungsdaten (offer) nur über die Live-Verbindung
+    let (s, _) = call(
+        &db,
+        "POST",
+        &format!("/api/v1/chat/rooms/{room}/signal"),
+        &admin,
+        Some(json!({ "to": jana_id, "data": { "kind": "ring", "media": "audio" } })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::NO_CONTENT);
+    assert_eq!(next_of(&mut ws_jana, "call").await["data"]["kind"], "ring");
+    let (s, _) = call(
+        &db,
+        "POST",
+        &format!("/api/v1/chat/rooms/{room}/signal"),
+        &admin,
+        Some(json!({ "to": jana_id, "data": { "kind": "offer" } })),
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+}
+
+async fn next_any<S>(ws: &mut S) -> Value
+where
+    S: StreamExt<Item = Result<Message, tokio_tungstenite::tungstenite::Error>> + Unpin,
+{
+    loop {
+        let msg = tokio::time::timeout(std::time::Duration::from_secs(5), ws.next())
+            .await
+            .expect("Zeitüberschreitung")
+            .unwrap()
+            .unwrap();
+        if let Message::Text(t) = msg {
+            return serde_json::from_str(&t).unwrap();
+        }
+    }
 }
 
 async fn next_of<S>(ws: &mut S, kind: &str) -> Value

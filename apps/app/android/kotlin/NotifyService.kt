@@ -13,7 +13,10 @@ import android.media.AudioAttributes
 import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import org.json.JSONObject
@@ -33,6 +36,10 @@ class NotifyService : Service() {
     private var worker: Thread? = null
     @Volatile private var conn: HttpURLConnection? = null
     @Volatile private var me: String = ""
+    private val main = Handler(Looper.getMainLooper())
+    /** Anrufe, die gerade klingeln (Raum → Zeitpunkt) – für das verzögerte Klingeln bei offener App */
+    private val pendingRings = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    @Volatile private var lastNet: android.net.Network? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -46,7 +53,12 @@ class NotifyService : Service() {
         try {
             val cm = getSystemService(android.net.ConnectivityManager::class.java)
             val cb = object : android.net.ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: android.net.Network) { conn?.disconnect() }
+                override fun onAvailable(network: android.net.Network) {
+                    // nur bei einem echten Wechsel trennen (der erste Aufruf meldet bloß das aktuelle Netz)
+                    val before = lastNet
+                    lastNet = network
+                    if (before != null && before != network) dropConn()
+                }
             }
             cm.registerDefaultNetworkCallback(cb)
             netCallback = cb
@@ -55,7 +67,13 @@ class NotifyService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING else 0
-        ServiceCompat.startForeground(this, ONGOING_ID, ongoing(this, "…"), type)
+        try {
+            ServiceCompat.startForeground(this, ONGOING_ID, ongoing(this, "…"), type)
+        } catch (_: Exception) {
+            // Start aus dem Hintergrund nicht erlaubt o. Ä. → beim nächsten Öffnen der App neu
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_REFRESH) {
             update(if (worker?.isAlive == true) state else "…")
             return START_STICKY
@@ -65,7 +83,7 @@ class NotifyService : Service() {
             worker = Thread({ loop() }, "km-notify").also { it.start() }
         } else {
             // neue Zugangsdaten → Verbindung neu aufbauen
-            conn?.disconnect()
+            dropConn()
         }
         return START_STICKY
     }
@@ -73,8 +91,15 @@ class NotifyService : Service() {
     override fun onDestroy() {
         running = false
         netCallback?.let { try { getSystemService(android.net.ConnectivityManager::class.java).unregisterNetworkCallback(it) } catch (_: Exception) {} }
-        conn?.disconnect()
+        main.removeCallbacksAndMessages(null)
+        dropConn()
         super.onDestroy()
+    }
+
+    /** Verbindung trennen – nie im Hauptthread (Netzwerkzugriff dort lässt Android die App abstürzen) */
+    private fun dropConn() {
+        val c = conn ?: return
+        Thread { try { c.disconnect() } catch (_: Exception) {} }.start()
     }
 
     @Volatile private var state = ""
@@ -140,7 +165,17 @@ class NotifyService : Service() {
                 val d = e.optJSONObject("data") ?: return
                 val room = e.optString("room")
                 when (d.optString("kind")) {
-                    "ring" -> if (!visible) ring(e, d)
+                    "ring" -> {
+                        val now = System.currentTimeMillis()
+                        pendingRings.entries.removeIf { now - it.value > 90000 }
+                        pendingRings[room] = now
+                        if (!visible) ring(e, d)
+                        else main.postDelayed({
+                            // App ist offen: normalerweise zeigt das Portal den Anruf selbst und klingelt. Tut es das
+                            // nicht (seine Verbindung hängt, Seite nicht bereit), klingelt nach kurzer Wartezeit die Mitteilung.
+                            if (pendingRings.containsKey(room) && !SupportBridge.webRinging && !SupportBridge.webActive) ring(e, d)
+                        }, 3000)
+                    }
                     "hangup" -> cancelCall(room)
                 }
             }
@@ -173,8 +208,16 @@ class NotifyService : Service() {
         val from = e.optString("from")
         val name = e.optString("name")
         val media = if (d.optString("media") == "video") "video" else "audio"
-        val q = "ring=$room&from=$from&media=$media&name=${URLEncoder.encode(name, "UTF-8")}&t=${System.currentTimeMillis()}"
+        // erneut zugestellt (Verbindung war beim Klingeln kurz weg): nur noch die Restzeit klingeln
+        val age = e.optLong("age", 0L).coerceIn(0L, 45L) * 1000
+        // Gerät für die Meldung wach halten (Bildschirm aus, Stromsparen)
+        try {
+            getSystemService(PowerManager::class.java).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "kmportal:ring").acquire(10000)
+        } catch (_: Exception) {}
+        val q = "ring=$room&from=$from&media=$media&name=${URLEncoder.encode(name, "UTF-8")}&t=${System.currentTimeMillis() - age}"
         val open = openIntent(this, "/portal/nachrichten?$q", room.hashCode())
+        // „Annehmen“ nimmt direkt an (eigener Link, damit er sich nicht mit dem Öffnen vermischt)
+        val accept = openIntent(this, "/portal/nachrichten?$q&accept=1", room.hashCode() + 2)
         val decline = PendingIntent.getBroadcast(this, room.hashCode() + 1,
             Intent(this, DeclineReceiver::class.java).putExtra("room", room).putExtra("to", from),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
@@ -187,18 +230,19 @@ class NotifyService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setOngoing(true)
             .setAutoCancel(true)
-            .setTimeoutAfter(45000)
+            .setTimeoutAfter((45000 - age).coerceAtLeast(5000))
             .setOnlyAlertOnce(true)
             .setFullScreenIntent(open, true)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, t.decline, decline)
-            .addAction(android.R.drawable.ic_menu_call, t.accept, open)
+            .addAction(android.R.drawable.ic_menu_call, t.accept, accept)
             .build()
         n.flags = n.flags or Notification.FLAG_INSISTENT // Klingelton wiederholen bis Reaktion
         getSystemService(NotificationManager::class.java).notify(callId(room), n)
     }
 
     private fun cancelCall(room: String) {
+        pendingRings.remove(room)
         getSystemService(NotificationManager::class.java).cancel(callId(room))
     }
 
@@ -215,18 +259,30 @@ class NotifyService : Service() {
 
         fun start(c: Context) {
             val i = Intent(c, NotifyService::class.java)
-            if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            try {
+                if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            } catch (_: Exception) { /* aus dem Hintergrund nicht erlaubt → beim nächsten Öffnen */ }
         }
 
         fun stop(c: Context) {
-            c.stopService(Intent(c, NotifyService::class.java))
+            try { c.stopService(Intent(c, NotifyService::class.java)) } catch (_: Exception) {}
         }
 
         fun refresh(c: Context) {
             val key = SupportBridge.prefs(c).getString("key", "") ?: ""
             if (key.isEmpty()) return
             val i = Intent(c, NotifyService::class.java).setAction(ACTION_REFRESH)
-            if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            try {
+                if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+            } catch (_: Exception) {}
+        }
+
+        /** Alle Anruf-Mitteilungen zurücknehmen – das Portal zeigt den Anruf jetzt selbst */
+        fun cancelCalls(c: Context) {
+            try {
+                val nm = c.getSystemService(NotificationManager::class.java)
+                nm.activeNotifications.filter { it.notification.channelId == CH_CALLS }.forEach { nm.cancel(it.id) }
+            } catch (_: Exception) {}
         }
 
         fun texts(): T {

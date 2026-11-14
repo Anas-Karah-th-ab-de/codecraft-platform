@@ -136,11 +136,27 @@ object SupportBridge {
 
     // ── Anrufe ────────────────────────────────────────────────────────────
 
-    /** Anruf läuft/beendet: Vordergrund-Dienst hält das Mikrofon auch bei ausgeschaltetem Bildschirm offen */
-    @JvmStatic fun callActive(on: Boolean) {
+    /** Zeigt das Portal gerade selbst einen klingelnden bzw. laufenden Anruf? */
+    @Volatile var webRinging = false
+    @Volatile var webActive = false
+
+    /**
+     * Anrufzustand aus dem Portal.
+     * active: Anruf läuft → Vordergrund-Dienst hält das Mikrofon auch bei ausgeschaltetem Bildschirm offen
+     * ringing: das Portal zeigt einen eingehenden Anruf selbst → Anruf-Mitteilung zurücknehmen
+     * video: Bildschirm bleibt an, kein Näherungssensor
+     */
+    @JvmStatic fun callState(active: Boolean, ringing: Boolean, video: Boolean) {
         val c = app ?: return
-        main.post { if (on) CallService.start(c) else CallService.stop(c) }
+        webActive = active
+        webRinging = ringing
+        main.post {
+            if (active) CallService.start(c, !video) else CallService.stop(c)
+            MainActivity.instance?.onCallState(active, ringing, video)
+        }
     }
+
+    @JvmStatic fun callActive(on: Boolean) = callState(on, false, false)
 
     /** Mikrofon (und Kamera) erfragen, falls nicht erlaubt; blockiert bis zur Antwort (max. 60 s) */
     @JvmStatic fun ensureMedia(video: Boolean): Boolean {

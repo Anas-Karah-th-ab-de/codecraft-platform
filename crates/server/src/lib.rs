@@ -49,7 +49,20 @@ pub fn app(state: AppState) -> Router {
 /// API + Frontend (Webseite & Portal als Single-Page-App aus `static_dir`)
 pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
     let index = static_dir.join("index.html");
-    let spa = ServeDir::new(&static_dir).append_index_html_on_directories(true).fallback(ServeFile::new(index));
+    // Die Startseite (index.html) verweist auf Dateien mit Hash im Namen. Nach einem Deploy darf keine alte
+    // Fassung aus dem Cache kommen – sonst lädt die App Dateien, die es nicht mehr gibt (weiße Seite).
+    let spa = Router::new()
+        .fallback_service(
+            ServeDir::new(&static_dir).append_index_html_on_directories(true).fallback(ServeFile::new(index)),
+        )
+        .layer(SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, |r: &axum::response::Response| {
+            let html = r
+                .headers()
+                .get(header::CONTENT_TYPE)
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|v| v.starts_with("text/html"));
+            html.then(|| HeaderValue::from_static("no-cache"))
+        }));
     // Produktbilder: Dateinamen enthalten eine UUID → unveränderlich, ein Jahr cachebar
     let media = Router::new().fallback_service(ServeDir::new(routes::media::media_dir())).layer(
         SetResponseHeaderLayer::overriding(
@@ -58,11 +71,12 @@ pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
         ),
     );
     // Gebaute JS/CSS-Dateien tragen einen Hash im Namen → ebenfalls unveränderlich
+    // (nur erfolgreiche Antworten – ein 404 für eine Datei eines alten Stands darf nicht ein Jahr im Cache bleiben)
     let assets = Router::new().fallback_service(ServeDir::new(static_dir.join("assets"))).layer(
-        SetResponseHeaderLayer::overriding(
-            header::CACHE_CONTROL,
-            HeaderValue::from_static("public, max-age=31536000, immutable"),
-        ),
+        SetResponseHeaderLayer::overriding(header::CACHE_CONTROL, |r: &axum::response::Response| {
+            let ok = r.status().is_success() || r.status() == axum::http::StatusCode::NOT_MODIFIED;
+            Some(HeaderValue::from_static(if ok { "public, max-age=31536000, immutable" } else { "no-store" }))
+        }),
     );
     // Logo, Videos, Poster: feste Namen → einen Tag cachen (Range-Anfragen für Videos unterstützt ServeDir)
     let brand = Router::new().fallback_service(ServeDir::new(static_dir.join("brand"))).layer(

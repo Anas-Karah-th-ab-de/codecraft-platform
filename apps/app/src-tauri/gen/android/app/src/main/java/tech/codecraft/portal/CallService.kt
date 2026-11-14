@@ -17,7 +17,7 @@ import androidx.core.app.ServiceCompat
  * Läuft während eines Anrufs. Android schaltet das Mikrofon von Apps im Hintergrund stumm –
  * ohne diesen Dienst hört die Gegenseite nichts mehr, sobald der Bildschirm ausgeht oder man
  * kurz eine andere App öffnet (man selbst hört sie aber weiter).
- * Zusätzlich: Näherungssensor schaltet den Bildschirm am Ohr aus, ohne die App zu pausieren.
+ * Sprachanruf zusätzlich: Näherungssensor schaltet den Bildschirm am Ohr aus, ohne die App zu pausieren.
  */
 class CallService : Service() {
     private var proximity: PowerManager.WakeLock? = null
@@ -29,39 +29,53 @@ class CallService : Service() {
         try {
             ServiceCompat.startForeground(this, ID, notification(this), type)
         } catch (e: Exception) {
-            // z. B. Mikrofon nicht erlaubt oder App nicht im Vordergrund → Anruf läuft trotzdem weiter
+            // z. B. Mikrofon nicht erlaubt → Anruf läuft trotzdem weiter, nur ohne Hintergrund-Mikrofon
+            active = false
             stopSelf()
             return START_NOT_STICKY
         }
-        if (proximity == null) {
-            val pm = getSystemService(PowerManager::class.java)
-            if (pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
-                proximity = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "kmportal:call").apply {
-                    setReferenceCounted(false)
-                    acquire(4 * 60 * 60 * 1000L)
+        if (proximity == null && intent?.getBooleanExtra("proximity", true) != false) {
+            try {
+                val pm = getSystemService(PowerManager::class.java)
+                if (pm.isWakeLockLevelSupported(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK)) {
+                    proximity = pm.newWakeLock(PowerManager.PROXIMITY_SCREEN_OFF_WAKE_LOCK, "kmportal:call").apply {
+                        setReferenceCounted(false)
+                        acquire(4 * 60 * 60 * 1000L)
+                    }
                 }
-            }
+            } catch (_: Exception) {}
         }
         return START_NOT_STICKY
     }
 
+    /** App aus der Übersicht gewischt → Anruf ist weg, Meldung „Anruf läuft“ nicht stehen lassen */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        stopSelf()
+        super.onTaskRemoved(rootIntent)
+    }
+
     override fun onDestroy() {
-        proximity?.let { if (it.isHeld) it.release() }
+        active = false
+        try { proximity?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
         proximity = null
         super.onDestroy()
     }
 
     companion object {
-        const val ID = 4712
+        // eigene Nummer: 4711 = Verbindung (NotifyService), 4712 = Bildschirmfreigabe (ProjectionService)
+        const val ID = 4714
         const val CH = "call_active"
         @Volatile var active = false
 
-        fun start(c: Context) {
+        /**
+         * Start beim Anrufbeginn (App ist dann sichtbar). Bewusst startService statt startForegroundService:
+         * Scheitert startForeground (Mikrofon-Recht fehlt), darf das die App nicht zum Absturz bringen.
+         */
+        fun start(c: Context, proximity: Boolean) {
             if (active) return
             active = true
-            val i = Intent(c, CallService::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= 26) c.startForegroundService(i) else c.startService(i)
+                c.startService(Intent(c, CallService::class.java).putExtra("proximity", proximity))
             } catch (e: Exception) {
                 active = false
             }
@@ -69,7 +83,7 @@ class CallService : Service() {
 
         fun stop(c: Context) {
             active = false
-            c.stopService(Intent(c, CallService::class.java))
+            try { c.stopService(Intent(c, CallService::class.java)) } catch (_: Exception) {}
         }
 
         private fun notification(c: Context): Notification {
@@ -88,7 +102,7 @@ class CallService : Service() {
                 .setContentText(text)
                 .setOngoing(true)
                 .setCategory(NotificationCompat.CATEGORY_CALL)
-                .setContentIntent(NotifyService.openIntent(c, "/portal/nachrichten", 4712))
+                .setContentIntent(NotifyService.openIntent(c, "/portal/nachrichten", ID))
                 .build()
         }
     }

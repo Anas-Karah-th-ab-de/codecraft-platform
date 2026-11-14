@@ -146,10 +146,11 @@ fn control_available() -> bool {
 
 /// Anruf läuft/beendet (Android: Mikrofon bleibt auch bei ausgeschaltetem Bildschirm offen)
 #[tauri::command]
-fn app_call(active: bool) {
+fn app_call(active: bool, ringing: Option<bool>, video: Option<bool>) {
+    let (ringing, video) = (ringing.unwrap_or(false), video.unwrap_or(false));
     #[cfg(target_os = "android")]
-    android::call_active(active);
-    let _ = active;
+    android::call_state(active, ringing, video);
+    let _ = (active, ringing, video);
 }
 
 /// Mikrofon/Kamera für einen Anruf erfragen (Android); true = Mikrofon erlaubt
