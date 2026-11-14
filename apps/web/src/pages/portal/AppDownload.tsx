@@ -1,7 +1,7 @@
 import { useI18n } from "../../i18n";
 import { Icon } from "../../icons";
 import { useEffect, useState } from "react";
-import { native, useIsApp, type AppInfo } from "../../native";
+import { isApp, native, useIsApp, type AppInfo } from "../../native";
 
 /** App-Downloads für Kunden und Mitarbeiter (Android-APK, Linux-.deb) */
 const AT = {
@@ -15,6 +15,10 @@ const AT = {
     l1: "Datei herunterladen und per Doppelklick installieren – oder: sudo apt install ./km-portal_amd64.deb",
     inApp: "Sie nutzen das Portal bereits in der App.",
     win: "Windows folgt in Kürze.",
+    ctrl: "Android mit Fernsteuerung", ctrlSub: "Support darf tippen und wischen (nur während einer Freigabe)",
+    ctrlHow: "Danach einmalig: Einstellungen → Apps → KM Portal → ⋮ → „Eingeschränkte Einstellungen zulassen“, dann Einstellungen → Bedienungshilfen → „KM Portal Fernsteuerung“ einschalten.",
+    browser: "Der Download startet im Browser. Danach die Datei öffnen und installieren – Ihre Anmeldung bleibt erhalten.",
+    copied: "Link kopiert – bitte im Browser öffnen.",
   },
   en: {
     intro: "With the app you receive messages, calls and notifications directly on your phone or PC – even when the browser is closed. Remote access by our support is only possible if you explicitly allow it in the app.",
@@ -26,6 +30,10 @@ const AT = {
     l1: "Download the file and double-click to install – or: sudo apt install ./km-portal_amd64.deb",
     inApp: "You are already using the portal in the app.",
     win: "Windows is coming soon.",
+    ctrl: "Android with remote control", ctrlSub: "Support may tap and swipe (only while you share)",
+    ctrlHow: "Then once: Settings → Apps → KM Portal → ⋮ → “Allow restricted settings”, then Settings → Accessibility → “KM Portal Fernsteuerung” on.",
+    browser: "The download starts in the browser. Then open the file and install – you stay signed in.",
+    copied: "Link copied – please open it in the browser.",
   },
   ar: {
     intro: "مع التطبيق تصلك الرسائل والمكالمات والإشعارات مباشرة على الهاتف أو الحاسوب – حتى عند إغلاق المتصفح. الوصول عن بُعد من فريق الدعم ممكن فقط إذا سمحت به صراحةً في التطبيق.",
@@ -37,7 +45,22 @@ const AT = {
     l1: "نزّل الملف وثبّته بالنقر المزدوج – أو: sudo apt install ./km-portal_amd64.deb",
     inApp: "أنت تستخدم البوابة داخل التطبيق بالفعل.",
     win: "نسخة ويندوز قريباً.",
+    ctrl: "أندرويد مع التحكم عن بُعد", ctrlSub: "يمكن للدعم النقر والسحب (فقط أثناء المشاركة)",
+    ctrlHow: "بعد ذلك مرة واحدة: الإعدادات ← التطبيقات ← KM Portal ← ⋮ ← «السماح بالإعدادات المقيدة»، ثم الإعدادات ← إمكانية الوصول ← تفعيل «KM Portal Fernsteuerung».",
+    browser: "يبدأ التنزيل في المتصفح. ثم افتح الملف وثبّته – يبقى تسجيل دخولك محفوظاً.",
+    copied: "تم نسخ الرابط – يرجى فتحه في المتصفح.",
   },
+};
+
+/** In der App kann die Webansicht nichts herunterladen → Link im Browser öffnen */
+const download = (path: string, copied: string) => (e: React.MouseEvent) => {
+  if (!isApp()) return; // Browser: normaler Download über den Link
+  e.preventDefault();
+  const url = new URL(path, location.origin).href;
+  native("open_url", { url }).catch(() => {
+    navigator.clipboard?.writeText(url).catch(() => {});
+    alert(`${url}\n\n${copied}`);
+  });
 };
 
 export function AppDownload() {
@@ -53,12 +76,19 @@ export function AppDownload() {
         <div className="dev-row">
           <Icon name="phone" />
           <div><b>{T.android}</b><small className="muted">{T.androidSub}</small></div>
-          <a className="btn small" href="/downloads/km-portal.apk" download><Icon name="download" size={16} /> {T.dl}</a>
+          <a className="btn small" href="/downloads/km-portal.apk" download onClick={download("/downloads/km-portal.apk", T.copied)}><Icon name="download" size={16} /> {T.dl}</a>
         </div>
+        <div className="dev-row">
+          <Icon name="phone" />
+          <div><b>{T.ctrl}</b><small className="muted">{T.ctrlSub}</small></div>
+          <a className="btn small ghost" href="/downloads/km-portal-fernsteuerung.apk" download onClick={download("/downloads/km-portal-fernsteuerung.apk", T.copied)}><Icon name="download" size={16} /> {T.dl}</a>
+        </div>
+        <p className="muted"><small>{T.ctrlHow}</small></p>
+        {inApp && <p className="muted"><small>{T.browser}</small></p>}
         <div className="dev-row">
           <Icon name="monitor" />
           <div><b>{T.linux}</b><small className="muted">{T.linuxSub}</small></div>
-          <a className="btn small ghost" href="/downloads/km-portal_amd64.deb" download><Icon name="download" size={16} /> {T.dl}</a>
+          <a className="btn small ghost" href="/downloads/km-portal_amd64.deb" download onClick={download("/downloads/km-portal_amd64.deb", T.copied)}><Icon name="download" size={16} /> {T.dl}</a>
         </div>
         <p className="muted" style={{ marginTop: 12 }}>{T.win}</p>
       </div>
