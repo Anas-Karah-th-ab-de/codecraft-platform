@@ -32,6 +32,32 @@ const reloadOnce = () => {
 };
 window.addEventListener("vite:preloadError", (e) => { e.preventDefault(); reloadOnce(); });
 
+/**
+ * Neue Version auf dem Server? Die App (und offene Browser-Tabs) halten die Seite oft tagelang offen und laufen
+ * sonst mit dem alten Stand weiter – behobene Fehler blieben sichtbar. Beim Zurückkehren zur Seite und alle
+ * 10 Minuten prüfen; neu geladen wird nur, wenn gerade kein Anruf läuft und nichts getippt wird.
+ */
+const current = () => Array.from(document.scripts).map((x) => x.getAttribute("src")).find((x) => x?.includes("/assets/index-")) ?? null;
+let pendingReload = false;
+const idle = () => {
+  if (document.querySelector(".callview, .meet-live")) return false;
+  const a = document.activeElement as HTMLInputElement | null;
+  return !(a && (a.tagName === "TEXTAREA" || a.tagName === "INPUT") && a.value);
+};
+const checkVersion = async () => {
+  const mine = current();
+  if (!mine) return; // Entwicklungsserver
+  try {
+    const html = await (await fetch("/", { cache: "no-store" })).text();
+    const live = html.match(/\/assets\/index-[^"']+\.js/)?.[0];
+    if (live && !mine.endsWith(live)) pendingReload = true;
+  } catch { /* offline */ }
+  if (pendingReload && idle()) reloadOnce();
+};
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkVersion(); });
+window.addEventListener("online", checkVersion);
+window.setInterval(checkVersion, 10 * 60 * 1000);
+
 /** Fängt Fehler der Oberfläche ab: In der App gibt es keinen „Neu laden“-Knopf – eine weiße Seite wäre eine Sackgasse */
 class Boundary extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
