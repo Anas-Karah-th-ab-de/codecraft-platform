@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         SupportBridge.app = applicationContext
+        instance = this
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         // Randlos zeichnen, aber das Portal nicht unter Statusleiste, Navigationsleiste, Kamera-Aussparung
@@ -50,6 +51,39 @@ class MainActivity : TauriActivity() {
     override fun onResume() {
         super.onResume()
         MainActivityState.visible = true
+        refreshInsets()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) refreshInsets()
+    }
+
+    override fun onDestroy() {
+        if (instance === this) instance = null
+        super.onDestroy()
+    }
+
+    /** Ränder (Statusleiste, Navigationsleiste, Kamera-Aussparung) neu anwenden – nach Sperrbildschirm,
+     *  Anruf-Vollbild oder App-Wechsel kamen sie auf manchen Geräten (z. B. Galaxy S24) nicht wieder an. */
+    private fun refreshInsets() {
+        val root = findViewById<android.view.View>(android.R.id.content) ?: return
+        root.post { ViewCompat.requestApplyInsets(root) }
+    }
+
+    /** Mikrofon/Kamera erfragen (für Anrufe); Ergebnis: Mikrofon erlaubt? */
+    fun askMedia(video: Boolean, done: (Boolean) -> Unit) {
+        val wanted = mutableListOf(Manifest.permission.RECORD_AUDIO)
+        if (video) wanted += Manifest.permission.CAMERA
+        val missing = wanted.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) { done(true); return }
+        requestPermissions(missing.toTypedArray()) { _ ->
+            done(checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+        }
+    }
+
+    companion object {
+        @Volatile var instance: MainActivity? = null
     }
 
     override fun onPause() {

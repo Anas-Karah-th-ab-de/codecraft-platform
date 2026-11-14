@@ -6,7 +6,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ringback, ringtone } from "./Notify";
 import { api, getToken, useAuth } from "../../api";
 import { RemoteScreen } from "./Remote";
-import { native, useIsApp, waitApp, type AppInfo } from "../../native";
+import { isApp, native, useIsApp, waitApp, type AppInfo } from "../../native";
 import { useI18n } from "../../i18n";
 
 export const TX = {
@@ -18,7 +18,7 @@ export const TX = {
     incoming: "ruft an …", calling: "Ruft an …", connecting: "Verbinde …", accept: "Annehmen", decline: "Ablehnen",
     hangup: "Auflegen", mute: "Stumm", unmute: "Ton an", camOff: "Kamera aus", camOn: "Kamera an",
     callAudio: "Anruf", callVideo: "Videoanruf", missed: "Verpasster Anruf", declined: "Anruf abgelehnt", busy: "Besetzt",
-    noMedia: "Kein Zugriff auf Mikrofon/Kamera. Bitte im Browser erlauben.", conn: "Verbindung wird hergestellt …",
+    noMedia: "Kein Zugriff auf Mikrofon/Kamera. Bitte im Browser erlauben.", noMic: "Mikrofon ist für die App nicht erlaubt – die Gegenseite kann Sie nicht hören.", openSettings: "Einstellungen öffnen", conn: "Verbindung wird hergestellt …",
     mailbox: "Postfach", you: "Sie", groupCall: "Gruppenanruf", remind: "Erinnerung", startsIn: (m: number) => (m <= 0 ? "beginnt jetzt" : m < 60 ? `beginnt in ${m} Minuten` : m < 1440 ? `beginnt in ${Math.round(m / 60)} Std.` : "beginnt morgen"), joinNow: "Meeting beitreten", ok: "OK", participants: "Teilnehmende", screen: "Bildschirm teilen", screenStop: "Teilen beenden", ctrlShare: "Steuerung freigeben", ctrlStop: "Freigabe beenden", ctrlView: (n: string) => `${n} steuern`, ctrlOffered: (n: string) => `${n} gibt das Gerät zur Steuerung frei`, ctrlAppOnly: "Steuerung freigeben geht in der KM-Portal-App (Handy/PC).", ctrlFail: "Freigabe nicht möglich", ctrlClose: "Schließen",
   },
   en: {
@@ -29,7 +29,7 @@ export const TX = {
     incoming: "is calling …", calling: "Calling …", connecting: "Connecting …", accept: "Accept", decline: "Decline",
     hangup: "Hang up", mute: "Mute", unmute: "Unmute", camOff: "Camera off", camOn: "Camera on",
     callAudio: "Call", callVideo: "Video call", missed: "Missed call", declined: "Call declined", busy: "Busy",
-    noMedia: "No access to microphone/camera. Please allow it in your browser.", conn: "Connecting …",
+    noMedia: "No access to microphone/camera. Please allow it in your browser.", noMic: "The app may not use the microphone – the other side cannot hear you.", openSettings: "Open settings", conn: "Connecting …",
     mailbox: "Mailbox", you: "You", groupCall: "Group call", remind: "Reminder", startsIn: (m: number) => (m <= 0 ? "starts now" : m < 60 ? `starts in ${m} minutes` : m < 1440 ? `starts in ${Math.round(m / 60)} h` : "starts tomorrow"), joinNow: "Join meeting", ok: "OK", participants: "Participants", screen: "Share screen", screenStop: "Stop sharing", ctrlShare: "Allow control", ctrlStop: "Stop control", ctrlView: (n: string) => `Control ${n}`, ctrlOffered: (n: string) => `${n} allows control of their device`, ctrlAppOnly: "Allowing control works in the KM Portal app (phone/PC).", ctrlFail: "Could not allow control", ctrlClose: "Close",
   },
   ar: {
@@ -40,7 +40,7 @@ export const TX = {
     incoming: "يتصل …", calling: "جارٍ الاتصال …", connecting: "جارٍ الوصل …", accept: "قبول", decline: "رفض",
     hangup: "إنهاء", mute: "كتم", unmute: "إلغاء الكتم", camOff: "إيقاف الكاميرا", camOn: "تشغيل الكاميرا",
     callAudio: "مكالمة", callVideo: "مكالمة فيديو", missed: "مكالمة فائتة", declined: "تم رفض المكالمة", busy: "مشغول",
-    noMedia: "لا يوجد وصول إلى الميكروفون/الكاميرا. يرجى السماح بذلك في المتصفح.", conn: "جارٍ الاتصال …",
+    noMedia: "لا يوجد وصول إلى الميكروفون/الكاميرا. يرجى السماح بذلك في المتصفح.", noMic: "التطبيق لا يملك إذن الميكروفون – الطرف الآخر لا يسمعك.", openSettings: "فتح الإعدادات", conn: "جارٍ الاتصال …",
     mailbox: "البريد", you: "أنت", groupCall: "مكالمة جماعية", remind: "تذكير", startsIn: (m: number) => (m <= 0 ? "يبدأ الآن" : m < 60 ? `يبدأ خلال ${m} دقيقة` : m < 1440 ? `يبدأ خلال ${Math.round(m / 60)} ساعة` : "يبدأ غداً"), joinNow: "الانضمام إلى الاجتماع", ok: "حسناً", participants: "المشاركون", screen: "مشاركة الشاشة", screenStop: "إيقاف المشاركة", ctrlShare: "السماح بالتحكم", ctrlStop: "إيقاف التحكم", ctrlView: (n: string) => `التحكم بجهاز ${n}`, ctrlOffered: (n: string) => `${n} يسمح بالتحكم بجهازه`, ctrlAppOnly: "السماح بالتحكم متاح في تطبيق KM Portal (الهاتف/الحاسوب).", ctrlFail: "تعذّر السماح بالتحكم", ctrlClose: "إغلاق",
   },
 };
@@ -150,7 +150,19 @@ export function CommProvider({ children }: { children: ReactNode }) {
       };
     };
     open();
-    return () => { stop = true; clearTimeout(timer); wsRef.current?.close(); };
+    const wake = () => {
+      const st = wsRef.current?.readyState;
+      if (document.visibilityState === "visible" && st !== WebSocket.OPEN && st !== WebSocket.CONNECTING) {
+        clearTimeout(timer); retry = 0; open();
+      }
+    };
+    document.addEventListener("visibilitychange", wake);
+    window.addEventListener("online", wake);
+    window.addEventListener("focus", wake);
+    return () => {
+      stop = true; clearTimeout(timer); wsRef.current?.close();
+      document.removeEventListener("visibilitychange", wake); window.removeEventListener("online", wake); window.removeEventListener("focus", wake);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me?.id]);
 
@@ -191,11 +203,42 @@ export function CommProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [callState]);
 
+  // Läuft ein Anruf, hält die App (Android) das Mikrofon auch bei ausgeschaltetem Bildschirm offen
+  const inCall = !!call && call.state !== "incoming";
+  useEffect(() => {
+    if (isApp()) native("app_call", { active: inCall }).catch(() => {});
+  }, [inCall]);
+
   // ── Medien und Verbindungen ──
   const media = async (kind: "audio" | "video") => {
-    const s = await navigator.mediaDevices.getUserMedia({ audio: true, video: kind === "video" ? { width: 1280, height: 720 } : false });
-    local.current = s; setLocalStream(s); setMuted(false); setCamOff(false);
+    const want: MediaStreamConstraints = { audio: true, video: kind === "video" ? { width: 1280, height: 720 } : false };
+    const get = (c: MediaStreamConstraints) => navigator.mediaDevices.getUserMedia(c);
+    let s: MediaStream;
+    let camOff = false;
+    try {
+      s = await get(want);
+    } catch (e) {
+      const name = (e as Error)?.name ?? String(e);
+      // App (Android): Recht fehlt oder ist abgelaufen („Nur dieses Mal“) → nachfragen und neu versuchen
+      let granted = false;
+      if (isApp() && (name === "NotAllowedError" || name === "SecurityError" || name === "NotReadableError")) {
+        granted = await native<boolean>("app_media_permission", { video: kind === "video" }).catch(() => false);
+      }
+      diag("media-retry", `${name} perm=${granted}`);
+      try {
+        s = await get(want);
+      } catch (e2) {
+        if (kind !== "video") throw e2;
+        s = await get({ audio: true }); // Kamera fehlt/belegt → wenigstens mit Ton telefonieren
+        camOff = true;
+      }
+    }
+    local.current = s; setLocalStream(s); setMuted(false); setCamOff(camOff);
     return s;
+  };
+  const mediaFailed = (x: unknown) => {
+    diag("media", String((x as Error)?.name ?? x));
+    setNotice(isApp() ? T.noMic : T.noMedia);
   };
 
   // ICE-Server (inkl. TURN-Zugang, läuft ab) vor dem Anruf frisch holen – nicht erst beim Verbindungsaufbau
@@ -285,7 +328,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
     if (callRef.current) return;
     const others = people.filter((p) => p.id !== myId);
     if (others.length === 0) return;
-    try { await refreshIce(); await media(m); } catch (x) { diag("media", String((x as Error)?.name ?? x)); setNotice(T.noMedia); return; }
+    try { await refreshIce(); await media(m); } catch (x) { mediaFailed(x); return; }
     setCall({ state: "outgoing", room, title, media: m, group, host: myId, invited: others, peers: [] });
     others.forEach((p) => signal(room, p.id, { kind: "ring", media: m, group, title }));
     ringTimer.current = window.setTimeout(() => { if (callRef.current?.state === "outgoing") end(true); }, 45000);
@@ -294,7 +337,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
   const accept = async () => {
     const c = callRef.current;
     if (!c) return;
-    try { await refreshIce(); await media(c.media); } catch (x) { diag("media", String((x as Error)?.name ?? x)); setNotice(T.noMedia); end(true); return; }
+    try { await refreshIce(); await media(c.media); } catch (x) { mediaFailed(x); end(true); return; }
     setCall({ ...c, state: "live" });
     signal(c.room, c.host, { kind: "accept" });
   };
@@ -306,7 +349,7 @@ export function CommProvider({ children }: { children: ReactNode }) {
     const person = { id: from, name: e.name as string };
     switch (d.kind) {
       case "ring":
-        if (c) { signal(e.room, from, { kind: "busy" }); return; }
+        if (c) { if (c.room !== e.room) signal(e.room, from, { kind: "busy" }); return; }
         setCall({ state: "incoming", room: e.room, title: d.group ? (d.title ?? e.name) : e.name, media: d.media === "video" ? "video" : "audio",
           group: !!d.group, host: from, invited: [], peers: [person] });
         return;
@@ -438,7 +481,12 @@ export function CommProvider({ children }: { children: ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      {notice && <div className="toast" role="status" onClick={() => setNotice(null)}>{notice}</div>}
+      {notice && (
+        <div className="toast" role="status" onClick={() => setNotice(null)}>
+          {notice}
+          {notice === T.noMic && <button className="btn small" style={{ marginInlineStart: 10 }} onClick={() => native("app_settings").catch(() => {})}>{T.openSettings}</button>}
+        </div>
+      )}
       {reminder && (
         <div className="reminder" role="alert">
           <small>⏰ {T.remind}</small>

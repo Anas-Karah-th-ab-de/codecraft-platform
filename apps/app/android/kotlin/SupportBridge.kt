@@ -134,6 +134,39 @@ object SupportBridge {
         c.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
+    // ── Anrufe ────────────────────────────────────────────────────────────
+
+    /** Anruf läuft/beendet: Vordergrund-Dienst hält das Mikrofon auch bei ausgeschaltetem Bildschirm offen */
+    @JvmStatic fun callActive(on: Boolean) {
+        val c = app ?: return
+        main.post { if (on) CallService.start(c) else CallService.stop(c) }
+    }
+
+    /** Mikrofon (und Kamera) erfragen, falls nicht erlaubt; blockiert bis zur Antwort (max. 60 s) */
+    @JvmStatic fun ensureMedia(video: Boolean): Boolean {
+        val c = app ?: return false
+        val mic = android.Manifest.permission.RECORD_AUDIO
+        if (c.checkSelfPermission(mic) == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            (!video || c.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED)) return true
+        val a = MainActivity.instance ?: return false
+        val latch = CountDownLatch(1)
+        var ok = false
+        main.post {
+            try { a.askMedia(video) { ok = it; latch.countDown() } } catch (e: Exception) { latch.countDown() }
+        }
+        latch.await(60, TimeUnit.SECONDS)
+        return ok
+    }
+
+    /** App-Einstellungen öffnen (Berechtigungen von Hand erlauben) */
+    @JvmStatic fun openAppSettings() {
+        val c = app ?: return
+        try {
+            c.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:" + c.packageName))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {}
+    }
+
     @JvmStatic fun notice(text: String) {
         val c = app ?: return
         main.post { Toast.makeText(c, text, Toast.LENGTH_LONG).show() }

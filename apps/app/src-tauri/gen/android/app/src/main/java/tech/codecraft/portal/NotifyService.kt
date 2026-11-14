@@ -36,10 +36,21 @@ class NotifyService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    private var netCallback: android.net.ConnectivityManager.NetworkCallback? = null
+
     override fun onCreate() {
         super.onCreate()
         SupportBridge.app = SupportBridge.app ?: applicationContext
         channels(this)
+        // WLAN ↔ Mobilfunk: alte Verbindung ist dann tot, ohne dass es jemand merkt → sofort neu aufbauen
+        try {
+            val cm = getSystemService(android.net.ConnectivityManager::class.java)
+            val cb = object : android.net.ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: android.net.Network) { conn?.disconnect() }
+            }
+            cm.registerDefaultNetworkCallback(cb)
+            netCallback = cb
+        } catch (_: Exception) {}
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -61,6 +72,7 @@ class NotifyService : Service() {
 
     override fun onDestroy() {
         running = false
+        netCallback?.let { try { getSystemService(android.net.ConnectivityManager::class.java).unregisterNetworkCallback(it) } catch (_: Exception) {} }
         conn?.disconnect()
         super.onDestroy()
     }
@@ -87,7 +99,7 @@ class NotifyService : Service() {
                     setRequestProperty("Authorization", "Bearer $key")
                     setRequestProperty("Accept", "text/event-stream")
                     connectTimeout = 15000
-                    readTimeout = 70000 // Server sendet alle 25 s ein Lebenszeichen
+                    readTimeout = 40000 // Server sendet alle 25 s ein Lebenszeichen → tote Verbindung nach 40 s erkannt
                 }
                 conn = c
                 if (c.responseCode == 401) {
@@ -116,7 +128,7 @@ class NotifyService : Service() {
             if (!running) return
             update(texts().reconnecting)
             Thread.sleep(backoff)
-            backoff = (backoff * 2).coerceAtMost(60000L)
+            backoff = (backoff * 2).coerceAtMost(15000L)
         }
     }
 
@@ -176,6 +188,7 @@ class NotifyService : Service() {
             .setOngoing(true)
             .setAutoCancel(true)
             .setTimeoutAfter(45000)
+            .setOnlyAlertOnce(true)
             .setFullScreenIntent(open, true)
             .setContentIntent(open)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, t.decline, decline)

@@ -104,7 +104,28 @@ impl Drop for Registration {
 }
 
 /// Offene Anrufe (Raum, Angerufene/r) → Anrufer/in; für „Verpasster Anruf“
-static RINGS: LazyLock<Mutex<HashMap<(Uuid, Uuid), Uuid>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+static RINGS: LazyLock<Mutex<HashMap<(Uuid, Uuid), Ring>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Laufendes Klingeln: wer anruft und das Ereignis, wie es zugestellt wurde
+struct Ring {
+    from: Uuid,
+    ev: String,
+    at: std::time::Instant,
+}
+
+/// So lange klingelt ein Anruf (Anrufer legt nach 45 s auf)
+const RING_SECS: u64 = 45;
+
+/// Noch klingelnde Anrufe an `user` – für Verbindungen, die gerade (neu) aufgebaut werden.
+/// Ein Handy, dessen Verbindung beim Klingeln kurz weg war, bekommt den Anruf so trotzdem.
+pub fn pending_rings(user: Uuid) -> Vec<String> {
+    let mut r = RINGS.lock().unwrap();
+    r.retain(|_, v| v.at.elapsed().as_secs() < RING_SECS + 15);
+    r.iter()
+        .filter(|((_, to), v)| *to == user && v.at.elapsed().as_secs() < RING_SECS)
+        .map(|(_, v)| v.ev.clone())
+        .collect()
+}
 
 pub fn online_users() -> Vec<Uuid> {
     HUB.lock().unwrap().keys().copied().collect()
@@ -732,6 +753,12 @@ pub async fn ws(State(s): State<AppState>, Query(q): Query<WsQuery>, up: WebSock
 async fn session(s: AppState, user: Uuid, token: Uuid, name: String, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
     let mut reg = Registration::new(user, token);
+    // Anruf, der gerade klingelt, auch nach einem Neuaufbau der Verbindung zeigen
+    for m in pending_rings(user) {
+        if sink.send(Message::Text(m.into())).await.is_err() {
+            return;
+        }
+    }
     loop {
         tokio::select! {
             out = reg.rx.recv() => match out {
@@ -796,11 +823,11 @@ pub async fn relay(
         return Ok(false);
     }
     let kind = data.get("kind").and_then(|k| k.as_str()).unwrap_or_default().to_owned();
-    let ev = json!({ "type": "call", "room": room, "from": user, "name": name, "data": data });
-    send_user(to, &ev.to_string());
+    let ev = json!({ "type": "call", "room": room, "from": user, "name": name, "data": data }).to_string();
+    send_user(to, &ev);
     match kind.as_str() {
         "ring" => {
-            RINGS.lock().unwrap().insert((room, to), user);
+            RINGS.lock().unwrap().insert((room, to), Ring { from: user, ev, at: std::time::Instant::now() });
             let media = if data.get("media").and_then(|m| m.as_str()) == Some("video") { "video" } else { "audio" };
             let url = format!(
                 "/portal/nachrichten?ring={room}&from={user}&media={media}&t={}&name={}",
@@ -835,7 +862,7 @@ pub async fn relay(
             let missed = {
                 let mut r = RINGS.lock().unwrap();
                 match r.get(&(room, to)) {
-                    Some(from) if *from == user => r.remove(&(room, to)).is_some(),
+                    Some(ring) if ring.from == user => r.remove(&(room, to)).is_some(),
                     _ => false,
                 }
             };

@@ -81,3 +81,17 @@ pub fn open_url(url: &str) -> bool {
     })
     .unwrap_or(false)
 }
+
+/// Anruf läuft (Mikrofon-Dienst, Näherungssensor) bzw. ist beendet
+pub fn call_active(on: bool) {
+    let _ = with_bridge(|env, cls| env.call_static_method(cls, "callActive", "(Z)V", &[JValue::Bool(on as u8)])?.v());
+}
+
+/// Mikrofon (und Kamera) bei Bedarf erfragen; blockiert bis zur Antwort
+pub fn ensure_media(video: bool) -> bool {
+    with_bridge(|env, cls| env.call_static_method(cls, "ensureMedia", "(Z)Z", &[JValue::Bool(video as u8)])?.z()).unwrap_or(false)
+}
+
+pub fn open_app_settings() {
+    let _ = with_bridge(|env, cls| env.call_static_method(cls, "openAppSettings", "()V", &[])?.v());
+}

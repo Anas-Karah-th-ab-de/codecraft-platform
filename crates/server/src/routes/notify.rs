@@ -619,9 +619,12 @@ pub async fn events(
         .await?;
     let conn = super::chat::Registration::new(user, token_id);
     let hello = json!({ "type": "hello", "user": user, "name": name, "unread": unread }).to_string();
-    let stream = futures_util::stream::unfold((conn, Some(hello)), |(mut conn, first)| async move {
-        if let Some(h) = first {
-            return Some((Ok(Event::default().data(h)), (conn, None)));
+    // Begrüßung und noch klingelnde Anrufe zuerst (die App war beim Klingeln evtl. kurz offline)
+    let mut first = std::collections::VecDeque::from([hello]);
+    first.extend(super::chat::pending_rings(user));
+    let stream = futures_util::stream::unfold((conn, first), |(mut conn, mut first)| async move {
+        if let Some(h) = first.pop_front() {
+            return Some((Ok(Event::default().data(h)), (conn, first)));
         }
         loop {
             let msg = conn.rx.recv().await?;
@@ -632,7 +635,7 @@ pub async fn events(
             if msg.contains("\"type\":\"typing\"") || msg.contains("\"type\":\"presence\"") {
                 continue;
             }
-            return Some((Ok(Event::default().data(msg)), (conn, None)));
+            return Some((Ok(Event::default().data(msg)), (conn, first)));
         }
     });
     Ok(Sse::new(stream).keep_alive(KeepAlive::new().interval(std::time::Duration::from_secs(25))))

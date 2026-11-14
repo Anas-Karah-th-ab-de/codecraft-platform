@@ -12,6 +12,9 @@ const COMMANDS: &[&str] = &[
     "control_settings",
     "open_file",
     "open_url",
+    "app_call",
+    "app_media_permission",
+    "app_settings",
 ];
 
 fn main() {

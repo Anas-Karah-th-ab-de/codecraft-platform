@@ -24,6 +24,9 @@
     "allow-support-status",
     "allow-control-settings",
     "allow-open-file",
-    "allow-open-url"
+    "allow-open-url",
+    "allow-app-call",
+    "allow-app-media-permission",
+    "allow-app-settings"
   ]
 }

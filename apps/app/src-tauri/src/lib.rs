@@ -144,6 +144,36 @@ fn control_available() -> bool {
 
 // ── Befehle für das Portal ──────────────────────────────────────────────────
 
+/// Anruf läuft/beendet (Android: Mikrofon bleibt auch bei ausgeschaltetem Bildschirm offen)
+#[tauri::command]
+fn app_call(active: bool) {
+    #[cfg(target_os = "android")]
+    android::call_active(active);
+    let _ = active;
+}
+
+/// Mikrofon/Kamera für einen Anruf erfragen (Android); true = Mikrofon erlaubt
+#[tauri::command]
+async fn app_media_permission(video: bool) -> bool {
+    #[cfg(target_os = "android")]
+    {
+        return tauri::async_runtime::spawn_blocking(move || android::ensure_media(video)).await.unwrap_or(false);
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = video;
+        true
+    }
+}
+
+/// App-Einstellungen öffnen (Berechtigungen)
+#[tauri::command]
+fn app_settings() {
+    #[cfg(target_os = "android")]
+    android::open_app_settings();
+}
+
+
 /// Link außerhalb der App öffnen (z. B. App-Update) – nur https auf dem eigenen Server
 #[tauri::command]
 fn open_url(state: State<AppState>, url: String) -> Result<(), String> {
@@ -426,7 +456,10 @@ pub fn run() {
             support_status,
             control_settings,
             open_file,
-            open_url
+            open_url,
+            app_call,
+            app_media_permission,
+            app_settings
         ])
         .run(tauri::generate_context!())
         .expect("App konnte nicht starten");
