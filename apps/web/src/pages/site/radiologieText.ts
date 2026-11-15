@@ -8,11 +8,15 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     "title": "KM Code Craft Radiology – RIS, PACS und Befundung aus einer Hand",
     "eyebrow": "Radiologie-Informationssystem · Bildarchiv · Befundung",
     "h1": "Die ganze Radiologie in einem System. Im eigenen Haus.",
-    "sub": "Von der Anmeldung über den Termin und das Gerät bis zum freigegebenen Befund: ein Arbeitsplatz im Browser, auf Arabisch, Englisch und Deutsch. Server und Daten stehen bei Ihnen, nicht in einer Cloud.",
+    "sub": "Von der Anmeldung über den Termin und das Gerät bis zum freigegebenen Befund: ein Arbeitsplatz im Browser, auf Arabisch, Englisch und Deutsch. Server und Daten stehen bei Ihnen, nicht in einer Cloud. Auf Wunsch mit KI-Unterstützung, die ebenfalls im Haus läuft.",
     "sheet": [
       [
         "Umfang",
-        "RIS, PACS-Archiv, Web-Viewer, Befundung, Dokumente"
+        "RIS, PACS-Archiv, Web-Viewer, Befundung, Dokumente, Patientenzugang"
+      ],
+      [
+        "KI",
+        "Zusatzmodul im eigenen Haus, auch auf demselben Server"
       ],
       [
         "Betrieb",
@@ -81,7 +85,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Bildbetrachtung",
-            "Web-Viewer direkt aus der Untersuchung, über einen kurzlebigen, persönlichen Link. Zur Durchsicht und Demonstration, nicht für die Primärdiagnostik."
+            "Eigener Web-Viewer direkt aus der Untersuchung: drei Ebenen (MPR) und 3D, Fenster per Taste (F2 Lunge, F3 Knochen, F4 Weichteile, F8 Gehirn, F9 Bauch), Messen von Abstand, Winkel, Cobb-Winkel, Fläche und Dichtewert, Vergleich mit der Voruntersuchung. Die Anordnung merkt sich jeder Arzt je Untersuchungsart (Hanging Protocol). Zur Durchsicht, nicht für die Primärdiagnostik."
           ],
           [
             "Befundung",
@@ -92,6 +96,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Jeder freigegebene Befund erhält ein kryptografisches Systemsiegel und lässt sich als PDF/A-2b für die Langzeitablage ausgeben."
           ],
           [
+            "Windows-Arbeitsplatz",
+            "Eigenes Programm für den Arztplatz: Arbeitsliste und Bilder nebeneinander oder die Bilder auf dem zweiten Bildschirm, Vergleich mit der Voruntersuchung in einem Aufruf, Testbild für den Bildschirm."
+          ],
+          [
             "Dokumente",
             "Überweisungen, Einwilligungen und Vorbefunde als PDF oder Bild hochladen. Jede Datei wird vor dem Speichern auf Schadsoftware geprüft."
           ],
@@ -100,8 +108,40 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Übersicht über Systemzustand, wartende Arbeit und eingeschaltete Funktionen. Benutzer, Rollen und zweiter Faktor in einer eigenen Verwaltungsoberfläche."
           ],
           [
-            "KI-Assistent (Zusatzmodul)",
-            "Auf Wunsch zuschaltbar und an einen KI-Server im eigenen Haus angebunden, etwa KM Code Craft AI: übersetzt Texte zwischen Arabisch, Englisch und Deutsch, prüft die Rechtschreibung im Befund und schlägt eine Reihenfolge der wartenden Arbeit vor. Er macht nur Vorschläge; übernommen wird nichts ohne einen Menschen."
+            "KI im Viewer (Zusatzmodul)",
+            "Ein Modell findet Organe, Knochen und Wirbel einer CT, beschriftet die Wirbel (C/T/L/S) in allen Ebenen und springt per Klick zum Organ. Gerechnet wird auf der Grafikkarte des Arzt-Rechners, wenn sie stark genug ist – das entlastet den Server –, sonst auf dem Server. Bei mehreren Grafikkarten wählt der Viewer die stärkste; der Arzt kann umstellen."
+          ],
+          [
+            "KI-Vorauswertung (Zusatzmodul)",
+            "Neue Untersuchungen sieht sich ein Bild- und Sprachmodell schon beim Eingang an. Beim Öffnen steht der Vorschlag neben den Bildern; der Arzt bestätigt oder verwirft ihn. Ein Vorschlag, kein Befund."
+          ],
+          [
+            "KI beim Befund (Zusatzmodul)",
+            "Diktat per Sprache; ein Klick gliedert den Text in Fragestellung, Technik, Befund und Beurteilung, ohne etwas hinzuzufügen. Dazu Übersetzung zwischen Arabisch, Englisch und Deutsch und Rechtschreibprüfung. Übernommen wird nichts ohne einen Menschen."
+          ],
+          [
+            "Kritische Befunde",
+            "Der Radiologe meldet einen kritischen Befund; die zuweisenden Ärzte sehen sofort einen roten Alarm, bis jemand ihn quittiert. Auf Wunsch zusätzlich E-Mail, SMS oder WhatsApp, ohne Patientennamen."
+          ],
+          [
+            "Schlüsselbilder im Befund",
+            "Bilder, auf die der Befundtext verweist, erscheinen im Befund-PDF direkt unter dem Text."
+          ],
+          [
+            "Patientenzugang",
+            "Link oder QR-Code ohne Konto: Fragebogen vor der Untersuchung (Schrittmacher, Metall, Allergie, Schwangerschaft, Niere, Metformin, Platzangst) mit Warnung an das Team, Bilder in einer Patientenansicht, der freigegebene Befund in einfachen Worten erklärt (Arabisch, Englisch, Deutsch) und ein Gast-Link für eine Zweitmeinung, höchstens 7 Tage gültig."
+          ],
+          [
+            "Tagesübersicht",
+            "Für Empfang und MTR: erwartet, im Wartezimmer mit Wartezeit, im Gerät mit Laufzeit und Restzeit, fertig. Dazu jedes Gerät mit frei oder belegt und dem nächsten Termin."
+          ],
+          [
+            "Alles auf einem Server",
+            "System und KI-Modelle laufen auf Wunsch zusammen auf einem einzigen Server, ohne zweiten KI-Rechner. Die Modelle werden vorab geladen oder per USB-Stick eingespielt – ohne Internet."
+          ],
+          [
+            "KI-Assistent im Text (Zusatzmodul)",
+            "Übersetzt Texte zwischen Arabisch, Englisch und Deutsch, prüft die Rechtschreibung und schlägt eine Reihenfolge der wartenden Arbeit vor – angebunden an einen KI-Server im eigenen Haus, etwa KM Code Craft AI. Er macht nur Vorschläge."
           ]
         ]
       },
@@ -116,12 +156,28 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Arbeitsliste: Untersuchungen mit Status und den nächsten erlaubten Schritten"
           ],
           [
-            "/products/radiologie/de-schedule.png",
-            "Terminplan: Raum, Beginn, Dauer – Doppelbelegung wird vom Server verhindert"
+            "/products/radiologie/de-board.png",
+            "Tagesübersicht: erwartet, wartet, im Gerät, fertig – mit Warnung aus dem Patienten-Fragebogen"
+          ],
+          [
+            "/products/radiologie/de-viewer.png",
+            "Viewer: drei Ebenen (MPR), Wirbel im Bild beschriftet, daneben die von der KI gefundenen Organe"
           ],
           [
             "/products/radiologie/de-report.png",
-            "Befundung: Entwurf, Vorlage, Einreichen zur Freigabe"
+            "Befundung: Entwurf, Vorlage, Diktat, Einreichen zur Freigabe"
+          ],
+          [
+            "/products/radiologie/de-access.png",
+            "Patientenzugang: Link und QR-Code, Versand per SMS, WhatsApp oder E-Mail"
+          ],
+          [
+            "/products/radiologie/de-portal.png",
+            "Patientenseite am Handy: der Befund in einfachen Worten erklärt"
+          ],
+          [
+            "/products/radiologie/de-schedule.png",
+            "Terminplan: Raum, Beginn, Dauer – Doppelbelegung wird vom Server verhindert"
           ],
           [
             "/products/radiologie/de-admin.png",
@@ -173,7 +229,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Viewer",
-            "OHIF, eingebunden über kurzlebige Zugangslinks"
+            "Eigener Web-Viewer (WebAssembly, WebGPU) über kurzlebige Zugangslinks; auch im Windows-Programm"
+          ],
+          [
+            "KI (Zusatzmodul)",
+            "Modelle im eigenen Haus, ohne Internet: Organsuche (TotalSegmentator, Apache-2.0), Bild- und Textmodell (MedGemma), Diktat (whisper), Textassistent. Auf einem eigenen KI-Server oder auf demselben Server wie das System"
           ],
           [
             "Anmeldung",
@@ -189,7 +249,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Richtwert Server",
-            "Für eine kleine Abteilung: 8 Kerne, 32 GB RAM, SSD für die Datenbank, gespiegelter Bildspeicher nach Studienaufkommen, USV, getrenntes Sicherungsmedium. Die genaue Auslegung folgt aus der Standortaufnahme."
+            "Für eine kleine Abteilung: 8 Kerne, 32 GB RAM, SSD für die Datenbank, gespiegelter Bildspeicher nach Studienaufkommen, USV, getrenntes Sicherungsmedium. Mit Sprachmodell auf demselben Server: 16 Kerne und 64 GB RAM. Die genaue Auslegung folgt aus der Standortaufnahme."
           ]
         ]
       },
@@ -203,6 +263,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           "Ergebnis"
         ],
         "rows": [
+          [
+            "Abnahme auf der Teststelle",
+            "Ganzer Tagesablauf mit Testkonten über das Internet: Anmeldung bis Freigabe, kritischer Alarm mit Quittung, Fragebogen am Handy mit Warnung ans Team, Befund-Erklärung, Organsuche im Viewer (15.11.2026)"
+          ],
           [
             "Automatische Tests",
             "Über 300 Unit-Tests und 60 Tests gegen eine echte Datenbank bei jeder Änderung"
@@ -273,6 +337,14 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "h": "Häufige Fragen",
         "items": [
           [
+            "Braucht die KI Internet oder einen zweiten Server?",
+            "Nein. Die Modelle laufen im eigenen Haus – auf einem eigenen KI-Server oder zusammen mit dem System auf einem Server. Die Organsuche rechnet, wo möglich, sogar auf der Grafikkarte des Arzt-Rechners."
+          ],
+          [
+            "Stellt die KI Diagnosen?",
+            "Nein. Sie macht Vorschläge, die als solche gekennzeichnet sind; der Arzt prüft, bestätigt oder verwirft sie. Freigegeben wird nur, was ein Mensch freigibt."
+          ],
+          [
             "Brauchen wir Internet?",
             "Nein. Das System läuft vollständig im eigenen Netz. Internet ist nur für die Fernbetreuung nötig, wenn Sie sie wünschen."
           ],
@@ -308,11 +380,15 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     "title": "KM Code Craft Radiology – RIS, PACS and reporting in one system",
     "eyebrow": "Radiology information system · Image archive · Reporting",
     "h1": "Your whole radiology department in one system. On your premises.",
-    "sub": "From registration to the appointment, the modality and the released report: one workplace in the browser, in Arabic, English and German. The server and the data stay with you, not in a cloud.",
+    "sub": "From registration to the appointment, the modality and the released report: one workplace in the browser, in Arabic, English and German. The server and the data stay with you, not in a cloud. Optionally with AI support that also runs on your premises.",
     "sheet": [
       [
         "Scope",
-        "RIS, PACS archive, web viewer, reporting, documents"
+        "RIS, PACS archive, web viewer, reporting, documents, patient access"
+      ],
+      [
+        "AI",
+        "Add-on on your premises, also on the same server"
       ],
       [
         "Operation",
@@ -381,7 +457,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Image viewing",
-            "Web viewer straight from the examination through a short-lived personal link. For review and demonstration, not for primary diagnosis."
+            "Own web viewer straight from the examination: three planes (MPR) and 3D, windows by key (F2 lung, F3 bone, F4 soft tissue, F8 brain, F9 abdomen), measuring distance, angle, Cobb angle, area and density, comparison with the earlier examination. Each physician's layout per examination type is remembered (hanging protocol). For review, not for primary diagnosis."
           ],
           [
             "Reporting",
@@ -392,6 +468,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Every released report receives a cryptographic system seal and can be exported as PDF/A-2b for long-term filing."
           ],
           [
+            "Windows workstation",
+            "A dedicated program for the reading desk: worklist and images side by side or the images on the second screen, comparison with the earlier examination in one step, a test pattern for the screen."
+          ],
+          [
             "Documents",
             "Upload referrals, consent forms and previous reports as PDF or image. Every file is scanned for malware before it is stored."
           ],
@@ -400,8 +480,40 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Overview of system state, waiting work and enabled functions. Users, roles and second factor in a dedicated administration console."
           ],
           [
-            "AI assistant (add-on module)",
-            "Can be switched on and connected to an AI server in your own building, such as KM Code Craft AI: translates texts between Arabic, English and German, checks the spelling of a report and suggests an order for the waiting work. It only suggests; nothing is taken over without a person."
+            "AI in the viewer (add-on)",
+            "A model finds the organs, bones and vertebrae of a CT, labels the vertebrae (C/T/L/S) in every plane and jumps to an organ with one click. It runs on the graphics card of the physician's computer when that card is strong enough – which relieves the server – and otherwise on the server. With several graphics cards the viewer picks the strongest; the physician can change it."
+          ],
+          [
+            "AI pre-read (add-on)",
+            "An image and language model looks at new examinations as soon as they arrive. When the study is opened, the suggestion sits next to the images; the physician confirms or rejects it. A suggestion, not a report."
+          ],
+          [
+            "AI for reporting (add-on)",
+            "Voice dictation; one click sorts the text into clinical question, technique, findings and impression without adding anything. Plus translation between Arabic, English and German and a spelling check. Nothing is taken over without a person."
+          ],
+          [
+            "Critical findings",
+            "The radiologist flags a critical finding; the referring physicians immediately see a red alarm until someone acknowledges it. Optionally also e-mail, SMS or WhatsApp, without the patient's name."
+          ],
+          [
+            "Key images in the report",
+            "Images the report text refers to appear in the report PDF right below the text."
+          ],
+          [
+            "Patient access",
+            "Link or QR code without an account: questionnaire before the examination (pacemaker, metal, allergy, pregnancy, kidneys, metformin, claustrophobia) with a warning to the team, images in a patient view, the released report explained in plain words (Arabic, English, German) and a guest link for a second opinion, valid for at most 7 days."
+          ],
+          [
+            "Day board",
+            "For reception and technologists: expected, in the waiting room with waiting time, in the device with running and remaining time, finished. Plus every device as free or busy with its next appointment."
+          ],
+          [
+            "All on one server",
+            "On request the system and the AI models run together on a single server, without a second AI machine. The models are loaded in advance or installed from a USB stick – without internet."
+          ],
+          [
+            "AI text assistant (add-on)",
+            "Translates texts between Arabic, English and German, checks spelling and suggests an order for the waiting work – connected to an AI server in your own building, such as KM Code Craft AI. It only suggests."
           ]
         ]
       },
@@ -416,12 +528,28 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "Worklist: examinations with status and the next permitted steps"
           ],
           [
-            "/products/radiologie/en-schedule.png",
-            "Schedule: room, start, duration – double booking is prevented by the server"
+            "/products/radiologie/en-board.png",
+            "Day board: expected, waiting, in the device, finished – with a warning from the patient questionnaire"
+          ],
+          [
+            "/products/radiologie/en-viewer.png",
+            "Viewer: three planes (MPR), vertebrae labelled in the image, next to them the organs found by the AI"
           ],
           [
             "/products/radiologie/en-report.png",
-            "Reporting: draft, template, submit for release"
+            "Reporting: draft, template, dictation, submit for release"
+          ],
+          [
+            "/products/radiologie/en-access.png",
+            "Patient access: link and QR code, sent by SMS, WhatsApp or e-mail"
+          ],
+          [
+            "/products/radiologie/en-portal.png",
+            "Patient page on the phone: the report explained in plain words"
+          ],
+          [
+            "/products/radiologie/en-schedule.png",
+            "Schedule: room, start, duration – double booking is prevented by the server"
           ],
           [
             "/products/radiologie/en-admin.png",
@@ -473,7 +601,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Viewer",
-            "OHIF, integrated through short-lived access links"
+            "Own web viewer (WebAssembly, WebGPU) through short-lived access links; also inside the Windows program"
+          ],
+          [
+            "AI (add-on)",
+            "Models on your premises, without internet: organ finding (TotalSegmentator, Apache-2.0), image and text model (MedGemma), dictation (whisper), text assistant. On a separate AI server or on the same server as the system"
           ],
           [
             "Sign-in",
@@ -489,7 +621,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Server guideline",
-            "For a small department: 8 cores, 32 GB RAM, SSD for the database, mirrored image storage sized by study volume, UPS, separate backup medium. Exact sizing follows from the site survey."
+            "For a small department: 8 cores, 32 GB RAM, SSD for the database, mirrored image storage sized by study volume, UPS, separate backup medium. With the language model on the same server: 16 cores and 64 GB RAM. Exact sizing follows from the site survey."
           ]
         ]
       },
@@ -503,6 +635,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           "Result"
         ],
         "rows": [
+          [
+            "Acceptance on the test site",
+            "A whole working day with test accounts over the internet: registration to release, critical alarm with acknowledgement, questionnaire on the phone with a warning to the team, report explanation, organ finding in the viewer (15 Nov 2026)"
+          ],
           [
             "Automated tests",
             "More than 300 unit tests and 60 tests against a real database on every change"
@@ -573,6 +709,14 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "h": "Frequent questions",
         "items": [
           [
+            "Does the AI need internet or a second server?",
+            "No. The models run on your premises – on a separate AI server or together with the system on one server. Where possible, organ finding even runs on the graphics card of the physician's computer."
+          ],
+          [
+            "Does the AI make diagnoses?",
+            "No. It makes suggestions that are marked as such; the physician checks, confirms or rejects them. Only what a person releases is released."
+          ],
+          [
             "Do we need internet?",
             "No. The system runs entirely in your own network. Internet is only needed for remote support, if you want it."
           ],
@@ -608,11 +752,15 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     "title": "KM Code Craft Radiology – نظام معلومات الأشعة والأرشيف والتقارير في نظام واحد",
     "eyebrow": "نظام معلومات الأشعة · أرشيف الصور · كتابة التقارير",
     "h1": "قسم الأشعة كاملاً في نظام واحد. داخل منشأتك.",
-    "sub": "من التسجيل إلى الموعد والجهاز حتى التقرير المعتمد: مكان عمل واحد في المتصفح، بالعربية والإنجليزية والألمانية. الخادم والبيانات عندك، لا في السحابة.",
+    "sub": "من التسجيل إلى الموعد والجهاز حتى التقرير المعتمد: مكان عمل واحد في المتصفح، بالعربية والإنجليزية والألمانية. الخادم والبيانات عندك، لا في السحابة. وعند الرغبة مع دعم بالذكاء الاصطناعي يعمل هو أيضاً داخل منشأتك.",
     "sheet": [
       [
         "النطاق",
-        "RIS، أرشيف PACS، عارض ويب، تقارير، وثائق"
+        "RIS، أرشيف PACS، عارض ويب، تقارير، وثائق، وصول المريض"
+      ],
+      [
+        "الذكاء الاصطناعي",
+        "وحدة إضافية داخل المنشأة، ويمكن تشغيلها على الخادم نفسه"
       ],
       [
         "التشغيل",
@@ -681,7 +829,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "عرض الصور",
-            "عارض ويب من داخل الفحص مباشرة عبر رابط شخصي قصير الصلاحية. للمراجعة والعرض، لا للتشخيص الأولي."
+            "عارض ويب خاص من داخل الفحص مباشرة: ثلاثة مستويات (MPR) وعرض ثلاثي الأبعاد، نوافذ العرض بمفتاح واحد (F2 الرئة، F3 العظم، F4 الأنسجة الرخوة، F8 الدماغ، F9 البطن)، قياس المسافة والزاوية وزاوية كوب والمساحة والكثافة، ومقارنة مع الفحص السابق. يتذكّر العارض ترتيب الشاشة لكل طبيب ولكل نوع فحص (Hanging Protocol). للمراجعة، لا للتشخيص الأولي."
           ],
           [
             "كتابة التقارير",
@@ -692,6 +840,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "كل تقرير معتمد يحصل على ختم تشفيري للنظام ويُصدَّر بصيغة PDF/A-2b للحفظ الطويل."
           ],
           [
+            "محطة عمل ويندوز",
+            "برنامج خاص بمكتب الطبيب: قائمة العمل والصور جنباً إلى جنب أو الصور على الشاشة الثانية، مقارنة مع الفحص السابق بخطوة واحدة، وصورة اختبار للشاشة."
+          ],
+          [
             "الوثائق",
             "رفع الإحالات والموافقات والتقارير السابقة كملف PDF أو صورة. يُفحص كل ملف من البرمجيات الخبيثة قبل حفظه."
           ],
@@ -700,8 +852,40 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "نظرة على حالة النظام والعمل المنتظر والوظائف المفعّلة. المستخدمون والأدوار وعامل التحقق الثاني في واجهة إدارة خاصة."
           ],
           [
-            "المساعد الذكي (وحدة إضافية)",
-            "يُفعَّل عند الرغبة ويُربط بخادم ذكاء اصطناعي داخل منشأتك مثل KM Code Craft AI: يترجم النصوص بين العربية والإنجليزية والألمانية، ويدقّق إملاء التقرير، ويقترح ترتيباً للعمل المنتظر. يقدّم اقتراحات فقط؛ لا يُعتمد شيء بدون إنسان."
+            "الذكاء الاصطناعي في العارض (وحدة إضافية)",
+            "يتعرّف نموذج على الأعضاء والعظام والفقرات في صور الطبقي المحوري، ويكتب أسماء الفقرات (C/T/L/S) على الصورة في كل المستويات، وينتقل إلى العضو بنقرة واحدة. يجري الحساب على بطاقة الرسوميات في حاسوب الطبيب إن كانت قوية بما يكفي فيخفّ الحمل عن الخادم، وإلا فعلى الخادم. وعند وجود أكثر من بطاقة يختار العارض الأقوى، ويمكن للطبيب تغييرها."
+          ],
+          [
+            "القراءة المسبقة بالذكاء الاصطناعي (وحدة إضافية)",
+            "ينظر نموذج للصور واللغة إلى الفحوص الجديدة فور وصولها. عند فتح الفحص يظهر الاقتراح بجانب الصور، فيؤكّده الطبيب أو يرفضه. إنه اقتراح، لا تقرير."
+          ],
+          [
+            "الذكاء الاصطناعي في كتابة التقرير (وحدة إضافية)",
+            "إملاء بالصوت، وبنقرة واحدة يُرتَّب النص تحت السؤال السريري والتقنية والموجودات والخلاصة دون إضافة أي شيء. إضافة إلى الترجمة بين العربية والإنجليزية والألمانية وتدقيق الإملاء. لا يُعتمد شيء بدون إنسان."
+          ],
+          [
+            "النتائج الحرجة",
+            "يبلّغ طبيب الأشعة عن نتيجة حرجة، فيرى الأطباء المحيلون فوراً تنبيهاً أحمر حتى يؤكّد أحدهم الاطلاع عليه. وعند الرغبة أيضاً بريد إلكتروني أو رسالة SMS أو واتساب، دون اسم المريض."
+          ],
+          [
+            "صور مفتاحية في التقرير",
+            "الصور التي يشير إليها نص التقرير تظهر في ملف PDF للتقرير تحت النص مباشرة."
+          ],
+          [
+            "وصول المريض",
+            "رابط أو رمز QR دون حساب: استبيان قبل الفحص (منظّم قلب، معادن، حساسية، حمل، الكلى، ميتفورمين، رهاب الأماكن الضيقة) مع تنبيه للفريق، والصور في عرض خاص بالمريض، والتقرير المعتمد مشروحاً بكلمات بسيطة (بالعربية والإنجليزية والألمانية)، ورابط ضيف لرأي طبي ثانٍ صالح 7 أيام على الأكثر."
+          ],
+          [
+            "لوحة اليوم",
+            "للاستقبال وفنيي الأشعة: المتوقَّعون، ومن في غرفة الانتظار مع مدة الانتظار، ومن في الجهاز مع المدة المنقضية والمتبقية، ومن انتهى. وكل جهاز مع حالته (متاح أو مشغول) وموعده التالي."
+          ],
+          [
+            "كل شيء على خادم واحد",
+            "عند الرغبة يعمل النظام ونماذج الذكاء الاصطناعي معاً على خادم واحد، دون حاسوب ثانٍ للذكاء الاصطناعي. تُحمَّل النماذج مسبقاً أو تُثبَّت من ذاكرة USB، دون إنترنت."
+          ],
+          [
+            "المساعد الذكي للنصوص (وحدة إضافية)",
+            "يترجم النصوص بين العربية والإنجليزية والألمانية، ويدقّق الإملاء، ويقترح ترتيباً للعمل المنتظر، مرتبطاً بخادم ذكاء اصطناعي داخل منشأتك مثل KM Code Craft AI. يقدّم اقتراحات فقط."
           ]
         ]
       },
@@ -716,12 +900,28 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
             "قائمة العمل: الفحوص مع حالتها والخطوات المسموحة التالية"
           ],
           [
-            "/products/radiologie/ar-schedule.png",
-            "جدول المواعيد: الغرفة والبداية والمدة – الخادم يمنع الحجز المزدوج"
+            "/products/radiologie/ar-board.png",
+            "لوحة اليوم: متوقَّع، ينتظر، في الجهاز، انتهى – مع تنبيه من استبيان المريض"
+          ],
+          [
+            "/products/radiologie/ar-viewer.png",
+            "العارض: ثلاثة مستويات (MPR)، وأسماء الفقرات على الصورة، وبجانبها الأعضاء التي وجدها الذكاء الاصطناعي"
           ],
           [
             "/products/radiologie/ar-report.png",
-            "كتابة التقرير: مسودة، قالب، إرسال للاعتماد"
+            "كتابة التقرير: مسودة، قالب، إملاء، إرسال للاعتماد"
+          ],
+          [
+            "/products/radiologie/ar-access.png",
+            "وصول المريض: رابط ورمز QR، يُرسل عبر SMS أو واتساب أو البريد الإلكتروني"
+          ],
+          [
+            "/products/radiologie/ar-portal.png",
+            "صفحة المريض على الهاتف: التقرير مشروحاً بكلمات بسيطة"
+          ],
+          [
+            "/products/radiologie/ar-schedule.png",
+            "جدول المواعيد: الغرفة والبداية والمدة – الخادم يمنع الحجز المزدوج"
           ],
           [
             "/products/radiologie/ar-admin.png",
@@ -773,7 +973,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "العارض",
-            "OHIF، مدمج عبر روابط دخول قصيرة الصلاحية"
+            "عارض ويب خاص (WebAssembly، WebGPU) عبر روابط دخول قصيرة الصلاحية، ومتوفر أيضاً داخل برنامج ويندوز"
+          ],
+          [
+            "الذكاء الاصطناعي (وحدة إضافية)",
+            "نماذج داخل المنشأة دون إنترنت: البحث عن الأعضاء (TotalSegmentator، Apache-2.0)، نموذج للصور والنصوص (MedGemma)، الإملاء (whisper)، مساعد النصوص. على خادم ذكاء اصطناعي مستقل أو على خادم النظام نفسه"
           ],
           [
             "تسجيل الدخول",
@@ -789,7 +993,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "خادم استرشادي",
-            "لقسم صغير: 8 أنوية، 32 غيغابايت ذاكرة، قرص SSD لقاعدة البيانات، تخزين صور مرآوي بحسب حجم الدراسات، مزوّد طاقة احتياطي، وسيط نسخ احتياطي منفصل. التحديد الدقيق يتبع مسح الموقع."
+            "لقسم صغير: 8 أنوية، 32 غيغابايت ذاكرة، قرص SSD لقاعدة البيانات، تخزين صور مرآوي بحسب حجم الدراسات، مزوّد طاقة احتياطي، وسيط نسخ احتياطي منفصل. ومع النموذج اللغوي على الخادم نفسه: 16 نواة و64 غيغابايت ذاكرة. التحديد الدقيق يتبع مسح الموقع."
           ]
         ]
       },
@@ -803,6 +1007,10 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           "النتيجة"
         ],
         "rows": [
+          [
+            "فحص القبول على موقع الاختبار",
+            "يوم عمل كامل بحسابات اختبار عبر الإنترنت: من التسجيل حتى الاعتماد، وتنبيه حرج مع تأكيد الاطلاع، واستبيان على الهاتف مع تنبيه للفريق، وشرح التقرير، والبحث عن الأعضاء في العارض (15‏/11‏/2026)"
+          ],
           [
             "اختبارات آلية",
             "أكثر من 300 اختبار وحدة و60 اختباراً على قاعدة بيانات حقيقية مع كل تغيير"
@@ -872,6 +1080,14 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "id": "fragen",
         "h": "أسئلة متكررة",
         "items": [
+          [
+            "هل يحتاج الذكاء الاصطناعي إلى إنترنت أو إلى خادم ثانٍ؟",
+            "لا. تعمل النماذج داخل منشأتك، على خادم ذكاء اصطناعي مستقل أو مع النظام على خادم واحد. والبحث عن الأعضاء يجري، حيث أمكن، على بطاقة الرسوميات في حاسوب الطبيب نفسه."
+          ],
+          [
+            "هل يضع الذكاء الاصطناعي تشخيصاً؟",
+            "لا. يقدّم اقتراحات موسومة بأنها اقتراحات، ويراجعها الطبيب فيؤكّدها أو يرفضها. لا يُعتمد إلا ما يعتمده إنسان."
+          ],
           [
             "هل نحتاج إلى الإنترنت؟",
             "لا. النظام يعمل كاملاً داخل شبكتك. الإنترنت مطلوب فقط للدعم عن بُعد إذا رغبت به."
