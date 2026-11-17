@@ -444,8 +444,11 @@ export function Contact() {
   useEffect(() => {
     const x = extra.find((e) => e.key === pre);
     if (x && !f.subject) setF((o) => ({ ...o, subject: x.name }));
+    // Steht das Produkt inzwischen im Katalog, wird der Katalogeintrag vorgewählt.
+    const known = pre === "radiologie" ? data?.products.find((p) => p.name === TEASER[locale].radiologie[0]) : undefined;
+    if (known) setF((o) => ({ ...o, product_id: known.id, subject: o.subject || known.name }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pre]);
+  }, [pre, data]);
   const s = useSubmit();
   useTitle(t("contact.title"));
   const submit = () => {
