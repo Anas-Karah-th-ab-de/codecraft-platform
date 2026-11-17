@@ -64,9 +64,9 @@ async fn seeded_catalog_is_consistent(db: PgPool) {
     assert_eq!(codes, ["ACC", "DEV", "MGT", "SAL", "SUP"]);
     assert!(ar["departments"].as_array().unwrap().iter().any(|d| d["name"] == "التطوير"));
 
-    // Öffentlich: 6 Produkte (KM Code Craft AI ist nicht öffentlich), jedes mit Abteilung und Preisen
+    // Öffentlich: 7 Produkte (KM Code Craft AI ist nicht öffentlich), jedes mit Abteilung und Preisen
     let products = ar["products"].as_array().unwrap();
-    assert_eq!(products.len(), 6);
+    assert_eq!(products.len(), 7);
     for p in products {
         assert!(codes.contains(&p["department"].as_str().unwrap()), "{p}");
         assert!(!p["prices"].as_array().unwrap().is_empty(), "{p}");
@@ -95,6 +95,9 @@ async fn seeded_catalog_is_consistent(db: PgPool) {
     assert_eq!(dept("CONSULTING"), "MGT");
     assert_eq!(dept("SUPPORT-AGENT"), "SUP");
     assert_eq!(dept("CC-POS-V3"), "DEV");
+    // Radiologie (Migration 0030): Preis nur auf Anfrage
+    assert_eq!(dept("KM-RADIOLOGY"), "DEV");
+    assert_eq!(price("KM-RADIOLOGY", "angebot")["billing"], "on_request");
 }
 
 #[sqlx::test(migrator = "codecraft_server::MIGRATOR")]
