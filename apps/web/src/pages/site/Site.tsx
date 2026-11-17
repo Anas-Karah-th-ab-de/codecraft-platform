@@ -436,9 +436,23 @@ export function Contact() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, pre, tier]);
+  // Produkte mit eigener Seite, die (noch) nicht im Katalog der Datenbank stehen: Die Anfrage
+  // geht ohne Katalog-Nummer hinaus, der Produktname steht dann vorn im Betreff.
+  const extra = [{ key: "radiologie", name: TEASER[locale].radiologie[0] }].filter(
+    (x) => !data?.products.some((p) => p.name === x.name),
+  );
+  useEffect(() => {
+    const x = extra.find((e) => e.key === pre);
+    if (x && !f.subject) setF((o) => ({ ...o, subject: x.name }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pre]);
   const s = useSubmit();
   useTitle(t("contact.title"));
-  const submit = () => api("/api/v1/public/contact", { body: { ...f, product_id: f.product_id || null, locale } });
+  const submit = () => {
+    const x = extra.find((e) => e.key === f.product_id);
+    const subject = x && !f.subject.includes(x.name) ? `${x.name} – ${f.subject}` : f.subject;
+    return api("/api/v1/public/contact", { body: { ...f, subject, product_id: x ? null : f.product_id || null, locale } });
+  };
   return (
     <section className="section container" style={{ maxWidth: 760 }}>
       <h1>{t("contact.title")}</h1>
@@ -457,6 +471,7 @@ export function Contact() {
                 <select value={f.product_id} onChange={(e) => setF({ ...f, product_id: e.target.value })}>
                   <option value="">—</option>
                   {data?.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  {extra.map((x) => <option key={x.key} value={x.key}>{x.name}</option>)}
                 </select>
               </Field>
             </div>
