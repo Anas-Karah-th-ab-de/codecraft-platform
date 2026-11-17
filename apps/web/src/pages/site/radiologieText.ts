@@ -41,7 +41,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     ],
     "primary": {
       "label": "Vorführung anfragen",
-      "to": "/kontakt"
+      "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
       "label": "Ausführliche Seite mit allen Unterlagen",
@@ -85,7 +85,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Bildbetrachtung",
-            "Eigener Web-Viewer direkt aus der Untersuchung: drei Ebenen (MPR) und 3D, Fenster per Taste (F2 Lunge, F3 Knochen, F4 Weichteile, F8 Gehirn, F9 Bauch), Messen von Abstand, Winkel, Cobb-Winkel, Fläche und Dichtewert, Vergleich mit der Voruntersuchung. Die Anordnung merkt sich jeder Arzt je Untersuchungsart (Hanging Protocol). Zur Durchsicht, nicht für die Primärdiagnostik."
+            "Eigener Web-Viewer direkt aus der Untersuchung: drei Ebenen (MPR) und 3D, Fenster per Taste (F2 Lunge, F3 Knochen, F4 Weichteile, F8 Gehirn, F9 Bauch), Messen von Abstand, Winkel, Cobb-Winkel, Fläche und Dichtewert, Vergleich mit der Voruntersuchung. Die Anordnung merkt sich jeder Arzt je Untersuchungsart (Hanging Protocol). Der diagnostische Einsatz richtet sich nach der Qualifizierung im jeweiligen Land."
           ],
           [
             "Befundung",
@@ -382,7 +382,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Darf mit dem Viewer befundet werden?",
-            "Der eingebaute Viewer ist zur Durchsicht gedacht und nicht für die Primärdiagnostik freigegeben. Für die Diagnostik nutzen Sie die dafür zugelassene Befundstation; das Archiv stellt ihr die Bilder per DICOM bereit."
+            "Das richtet sich nach der Qualifizierung und Zulassung im jeweiligen Land. Wo eine zugelassene Befundstation vorgeschrieben ist, stellt das Archiv ihr die Bilder per DICOM bereit."
           ],
           [
             "Welche Geräte lassen sich anbinden?",
@@ -445,7 +445,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     ],
     "primary": {
       "label": "Request a demonstration",
-      "to": "/kontakt"
+      "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
       "label": "Full page with all documents",
@@ -489,7 +489,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "Image viewing",
-            "Own web viewer straight from the examination: three planes (MPR) and 3D, windows by key (F2 lung, F3 bone, F4 soft tissue, F8 brain, F9 abdomen), measuring distance, angle, Cobb angle, area and density, comparison with the earlier examination. Each physician's layout per examination type is remembered (hanging protocol). For review, not for primary diagnosis."
+            "Own web viewer straight from the examination: three planes (MPR) and 3D, windows by key (F2 lung, F3 bone, F4 soft tissue, F8 brain, F9 abdomen), measuring distance, angle, Cobb angle, area and density, comparison with the earlier examination. Each physician's layout per examination type is remembered (hanging protocol). Diagnostic use follows the qualification in the country concerned."
           ],
           [
             "Reporting",
@@ -786,7 +786,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "May the viewer be used for diagnosis?",
-            "The built-in viewer is meant for review and is not released for primary diagnosis. For diagnosis you use an approved diagnostic workstation; the archive provides it with the images through DICOM."
+            "That follows the qualification and approval in the country concerned. Where an approved diagnostic workstation is required, the archive provides it with the images through DICOM."
           ],
           [
             "Which modalities can be connected?",
@@ -849,7 +849,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
     ],
     "primary": {
       "label": "اطلب عرضاً تجريبياً",
-      "to": "/kontakt"
+      "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
       "label": "الصفحة الكاملة مع كل الوثائق",
@@ -893,7 +893,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "عرض الصور",
-            "عارض ويب خاص من داخل الفحص مباشرة: ثلاثة مستويات (MPR) وعرض ثلاثي الأبعاد، نوافذ العرض بمفتاح واحد (F2 الرئة، F3 العظم، F4 الأنسجة الرخوة، F8 الدماغ، F9 البطن)، قياس المسافة والزاوية وزاوية كوب والمساحة والكثافة، ومقارنة مع الفحص السابق. يتذكّر العارض ترتيب الشاشة لكل طبيب ولكل نوع فحص (Hanging Protocol). للمراجعة، لا للتشخيص الأولي."
+            "عارض ويب خاص من داخل الفحص مباشرة: ثلاثة مستويات (MPR) وعرض ثلاثي الأبعاد، نوافذ العرض بمفتاح واحد (F2 الرئة، F3 العظم، F4 الأنسجة الرخوة، F8 الدماغ، F9 البطن)، قياس المسافة والزاوية وزاوية كوب والمساحة والكثافة، ومقارنة مع الفحص السابق. يتذكّر العارض ترتيب الشاشة لكل طبيب ولكل نوع فحص (Hanging Protocol). ويتبع الاستخدام التشخيصي تأهيل النظام في البلد المعني."
           ],
           [
             "كتابة التقارير",
@@ -1190,7 +1190,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           ],
           [
             "هل يجوز التشخيص بالعارض؟",
-            "العارض المدمج مخصص للمراجعة وغير معتمد للتشخيص الأولي. للتشخيص تُستخدم محطة تشخيص معتمدة، والأرشيف يزوّدها بالصور عبر DICOM."
+            "يتبع ذلك تأهيل النظام واعتماده في البلد المعني. وحيث تُشترط محطة تشخيص معتمدة يزوّدها الأرشيف بالصور عبر DICOM."
           ],
           [
             "أي الأجهزة يمكن ربطها؟",

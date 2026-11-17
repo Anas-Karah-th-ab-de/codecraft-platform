@@ -7,7 +7,7 @@
       "url": "https://code-craft.tech"
     },
     "version": "0.1.0",
-    "description": "Interface of the radiology workplace. Not for primary diagnosis. Every response carries x-correlation-id; quote it when reporting a problem. Access is limited to the sites and departments of the caller. Write operations use optimistic concurrency (expectedVersion)."
+    "description": "Interface of the radiology workplace. Every response carries x-correlation-id; quote it when reporting a problem. Access is limited to the sites and departments of the caller. Write operations use optimistic concurrency (expectedVersion)."
   },
   "servers": [
     {
