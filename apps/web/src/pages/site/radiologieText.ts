@@ -51,9 +51,9 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       {
         "kind": "points",
         "id": "stand",
-        "h": "Ehrlich zum Stand",
+        "h": "Zulassung nach Land",
         "items": [
-          "Das System ist in der Pilotphase. Bilder aus dem eingebauten Viewer sind nicht für die Primärdiagnostik freigegeben; das zeigt das Programm auf jeder Seite an. Eine Zulassung als Medizinprodukt liegt nicht vor und hängt vom Land ab, in dem Sie es einsetzen. Wir suchen Einrichtungen für Pilotinstallationen."
+          "Die Zulassung richtet sich nach dem Land und der dort zuständigen Behörde. Vor dem klinischen Einsatz erhält das System die Zulassung, die das jeweilige Land und seine Vorschriften verlangen."
         ],
         "dark": true
       },
@@ -134,6 +134,26 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "Tagesübersicht",
             "Für Empfang und MTR: erwartet, im Wartezimmer mit Wartezeit, im Gerät mit Laufzeit und Restzeit, fertig. Dazu jedes Gerät mit frei oder belegt und dem nächsten Termin."
+          ],
+          [
+            "Verlaufskontrolle im Viewer",
+            "Vergleich mit der Voruntersuchung als Differenzkarte (zugenommen rot, abgenommen grün) oder Überblendung; die Vorserie wird dafür von selbst räumlich angepasst – Höhe, Lage und elastisch in drei Richtungen. Bei bestätigten Herden rechnet der Viewer die Summe der längsten Durchmesser und die Veränderung nach RECIST 1.1. Berechnete Hilfen; die Beurteilung bleibt beim Arzt."
+          ],
+          [
+            "Notizen, Sprache und Messungen",
+            "Befund-Notizen direkt neben den Bildern, mit Diktat und Messungen als Verweis; Sprachbefehle auf Arabisch, Englisch und Deutsch. Messungen lassen sich als DICOM-Darstellungszustand (GSPS) im Archiv ablegen, damit andere Betrachter sie zeigen, und gegen die Normwert-Liste der Einrichtung halten. Ein Erklär-Clip mit Stimme entsteht als MP4."
+          ],
+          [
+            "PET-CT und moderne Bildformate",
+            "Eine zweite Serie liegt deckungsgleich über der ersten, etwa PET über CT. Helligkeit und Kontrast rechnet der Grafikchip des Arbeitsplatzes; das Archiv liest auch HTJ2K-komprimierte Bilder."
+          ],
+          [
+            "Befundvorlagen übernehmen",
+            "Die Einrichtung pflegt ihre Vorlagen in einer Datei. Vorlagen im MRRT-Format, wie RadReport sie anbietet, lassen sich mit einem Befehl übernehmen; Quelle und Lizenzhinweis bleiben am Text."
+          ],
+          [
+            "Installation als Paket, auch ohne Internet",
+            "Der Server wird als RPM-Paket eingerichtet. Für Standorte ohne Internet nimmt ein Befehl alles Nötige auf einen Datenträger; die Installation läuft dann ganz ohne Netzzugang."
           ],
           [
             "Alles auf einem Server",
@@ -265,11 +285,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "rows": [
           [
             "Abnahme auf der Teststelle",
-            "Ganzer Tagesablauf mit Testkonten über das Internet: Anmeldung bis Freigabe, kritischer Alarm mit Quittung, Fragebogen am Handy mit Warnung ans Team, Befund-Erklärung, Organsuche im Viewer (15.11.2026)"
+            "Ganzer Tagesablauf mit Testkonten über das Internet: Anmeldung bis Freigabe, kritischer Alarm mit Quittung, Fragebogen am Handy mit Warnung ans Team, Befund-Erklärung, Organsuche im Viewer (17.11.2026)"
           ],
           [
             "Automatische Tests",
-            "Über 300 Unit-Tests und 60 Tests gegen eine echte Datenbank bei jeder Änderung"
+            "Über 400 automatische Tests und 60 Tests gegen eine echte Datenbank bei jeder Änderung"
           ],
           [
             "Gesamtablauf im Browser",
@@ -423,9 +443,9 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       {
         "kind": "points",
         "id": "stand",
-        "h": "Where we honestly stand",
+        "h": "Approval by country",
         "items": [
-          "The system is in its pilot phase. Images in the built-in viewer are not released for primary diagnosis; the program says so on every page. It is not approved as a medical device, and what approval is needed depends on the country you use it in. We are looking for sites for pilot installations."
+          "Approval follows the country and its regulator. Before clinical use, the system obtains the approval that the country and its regulations require."
         ],
         "dark": true
       },
@@ -506,6 +526,26 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "Day board",
             "For reception and technologists: expected, in the waiting room with waiting time, in the device with running and remaining time, finished. Plus every device as free or busy with its next appointment."
+          ],
+          [
+            "Follow-up in the viewer",
+            "Comparison with the earlier examination as a difference map (risen red, fallen green) or a blend; the earlier series is fitted in space by itself – level, position and elastic bend in three directions. For confirmed lesions the viewer works out the sum of the longest diameters and the change by RECIST 1.1. Computed aids; the assessment stays with the physician."
+          ],
+          [
+            "Notes, voice and measurements",
+            "Report notes right beside the images, with dictation and measurements as references; voice commands in Arabic, English and German. Measurements can be stored in the archive as a DICOM presentation state (GSPS) so that other viewers show them, and held against the facility's list of reference values. An explanatory clip with voice is saved as MP4."
+          ],
+          [
+            "PET-CT and modern image formats",
+            "A second series lies exactly over the first, for example PET over CT. Brightness and contrast are worked out by the graphics chip of the workstation; the archive also reads HTJ2K-compressed images."
+          ],
+          [
+            "Import report templates",
+            "The facility keeps its templates in one file. Templates in the MRRT format, as RadReport offers them, are imported with one command; source and licence note stay with the text."
+          ],
+          [
+            "Installed as a package, also without internet",
+            "The server is set up from an RPM package. For sites without internet, one command collects everything needed on a medium; the installation then runs with no network access at all."
           ],
           [
             "All on one server",
@@ -637,11 +677,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "rows": [
           [
             "Acceptance on the test site",
-            "A whole working day with test accounts over the internet: registration to release, critical alarm with acknowledgement, questionnaire on the phone with a warning to the team, report explanation, organ finding in the viewer (15 Nov 2026)"
+            "A whole working day with test accounts over the internet: registration to release, critical alarm with acknowledgement, questionnaire on the phone with a warning to the team, report explanation, organ finding in the viewer (17 Nov 2026)"
           ],
           [
             "Automated tests",
-            "More than 300 unit tests and 60 tests against a real database on every change"
+            "More than 400 automated tests and 60 tests against a real database on every change"
           ],
           [
             "Whole workflow in the browser",
@@ -795,9 +835,9 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       {
         "kind": "points",
         "id": "stand",
-        "h": "بصراحة عن الوضع الحالي",
+        "h": "الاعتماد حسب البلد",
         "items": [
-          "النظام في مرحلته التجريبية. الصور في العارض المدمج غير معتمدة للتشخيص الأولي، والبرنامج يذكر ذلك في كل صفحة. لا يحمل النظام اعتماداً كجهاز طبي، ونوع الاعتماد المطلوب يتبع البلد الذي يُستخدم فيه. نبحث عن منشآت لتركيبات تجريبية."
+          "يتبع الاعتماد البلد والجهة التنظيمية المختصة فيه. قبل الاستخدام السريري يحصل النظام على الاعتماد الذي يتطلبه ذلك البلد وأنظمته."
         ],
         "dark": true
       },
@@ -878,6 +918,26 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "لوحة اليوم",
             "للاستقبال وفنيي الأشعة: المتوقَّعون، ومن في غرفة الانتظار مع مدة الانتظار، ومن في الجهاز مع المدة المنقضية والمتبقية، ومن انتهى. وكل جهاز مع حالته (متاح أو مشغول) وموعده التالي."
+          ],
+          [
+            "متابعة الحالة في العارض",
+            "مقارنة مع الفحص السابق كخريطة فرق (الزيادة بالأحمر والنقص بالأخضر) أو كمزج؛ وتُطابَق السلسلة السابقة تلقائياً في الفراغ – المستوى والموضع والتليين المرن في الاتجاهات الثلاثة. وللآفات المؤكَّدة يحسب العارض مجموع أطول الأقطار والتغيّر وفق RECIST 1.1. وسائل مساعدة محسوبة، والتقييم يبقى للطبيب."
+          ],
+          [
+            "ملاحظات وصوت وقياسات",
+            "ملاحظات التقرير بجانب الصور مباشرة، مع الإملاء والقياسات كمراجع؛ وأوامر صوتية بالعربية والإنجليزية والألمانية. تُحفظ القياسات في الأرشيف كحالة عرض DICOM (GSPS) لتظهر في برامج العرض الأخرى، وتُقارَن بقائمة القيم المرجعية للمنشأة. ويُحفظ مقطع شرح بالصوت بصيغة MP4."
+          ],
+          [
+            "PET-CT وصيغ الصور الحديثة",
+            "تُعرض سلسلة ثانية مطابقةً فوق الأولى، مثل PET فوق CT. يحسب معالج الرسوم في جهاز العمل السطوع والتباين، ويقرأ الأرشيف أيضاً الصور المضغوطة بصيغة HTJ2K."
+          ],
+          [
+            "استيراد قوالب التقارير",
+            "تحتفظ المنشأة بقوالبها في ملف واحد. القوالب بصيغة MRRT، كما يقدّمها RadReport، تُستورد بأمر واحد، ويبقى المصدر وإشعار الترخيص مع النص."
+          ],
+          [
+            "تثبيت كحزمة، ودون إنترنت أيضاً",
+            "يُجهَّز الخادم من حزمة RPM. وللمواقع التي لا إنترنت فيها يجمع أمر واحد كل ما يلزم على وسيط تخزين، ثم يجري التثبيت دون أي اتصال بالشبكة."
           ],
           [
             "كل شيء على خادم واحد",
@@ -1009,11 +1069,11 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "rows": [
           [
             "فحص القبول على موقع الاختبار",
-            "يوم عمل كامل بحسابات اختبار عبر الإنترنت: من التسجيل حتى الاعتماد، وتنبيه حرج مع تأكيد الاطلاع، واستبيان على الهاتف مع تنبيه للفريق، وشرح التقرير، والبحث عن الأعضاء في العارض (15‏/11‏/2026)"
+            "يوم عمل كامل بحسابات اختبار عبر الإنترنت: من التسجيل حتى الاعتماد، وتنبيه حرج مع تأكيد الاطلاع، واستبيان على الهاتف مع تنبيه للفريق، وشرح التقرير، والبحث عن الأعضاء في العارض (17‏/11‏/2026)"
           ],
           [
             "اختبارات آلية",
-            "أكثر من 300 اختبار وحدة و60 اختباراً على قاعدة بيانات حقيقية مع كل تغيير"
+            "أكثر من 400 اختبار آلي و60 اختباراً على قاعدة بيانات حقيقية مع كل تغيير"
           ],
           [
             "المسار الكامل في المتصفح",
