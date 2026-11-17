@@ -169,7 +169,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "kind": "gallery",
         "id": "einblick",
         "h": "So sieht die Arbeit aus",
-        "lead": "Bildschirmfotos der echten Oberfläche mit erfundenen Beispieldaten.",
+        "lead": "Bildschirmfotos der echten Oberfläche. Personen und Angaben sind erfunden; die Aufnahmen im Viewer stammen aus öffentlichen, anonymisierten Forschungssammlungen (The Cancer Imaging Archive: RIDER Lung CT, Lung-PET-CT-Dx, Pancreas-CT; CC BY).",
         "items": [
           [
             "/products/radiologie/de-worklist.png",
@@ -182,6 +182,18 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "/products/radiologie/de-viewer.png",
             "Viewer: drei Ebenen (MPR), Wirbel im Bild beschriftet, daneben die von der KI gefundenen Organe"
+          ],
+          [
+            "/products/radiologie/de-followup.png",
+            "Verlauf: links die aktuelle CT mit Differenzkarte – zugenommen rot, abgenommen grün –, rechts die Voruntersuchung. Die Vorserie wird von selbst räumlich angepasst"
+          ],
+          [
+            "/products/radiologie/de-fusion.png",
+            "PET über CT: die Stoffwechselaufnahme liegt deckungsgleich über der CT, der Herd leuchtet an seiner Stelle"
+          ],
+          [
+            "/products/radiologie/de-volume.png",
+            "3D-Ansicht aus der CT: Knochen und Gefäße als drehbarer Körper, im Browser auf dem Grafikchip gerechnet"
           ],
           [
             "/products/radiologie/de-report.png",
@@ -561,7 +573,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "kind": "gallery",
         "id": "einblick",
         "h": "What the work looks like",
-        "lead": "Screenshots of the real interface with invented sample data.",
+        "lead": "Screenshots of the real interface. Persons and details are invented; the images in the viewer come from public, anonymised research collections (The Cancer Imaging Archive: RIDER Lung CT, Lung-PET-CT-Dx, Pancreas-CT; CC BY).",
         "items": [
           [
             "/products/radiologie/en-worklist.png",
@@ -574,6 +586,18 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "/products/radiologie/en-viewer.png",
             "Viewer: three planes (MPR), vertebrae labelled in the image, next to them the organs found by the AI"
+          ],
+          [
+            "/products/radiologie/en-followup.png",
+            "Follow-up: on the left the current CT with a difference map – risen red, fallen green –, on the right the earlier examination. The earlier series is fitted in space by itself"
+          ],
+          [
+            "/products/radiologie/en-fusion.png",
+            "PET over CT: the metabolic image lies exactly over the CT, the lesion lights up in its place"
+          ],
+          [
+            "/products/radiologie/en-volume.png",
+            "3D view from the CT: bones and vessels as a body you can turn, worked out in the browser on the graphics chip"
           ],
           [
             "/products/radiologie/en-report.png",
@@ -953,7 +977,7 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
         "kind": "gallery",
         "id": "einblick",
         "h": "هكذا يبدو العمل",
-        "lead": "لقطات من الواجهة الحقيقية ببيانات تجريبية مختلقة.",
+        "lead": "لقطات من الواجهة الحقيقية. الأشخاص والبيانات مختلقة؛ أما الصور في العارض فمن مجموعات بحثية عامة مجهولة الهوية (The Cancer Imaging Archive: RIDER Lung CT و Lung-PET-CT-Dx و Pancreas-CT؛ ترخيص CC BY).",
         "items": [
           [
             "/products/radiologie/ar-worklist.png",
@@ -966,6 +990,18 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
           [
             "/products/radiologie/ar-viewer.png",
             "العارض: ثلاثة مستويات (MPR)، وأسماء الفقرات على الصورة، وبجانبها الأعضاء التي وجدها الذكاء الاصطناعي"
+          ],
+          [
+            "/products/radiologie/ar-followup.png",
+            "متابعة الحالة: يساراً التصوير المقطعي الحالي مع خريطة الفرق – الزيادة بالأحمر والنقص بالأخضر –، ويميناً الفحص السابق. تُطابَق السلسلة السابقة تلقائياً في الفراغ"
+          ],
+          [
+            "/products/radiologie/ar-fusion.png",
+            "PET فوق CT: صورة الاستقلاب مطابقة فوق التصوير المقطعي، والآفة تتوهّج في موضعها"
+          ],
+          [
+            "/products/radiologie/ar-volume.png",
+            "عرض ثلاثي الأبعاد من التصوير المقطعي: العظام والأوعية كجسم يمكن تدويره، يُحسب في المتصفح على معالج الرسوم"
           ],
           [
             "/products/radiologie/ar-report.png",
