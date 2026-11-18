@@ -25,6 +25,7 @@ import { Icon } from "../../icons";
 import { Sessions } from "./Sessions";
 import { AppSupport } from "./AppSupport";
 import { AppDownload, BuildInfo, UpdateBanner } from "./AppDownload";
+import { AddressReminder, CompanyCard } from "./Company";
 import { isApp, useIsApp } from "../../native";
 import Register, { RegisterLink } from "./Register";
 
@@ -172,6 +173,7 @@ export default function Portal() {
         <section className={`main ${seg === "mail" ? "wide" : ""}`}>
           <AnnouncementBanner />
           <UpdateBanner />
+          <AddressReminder />
           <Routes>
             <Route index element={<Dashboard />} />
             <Route path="nachrichten" element={<Chat />} />
@@ -415,6 +417,7 @@ function Account() {
           </form>
         </div>
       </div>
+      {!me.is_employee && <CompanyCard />}
       <div style={{ marginTop: 16 }}><Sessions /></div>
       {me.is_employee && <div style={{ marginTop: 16 }}><AppPasswords /></div>}
     </>

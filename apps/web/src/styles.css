@@ -1464,3 +1464,6 @@ body:has(.callview) .toast { bottom: auto; top: 72px; }
 .docs .doc-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .docs .doc-main b { overflow-wrap: anywhere; }
 .doc-up { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 6px; }
+
+/* Kunde ohne Adresse */
+.badge.warn { background: #fef3c7; color: #92400e; }

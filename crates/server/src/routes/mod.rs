@@ -125,7 +125,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/pos/report", post(pos_keys::report))
         .route("/api/v1/pos/register/report", post(pos_keys::report_register))
         .route("/api/v1/organizations", get(organizations::list).post(organizations::create))
-        .route("/api/v1/organizations/{id}", get(organizations::get))
+        .route("/api/v1/organizations/{id}", get(organizations::get).patch(organizations::patch))
         .route("/api/v1/invoices", get(invoices::list).post(invoices::create_draft))
         .route("/api/v1/invoices/{id}", get(invoices::get).delete(invoices::delete_draft))
         .route("/api/v1/invoices/{id}/items", put(invoices::replace_items))

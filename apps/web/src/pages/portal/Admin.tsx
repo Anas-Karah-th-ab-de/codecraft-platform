@@ -7,12 +7,13 @@ import { I18nInput } from "./Products";
 import type { Product } from "./Invoices";
 import { RedeemCode, ResetPassword, useMustChangeLabel } from "./Access";
 import { PaymentMethodsAdmin, PaymentSelect, PT, usePaymentMethods } from "./Payment";
+import { CT, OrgEditDialog, type OrgData } from "./Company";
 
 type I18n = { de: string; en: string; ar: string };
 type Dept = { code: string; name: I18n };
 
 // ── Kunden ──────────────────────────────────────────────────────────────────
-type Org = { id: string; name: string; address: string; vat_id: string | null; email: string | null; locale: string; sla: "basic" | "business" | "premium"; payment_method_id: string | null };
+type Org = OrgData & { sla: "basic" | "business" | "premium"; payment_method_id: string | null };
 
 export function Customers() {
   const { t, locale } = useI18n();
@@ -24,8 +25,14 @@ export function Customers() {
   const [q, setQ] = useState("");
   const [sla, setSla] = useState("");
   const [pm, setPm] = useState("");
+  const [noAddr, setNoAddr] = useState("");
+  const [edit, setEdit] = useState<Org | null>(null);
+  const CTL = CT[locale];
+  const missing = (data ?? []).filter((o) => !o.address.trim()).length;
   const rows = (data ?? []).filter((o) => (!sla || o.sla === sla) && (!pm || (o.payment_method_id ?? "-") === pm)
-    && matches(q, o.name, o.address, o.vat_id, o.email));
+    && (!noAddr || !o.address.trim())
+    && matches(q, o.name, o.address, o.vat_id, o.email, o.contact_name, o.phone, o.customer_number));
+  const canEdit = can(me, "customer_write");
   const s = useSubmit();
   return (
     <>
@@ -36,14 +43,18 @@ export function Customers() {
       <ListTools q={q} setQ={setQ} shown={rows.length} total={data?.length ?? 0}>
         <Filter label="SLA" value={sla} onChange={setSla} options={[["basic", "Basis"], ["business", "Business"], ["premium", "Premium"]]} />
         <Filter label={PT[locale].method} value={pm} onChange={setPm} options={[["-", PT[locale].auto], ...(methods.data ?? []).map((m) => [m.id, m.name] as [string, string])]} />
+        {missing > 0 && <Filter label={t("p.address")} value={noAddr} onChange={setNoAddr} options={[["1", `⚠️ ${CTL.missing} (${missing})`]]} />}
       </ListTools>
       <div className="card" style={{ padding: 0 }}>
         {!data ? <Loading error={error} /> : data.length === 0 ? <p className="spin">{t("p.empty")}</p> : rows.length === 0 ? <NoHits /> : (
           <table>
-            <thead><tr><th>{t("p.customer")}</th><th>{t("p.address")}</th><th>{t("p.vat_id")}</th><th>{t("p.email")}</th><th>{t("p.language")}</th><th>SLA</th><th>{PT[locale].method}</th></tr></thead>
+            <thead><tr><th>{t("p.customer")}</th><th>{t("p.address")}</th><th>{t("p.vat_id")}</th><th>{t("p.email")}</th><th>{t("p.language")}</th><th>SLA</th><th>{PT[locale].method}</th>{canEdit && <th />}</tr></thead>
             <tbody>
               {rows.map((o) => (
-                <tr key={o.id}><td><b>{o.name}</b></td><td style={{ whiteSpace: "pre-line" }}>{o.address}</td><td>{o.vat_id ?? "–"}</td><td>{o.email ?? "–"}</td><td>{o.locale.toUpperCase()}</td>
+                <tr key={o.id}><td><b>{o.name}</b>{o.contact_name && <div className="muted" style={{ fontSize: ".85em" }}>{o.contact_name}{o.phone && <span dir="ltr"> · {o.phone}</span>}</div>}</td>
+                  <td style={{ whiteSpace: "pre-line" }}>{o.address.trim() ? o.address : canEdit
+                    ? <button className="badge warn" style={{ cursor: "pointer", border: 0 }} onClick={() => setEdit(o)}>⚠️ {CTL.missing}</button>
+                    : <span className="badge warn">⚠️ {CTL.missing}</span>}</td><td>{o.vat_id ?? "–"}</td><td>{o.email ?? "–"}</td><td>{o.locale.toUpperCase()}</td>
                   <td>{me && ["admin", "lead"].includes(me.role) ? (
                     <select value={o.sla} onChange={(e) => api(`/api/v1/organizations/${o.id}/sla`, { method: "PUT", body: { sla: e.target.value } }).then(reload)}>
                       <option value="basic">Basis</option><option value="business">Business</option><option value="premium">Premium</option>
@@ -51,12 +62,14 @@ export function Customers() {
                   ) : o.sla}</td>
                   <td>{can(me, "customer_write") ? (
                     <PaymentSelect value={o.payment_method_id ?? ""} onChange={(v) => api(`/api/v1/organizations/${o.id}/payment-method`, { method: "PUT", body: { payment_method_id: v || null } }).then(reload)} />
-                  ) : methods.data?.find((m) => m.id === o.payment_method_id)?.name ?? PT[locale].auto}</td></tr>
+                  ) : methods.data?.find((m) => m.id === o.payment_method_id)?.name ?? PT[locale].auto}</td>
+                  {canEdit && <td><button className="btn small ghost" onClick={() => setEdit(o)}>✎ {CTL.edit}</button></td>}</tr>
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {edit && <OrgEditDialog org={edit} onClose={() => setEdit(null)} onSaved={reload} />}
       {open && (
         <Modal title={`${t("p.customers")} – ${t("p.new")}`} onClose={() => setOpen(false)}>
           <form onSubmit={s.run(async () => {
