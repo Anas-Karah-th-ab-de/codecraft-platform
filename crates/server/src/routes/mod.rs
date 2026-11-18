@@ -17,7 +17,7 @@ mod organizations;
 mod payments;
 pub mod pos;
 pub mod pos_keys;
-mod projects;
+pub mod projects;
 mod quotes;
 pub mod remote;
 mod requests;
@@ -140,6 +140,14 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/projects/{id}", get(projects::get).patch(projects::patch))
         .route("/api/v1/projects/{id}/milestones", post(projects::add_milestone))
         .route("/api/v1/projects/{id}/updates", post(projects::add_update))
+        .route(
+            "/api/v1/projects/{id}/documents",
+            post(projects::upload_document).layer(DefaultBodyLimit::max(projects::MAX_DOC + 1024 * 1024)),
+        )
+        .route(
+            "/api/v1/project-documents/{id}",
+            get(projects::download_document).delete(projects::delete_document),
+        )
         .route("/api/v1/milestones/{id}", patch(projects::patch_milestone).delete(projects::delete_milestone))
         // Shop & Entwicklungsanfragen
         .route("/api/v1/orders", get(shop::list).post(shop::create))

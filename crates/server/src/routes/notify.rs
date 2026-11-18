@@ -99,6 +99,7 @@ pub fn label(kind: &str, event: &str, l: &str) -> &'static str {
         ("request", "new") => ["Neue Entwicklungsanfrage", "New development request", "طلب تطوير جديد"],
         ("request", "message") => ["Neue Nachricht zur Anfrage", "New message on request", "رسالة جديدة على الطلب"],
         ("request", _) => ["Anfrage aktualisiert", "Request updated", "تم تحديث الطلب"],
+        ("project", "document") => ["Neues Dokument im Projekt", "New project document", "مستند جديد في المشروع"],
         ("project", _) => ["Projekt aktualisiert", "Project updated", "تم تحديث المشروع"],
         ("leave", "new") => ["Neuer Urlaubsantrag", "New leave request", "طلب إجازة جديد"],
         ("leave", _) => ["Urlaubsantrag aktualisiert", "Leave request updated", "تم تحديث طلب الإجازة"],

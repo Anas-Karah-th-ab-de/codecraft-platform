@@ -98,6 +98,7 @@ pub struct ProjectDetail {
     pub quotes: Vec<QuoteRow>,
     pub milestones: Vec<MilestoneRow>,
     pub updates: Vec<UpdateRow>,
+    pub documents: Vec<DocumentRow>,
 }
 
 #[derive(Debug, Serialize, sqlx::FromRow)]
@@ -168,7 +169,8 @@ pub async fn get(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) ->
     .bind(user.role.is_employee())
     .fetch_all(&s.db)
     .await?;
-    Ok(Json(ProjectDetail { project, invoices, quotes, milestones, updates }))
+    let documents = documents(&s.db, id, user.role.is_employee()).await?;
+    Ok(Json(ProjectDetail { project, invoices, quotes, milestones, updates, documents }))
 }
 
 // ── Kostenvoranschläge ──────────────────────────────────────────────────────
@@ -705,4 +707,220 @@ pub async fn public_list(State(s): State<AppState>) -> ApiResult<Json<serde_json
         .iter()
         .map(|r| json!({ "name": r.0, "slug": r.1, "description": r.2, "repo_url": r.3, "license": r.4, "status": r.5, "progress": r.6 }))
         .collect::<Vec<_>>())))
+}
+
+// ── Projekt-Dokumente (Berichte, Verträge, Spezifikationen …) ───────────────
+
+/// Höchstgröße einer Projektdatei
+pub const MAX_DOC: usize = 50 * 1024 * 1024;
+const DOC_KINDS: [&str; 6] = ["report", "contract", "offer", "spec", "protocol", "other"];
+
+#[derive(Debug, Serialize, sqlx::FromRow)]
+pub struct DocumentRow {
+    pub id: Uuid,
+    pub title: String,
+    /// report | contract | offer | spec | protocol | other
+    pub kind: String,
+    pub name: String,
+    pub mime: String,
+    pub size: i64,
+    pub for_customer: bool,
+    pub uploader: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+async fn documents(db: &sqlx::PgPool, project: Uuid, employee: bool) -> Result<Vec<DocumentRow>, sqlx::Error> {
+    sqlx::query_as(
+        "SELECT d.id, d.title, d.kind, d.name, d.mime, d.size, d.for_customer, u.display_name AS uploader, d.created_at
+           FROM project_documents d LEFT JOIN users u ON u.id = d.uploader_id
+          WHERE d.project_id = $1 AND (d.for_customer OR $2) ORDER BY d.created_at DESC",
+    )
+    .bind(project)
+    .bind(employee)
+    .fetch_all(db)
+    .await
+}
+
+fn clean_file_name(n: &str) -> String {
+    let n: String = n
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(|c| !c.is_control() && !matches!(c, '"' | '<' | '>' | ':' | '|' | '?' | '*'))
+        .collect();
+    let n = n.trim().trim_start_matches('.').to_string();
+    if n.is_empty() {
+        "dokument".into()
+    } else {
+        n.chars().take(200).collect()
+    }
+}
+
+/// Team: Dokument zum Projekt hochladen (multipart: `file`, `title`, `kind`, `for_customer`).
+/// Für den Kunden sichtbare Dokumente erscheinen zusätzlich als Neuigkeit, der Kunde wird benachrichtigt.
+pub async fn upload_document(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+    mut mp: axum::extract::Multipart,
+) -> ApiResult<(StatusCode, Json<DocumentRow>)> {
+    let (org, project_name) = project_org(&s, &user, id).await?;
+    let (mut name, mut mime, mut data) = (String::new(), String::new(), None);
+    let (mut title, mut kind, mut for_customer) = (String::new(), "report".to_string(), true);
+    while let Some(field) = mp.next_field().await.map_err(|e| ApiError::BadRequest(e.to_string()))? {
+        match field.name() {
+            Some("file") => {
+                name = clean_file_name(field.file_name().unwrap_or("dokument"));
+                mime = field.content_type().unwrap_or("application/octet-stream").to_string();
+                data =
+                    Some(field.bytes().await.map_err(|_| ApiError::BadRequest("Datei zu groß (max. 50 MB)".into()))?);
+            }
+            Some("title") => title = field.text().await.unwrap_or_default().trim().chars().take(200).collect(),
+            Some("kind") => kind = field.text().await.unwrap_or_default().trim().to_string(),
+            Some("for_customer") => for_customer = field.text().await.unwrap_or_default().trim() != "false",
+            _ => {}
+        }
+    }
+    let data = data.filter(|d| !d.is_empty()).ok_or_else(|| ApiError::BadRequest("Datei fehlt".into()))?;
+    if data.len() > MAX_DOC {
+        return Err(ApiError::BadRequest("Datei zu groß (max. 50 MB)".into()));
+    }
+    if !DOC_KINDS.contains(&kind.as_str()) {
+        return Err(ApiError::BadRequest("Unbekannte Dokumentart".into()));
+    }
+    if crate::mail::guard::dangerous_file(&name, &mime, &data) {
+        return Err(ApiError::BadRequest(format!(
+            "{name}: Programme und Makro-Dateien sind aus Sicherheitsgründen gesperrt"
+        )));
+    }
+    if name.to_ascii_lowercase().ends_with(".pdf") {
+        mime = "application/pdf".into();
+    }
+    if title.is_empty() {
+        title = name.rsplit_once('.').map(|(a, _)| a.to_string()).unwrap_or_else(|| name.clone());
+    }
+    let hash = {
+        use sha2::{Digest, Sha256};
+        hex::encode(Sha256::digest(&data))
+    };
+    let did = Uuid::now_v7();
+    let mut tx = s.db.begin().await?;
+    sqlx::query(
+        "INSERT INTO project_documents (id, project_id, title, kind, name, mime, size, sha256, data, for_customer, uploader_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
+    )
+    .bind(did)
+    .bind(id)
+    .bind(&title)
+    .bind(&kind)
+    .bind(&name)
+    .bind(&mime)
+    .bind(data.len() as i64)
+    .bind(&hash)
+    .bind(crate::mail::guard::seal(&data))
+    .bind(for_customer)
+    .bind(user.id)
+    .execute(&mut *tx)
+    .await?;
+    if for_customer {
+        sqlx::query(
+            "INSERT INTO project_updates (id, project_id, author_id, body, for_customer) VALUES ($1,$2,$3,$4,true)",
+        )
+        .bind(Uuid::now_v7())
+        .bind(id)
+        .bind(user.id)
+        .bind(format!("📄 {title}"))
+        .execute(&mut *tx)
+        .await?;
+    }
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "upload",
+        "project_document",
+        did,
+        json!({ "project": id, "title": title, "kind": kind }),
+    )
+    .await?;
+    tx.commit().await?;
+    if for_customer {
+        tell_customer(&s, org, id, &project_name).await;
+    }
+    let row = documents(&s.db, id, true).await?.into_iter().find(|d| d.id == did).ok_or(ApiError::NotFound)?;
+    Ok((StatusCode::CREATED, Json(row)))
+}
+
+/// Organisation, für den Kunden?, Name, Typ, Inhalt
+type DocFile = (Option<Uuid>, bool, String, String, Vec<u8>);
+
+/// Dokument laden: Team immer, Kunde nur eigene Projekte und freigegebene Dokumente
+pub async fn download_document(
+    State(s): State<AppState>,
+    user: User,
+    Path(id): Path<Uuid>,
+) -> ApiResult<axum::response::Response> {
+    use axum::http::header;
+    use axum::response::IntoResponse;
+    let org = scope(&user, Permission::ProjectRead)?;
+    let row: Option<DocFile> = sqlx::query_as(
+        "SELECT p.organization_id, d.for_customer, d.name, d.mime, d.data
+           FROM project_documents d JOIN projects p ON p.id = d.project_id WHERE d.id = $1",
+    )
+    .bind(id)
+    .fetch_optional(&s.db)
+    .await?;
+    let (porg, for_customer, name, mime, data) = row.ok_or(ApiError::NotFound)?;
+    if org.is_some() && (porg != org || !for_customer) {
+        return Err(ApiError::NotFound);
+    }
+    let data = crate::mail::guard::open(data);
+    // PDF als PDF (Anzeige im Viewer), alles andere nur zum Herunterladen
+    let ct = if mime == "application/pdf" { mime } else { "application/octet-stream".into() };
+    let ascii: String =
+        name.chars().map(|c| if c.is_ascii_alphanumeric() || ".-_ ".contains(c) { c } else { '_' }).collect();
+    let utf8: String = name
+        .bytes()
+        .map(|b| {
+            if b.is_ascii_alphanumeric() || b".-_".contains(&b) {
+                (b as char).to_string()
+            } else {
+                format!("%{b:02X}")
+            }
+        })
+        .collect();
+    Ok((
+        [
+            (header::CONTENT_TYPE, ct),
+            (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{ascii}\"; filename*=UTF-8''{utf8}")),
+            (header::X_CONTENT_TYPE_OPTIONS, "nosniff".into()),
+            (header::CONTENT_SECURITY_POLICY, "default-src 'none'; sandbox".into()),
+            (header::CACHE_CONTROL, "private, no-store".into()),
+        ],
+        data,
+    )
+        .into_response())
+}
+
+/// Team: Dokument löschen
+pub async fn delete_document(State(s): State<AppState>, user: User, Path(id): Path<Uuid>) -> ApiResult<StatusCode> {
+    user.require(Permission::ProjectWrite, None)?;
+    let mut tx = s.db.begin().await?;
+    let gone: Option<(Uuid, String)> =
+        sqlx::query_as("DELETE FROM project_documents WHERE id = $1 RETURNING project_id, title")
+            .bind(id)
+            .fetch_optional(&mut *tx)
+            .await?;
+    let (project, title) = gone.ok_or(ApiError::NotFound)?;
+    super::audit(
+        &mut tx,
+        &user.actor(),
+        "delete",
+        "project_document",
+        id,
+        json!({ "project": project, "title": title }),
+    )
+    .await?;
+    tx.commit().await?;
+    Ok(StatusCode::NO_CONTENT)
 }

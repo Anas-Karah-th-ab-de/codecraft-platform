@@ -137,3 +137,136 @@ async fn create_projects_of_all_kinds(db: PgPool) {
     .await;
     assert!(s.is_client_error(), "Kundenprojekt nie öffentlich");
 }
+
+async fn multipart(db: &PgPool, uri: &str, token: &str, parts: &[(&str, Option<&str>, &[u8])]) -> (StatusCode, Value) {
+    let b = "XyZgrenze42";
+    let mut body = Vec::new();
+    for (name, file, data) in parts {
+        body.extend_from_slice(format!("--{b}\r\nContent-Disposition: form-data; name=\"{name}\"").as_bytes());
+        if let Some(f) = file {
+            body.extend_from_slice(format!("; filename=\"{f}\"\r\nContent-Type: application/pdf").as_bytes());
+        }
+        body.extend_from_slice(b"\r\n\r\n");
+        body.extend_from_slice(data);
+        body.extend_from_slice(b"\r\n");
+    }
+    body.extend_from_slice(format!("--{b}--\r\n").as_bytes());
+    let req = Request::builder()
+        .method("POST")
+        .uri(uri)
+        .header("authorization", format!("Bearer {token}"))
+        .header("content-type", format!("multipart/form-data; boundary={b}"))
+        .body(Body::from(body))
+        .unwrap();
+    let res = app(AppState { db: db.clone() }).oneshot(req).await.unwrap();
+    let status = res.status();
+    let bytes = res.into_body().collect().await.unwrap().to_bytes();
+    (status, serde_json::from_slice(&bytes).unwrap_or(Value::Null))
+}
+
+async fn get_raw(db: &PgPool, uri: &str, token: &str) -> (StatusCode, Vec<u8>) {
+    let req =
+        Request::builder().uri(uri).header("authorization", format!("Bearer {token}")).body(Body::empty()).unwrap();
+    let res = app(AppState { db: db.clone() }).oneshot(req).await.unwrap();
+    let status = res.status();
+    (status, res.into_body().collect().await.unwrap().to_bytes().to_vec())
+}
+
+#[sqlx::test(migrator = "codecraft_server::MIGRATOR")]
+async fn project_documents_upload(db: PgPool) {
+    sqlx::query("INSERT INTO users (id, email, display_name, role, password_hash) VALUES ($1, 'ak@code-craft.tech', 'Anas', 'admin', $2)")
+        .bind(Uuid::now_v7())
+        .bind(auth::hash_password("admin-passwort-1").unwrap())
+        .execute(&db)
+        .await
+        .unwrap();
+    let admin = login(&db, "ak@code-craft.tech", "admin-passwort-1").await;
+    let (_, o) = call(&db, "POST", "/api/v1/organizations", &admin, Some(json!({ "name": "Kunde GmbH" }))).await;
+    let org = o["id"].as_str().unwrap().to_owned();
+    let (_, o2) = call(&db, "POST", "/api/v1/organizations", &admin, Some(json!({ "name": "Andere AG" }))).await;
+    for (mail, o) in [("k@kunde.de", &org), ("x@andere.de", &o2["id"].as_str().unwrap().to_owned())] {
+        call(&db, "POST", "/api/v1/users", &admin, Some(json!({
+            "email": mail, "display_name": "K", "role": "customer", "password": "start-passwort-1", "organization_id": o
+        }))).await;
+    }
+    let kunde = login(&db, "k@kunde.de", "start-passwort-1").await;
+    let fremd = login(&db, "x@andere.de", "start-passwort-1").await;
+    let (_, p) = call(
+        &db,
+        "POST",
+        "/api/v1/projects",
+        &admin,
+        Some(json!({ "name": "GNSS", "kind": "customer", "organization_id": org })),
+    )
+    .await;
+    let pid = p["id"].as_str().unwrap().to_owned();
+    let pdf: &[u8] = b"%PDF-1.4 Bericht";
+
+    // Kunde darf nicht hochladen
+    let (s, _) =
+        multipart(&db, &format!("/api/v1/projects/{pid}/documents"), &kunde, &[("file", Some("x.pdf"), pdf)]).await;
+    assert_eq!(s, StatusCode::FORBIDDEN);
+    // Bericht für den Kunden, ein internes Dokument
+    let (s, d) = multipart(
+        &db,
+        &format!("/api/v1/projects/{pid}/documents"),
+        &admin,
+        &[
+            ("title", None, "تقرير تقدّم العمل رقم 1".as_bytes()),
+            ("kind", None, b"report"),
+            ("file", Some("bericht.pdf"), pdf),
+        ],
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED, "{d}");
+    assert_eq!(d["mime"], "application/pdf");
+    let doc = d["id"].as_str().unwrap().to_owned();
+    let (s, i) = multipart(
+        &db,
+        &format!("/api/v1/projects/{pid}/documents"),
+        &admin,
+        &[("for_customer", None, b"false"), ("kind", None, b"other"), ("file", Some("intern.pdf"), pdf)],
+    )
+    .await;
+    assert_eq!(s, StatusCode::CREATED);
+    assert_eq!(i["title"], "intern");
+    let internal = i["id"].as_str().unwrap().to_owned();
+    // gefährliche Dateien und unbekannte Arten werden abgelehnt
+    let (s, _) =
+        multipart(&db, &format!("/api/v1/projects/{pid}/documents"), &admin, &[("file", Some("a.exe"), b"MZ\x90\x00")])
+            .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+    let (s, _) = multipart(
+        &db,
+        &format!("/api/v1/projects/{pid}/documents"),
+        &admin,
+        &[("kind", None, b"x"), ("file", Some("a.pdf"), pdf)],
+    )
+    .await;
+    assert_eq!(s, StatusCode::BAD_REQUEST);
+
+    // Kunde sieht nur den freigegebenen Bericht – und eine Neuigkeit dazu
+    let (_, v) = call(&db, "GET", &format!("/api/v1/projects/{pid}"), &kunde, None).await;
+    assert_eq!(v["documents"].as_array().unwrap().len(), 1, "{v}");
+    assert_eq!(v["documents"][0]["title"], "تقرير تقدّم العمل رقم 1");
+    assert!(v["updates"][0]["body"].as_str().unwrap().contains("تقرير"));
+    let (_, v) = call(&db, "GET", &format!("/api/v1/projects/{pid}"), &admin, None).await;
+    assert_eq!(v["documents"].as_array().unwrap().len(), 2);
+
+    let (s, body) = get_raw(&db, &format!("/api/v1/project-documents/{doc}"), &kunde).await;
+    assert_eq!(s, StatusCode::OK);
+    assert_eq!(body, pdf);
+    assert_eq!(get_raw(&db, &format!("/api/v1/project-documents/{internal}"), &kunde).await.0, StatusCode::NOT_FOUND);
+    assert_eq!(get_raw(&db, &format!("/api/v1/project-documents/{doc}"), &fremd).await.0, StatusCode::NOT_FOUND);
+
+    // Löschen nur durch das Team
+    assert_eq!(
+        call(&db, "DELETE", &format!("/api/v1/project-documents/{doc}"), &kunde, None).await.0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        call(&db, "DELETE", &format!("/api/v1/project-documents/{doc}"), &admin, None).await.0,
+        StatusCode::NO_CONTENT
+    );
+    assert_eq!(get_raw(&db, &format!("/api/v1/project-documents/{doc}"), &admin).await.0, StatusCode::NOT_FOUND);
+}

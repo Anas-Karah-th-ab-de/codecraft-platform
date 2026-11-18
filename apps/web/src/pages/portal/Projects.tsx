@@ -4,6 +4,7 @@ import { api, can, openPdf, useApi, useAuth } from "../../api";
 import { fmtDate, money, useI18n, type Key } from "../../i18n";
 import { Badge, Field, Loading, Modal, useSubmit, ListTools, Filter, matches, NoHits } from "../../ui";
 import { ProgressBar, ProjectProgress, type Milestone, type Update } from "./Progress";
+import { ProjectDocuments, type ProjectDocument } from "./Docs";
 import QuoteEditor from "./QuoteEditor";
 import { PaymentBox, usePaymentMethods } from "./Payment";
 
@@ -171,7 +172,7 @@ function ProjectList() {
 function ProjectDetail() {
   const { id } = useParams();
   const { t, locale } = useI18n();
-  const { data: p, error, reload } = useApi<Project & { invoices: InvRow[]; quotes: QuoteRow[]; milestones: Milestone[]; updates: Update[] }>(`/api/v1/projects/${id}`, [id]);
+  const { data: p, error, reload } = useApi<Project & { invoices: InvRow[]; quotes: QuoteRow[]; milestones: Milestone[]; updates: Update[]; documents?: ProjectDocument[] }>(`/api/v1/projects/${id}`, [id]);
   if (!p) return <Loading error={error} />;
   return (
     <>
@@ -181,6 +182,7 @@ function ProjectDetail() {
       </div>
       {p.description && <p className="muted" style={{ whiteSpace: "pre-line" }}>{p.description}</p>}
       <ProjectProgress projectId={p.id} progress={p.progress} milestones={p.milestones} updates={p.updates} onChange={reload} />
+      <ProjectDocuments projectId={p.id} docs={p.documents ?? []} onChange={reload} />
       <div className="grid2" style={{ margin: "16px 0" }}>
         <div className="card"><div className="muted">{t("p.customer")}</div><b>{p.organization_name ?? t("p.internal")}</b></div>
         <div className="card"><div className="muted">{t("p.period")}</div><b>{fmtDate(p.start_date, locale)}</b> → {fmtDate(p.target_date, locale)}</div>
