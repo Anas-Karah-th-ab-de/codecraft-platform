@@ -1,4 +1,4 @@
-// Produktseiten: /kasse, /ki-server, /karten – Inhalte in productText.ts (DE/EN/AR)
+// Produktseiten: /kasse, /ki-server, /karten, /e-health, /ultar-os – Inhalte in productText.ts (DE/EN/AR)
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../../api";
@@ -16,7 +16,7 @@ const money = (cents: number, currency: string, locale: string) =>
 /** Interne Ziele als Link, externe als neuer Tab */
 function Go({ to, className, children }: { to: string; className: string; children: React.ReactNode }) {
   // Dateien (PDF) sind keine Seiten der Anwendung: normaler Link statt Router
-  if (to.startsWith("/downloads/") || to.startsWith("/radiology/")) return <a className={className} href={to}>{children}</a>;
+  if (to.startsWith("/downloads/") || to.startsWith("/radiology/") || to.startsWith("#")) return <a className={className} href={to}>{children}</a>;
   return to.startsWith("http")
     ? <a className={className} href={to} target="_blank" rel="noopener noreferrer">{children}</a>
     : <Link className={className} to={to}>{children}</Link>;
@@ -80,7 +80,7 @@ function BlockView({ b, alt }: { b: Block; alt: boolean }) {
   const dark = (b.kind === "points" && b.dark) || b.kind === "plans";
   const cls = `pp-block ${dark ? "pp-dark" : alt ? "pp-alt" : ""}`;
   return (
-    <section className={cls}>
+    <section className={cls} id={b.id}>
       <div className="hx-wrap">
         <h2>{b.h}</h2>
         {"lead" in b && b.lead && <p className="hx-intro">{b.lead}</p>}

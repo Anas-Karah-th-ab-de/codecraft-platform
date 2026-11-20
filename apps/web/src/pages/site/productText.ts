@@ -3,8 +3,9 @@
 // Preise kommen aus dem Katalog (KI-Server) bzw. stehen bewusst nicht hier (Kasse: Preis auf Anfrage).
 import type { Locale } from "../../i18n";
 import { RADIOLOGIE, RADIOLOGIE_TEASER } from "./radiologieText";
+import { ULTAR, ULTAR_TEASER } from "./ultarText";
 
-export type ProductKey = "kasse" | "ki-server" | "karten" | "radiologie";
+export type ProductKey = "kasse" | "ki-server" | "karten" | "radiologie" | "ultar-os";
 
 export type Block =
   | { kind: "features"; id?: string; h: string; lead?: string; items: [string, string][] }
@@ -40,18 +41,21 @@ export const TEASER: Record<Locale, Record<ProductKey, [string, string]>> = {
     "ki-server": ["KI-Server", "Ihre eigene KI im eigenen Haus, ohne Cloud."],
     karten: ["Maps Syria", "Karten und Navigation für Syrien, betrieben in Syrien."],
     radiologie: RADIOLOGIE_TEASER.de,
+    "ultar-os": ULTAR_TEASER.de,
   },
   en: {
     kasse: ["POS Code Craft v3", "POS, stock and customer app – works without internet."],
     "ki-server": ["AI server", "Your own AI in your own building, no cloud."],
     karten: ["Maps Syria", "Maps and navigation for Syria, run in Syria."],
     radiologie: RADIOLOGIE_TEASER.en,
+    "ultar-os": ULTAR_TEASER.en,
   },
   ar: {
     kasse: ["POS Code Craft v3", "كاشير ومستودع وتطبيق للزبائن – يعمل بدون إنترنت."],
     "ki-server": ["خادم الذكاء الاصطناعي", "ذكاء اصطناعي خاص بك داخل منشأتك، بدون سحابة."],
     karten: ["خرائط سوريا", "خرائط وملاحة لسوريا، تُدار من داخل سوريا."],
     radiologie: RADIOLOGIE_TEASER.ar,
+    "ultar-os": ULTAR_TEASER.ar,
   },
 };
 
@@ -534,6 +538,7 @@ export const PRODUCTS: Record<ProductKey, Record<Locale, ProductPage>> = {
   "ki-server": { de: kiDe, en: kiEn, ar: kiAr },
   karten: { de: mapsDe, en: mapsEn, ar: mapsAr },
   radiologie: RADIOLOGIE,
+  "ultar-os": ULTAR,
 };
 
-export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/e-health" };
+export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/e-health", "ultar-os": "/ultar-os" };

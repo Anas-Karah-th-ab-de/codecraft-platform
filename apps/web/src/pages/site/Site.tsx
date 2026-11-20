@@ -94,6 +94,7 @@ export function SiteLayout() {
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
             <Link to="/karten">{TEASER[locale].karten[0]}</Link>
             <Link to="/e-health">{TEASER[locale].radiologie[0]}</Link>
+            <Link to="/ultar-os">{TEASER[locale]["ultar-os"][0]}</Link>
             <Link to="/#leistungen">{H.nav.services}</Link>
           </div>
           <div>
