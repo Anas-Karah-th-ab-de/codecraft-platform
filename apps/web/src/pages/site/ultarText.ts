@@ -42,9 +42,9 @@ const de: ProductPage = {
     {
       kind: "gallery", h: "So sieht Ultar OS aus", lead: "Bildschirme aus der aktuellen Entwicklungsfassung, mit Beispieldaten.",
       items: [
-        [`${IMG}/uebersicht.png`, "Start, Schnelleinstellungen, Funktürme, Mobilfunk, Anruf, Nachrichten, Dateien – auch auf Arabisch"],
+        [`${IMG}/uebersicht.png`, "Start, Schnelleinstellungen, Funktürme, Mobilfunk, Anruf, Kontakte, Dateien – auch auf Arabisch"],
         [`${IMG}/runde2.png`, "Werkzeuge, Gebetszeiten, Qibla, Aufgaben, Nutzungszeit, Gerätepflege, Akku-Verlauf, Modi"],
-        [`${IMG}/apps-neu-ar.png`, "Eingebaute Apps auf Arabisch"],
+        [`${IMG}/apps-neu-ar.png`, "Eingebaute Apps auf Arabisch: Einstellungen, Kontakte, Rechner, Uhr, Galerie, Notizen, Store, Kamera"],
         [`${IMG}/monitor.png`, "Monitor: Prozessor, Speicher und Datenverkehr"],
       ],
     },
@@ -168,7 +168,7 @@ const en: ProductPage = {
     {
       kind: "gallery", h: "What Ultar OS looks like", lead: "Screens from the current development build, with sample data.",
       items: [
-        [`${IMG}/uebersicht.png`, "Home, quick settings, cell towers, mobile network, calls, messages, files – also in Arabic"],
+        [`${IMG}/uebersicht.png`, "Home, quick settings, cell towers, mobile network, calls, contacts, files – also in Arabic"],
         [`${IMG}/runde2.png`, "Tools, prayer times, Qibla, tasks, screen time, device care, battery history, modes"],
         [`${IMG}/apps-neu-ar.png`, "Built-in apps in Arabic"],
         [`${IMG}/monitor.png`, "Monitor: CPU, memory and data usage"],
@@ -294,7 +294,7 @@ const ar: ProductPage = {
     {
       kind: "gallery", h: "هكذا يبدو Ultar OS", lead: "شاشات من نسخة التطوير الحالية، ببيانات تجريبية.",
       items: [
-        [`${IMG}/uebersicht.png`, "الشاشة الرئيسية، الإعدادات السريعة، أبراج الشبكة، الشبكة الخلوية، المكالمات، الرسائل، الملفات – وبالعربية أيضاً"],
+        [`${IMG}/uebersicht.png`, "الشاشة الرئيسية، الإعدادات السريعة، أبراج الشبكة، الشبكة الخلوية، المكالمات، جهات الاتصال، الملفات – وبالعربية أيضاً"],
         [`${IMG}/runde2.png`, "الأدوات، مواقيت الصلاة، القبلة، المهام، وقت الاستخدام، العناية بالجهاز، سجل البطارية، الأوضاع"],
         [`${IMG}/apps-neu-ar.png`, "التطبيقات المدمجة بالعربية"],
         [`${IMG}/monitor.png`, "المراقبة: المعالج والذاكرة واستهلاك البيانات"],
