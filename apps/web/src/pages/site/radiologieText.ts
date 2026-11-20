@@ -44,8 +44,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
-      "label": "Ausführliche Seite mit allen Unterlagen",
-      "to": "/radiology/index.html?lang=de"
+      "label": "Interaktive Demo ausprobieren",
+      "to": "/radiology/demo/index.html?lang=de"
     },
     "blocks": [
       {
@@ -448,8 +448,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
-      "label": "Full page with all documents",
-      "to": "/radiology/index.html?lang=en"
+      "label": "Try the interactive demo",
+      "to": "/radiology/demo/index.html?lang=en"
     },
     "blocks": [
       {
@@ -852,8 +852,8 @@ export const RADIOLOGIE: Record<Locale, ProductPage> = {
       "to": "/kontakt?produkt=radiologie"
     },
     "secondary": {
-      "label": "الصفحة الكاملة مع كل الوثائق",
-      "to": "/radiology/index.html?lang=ar"
+      "label": "جرّب العرض التفاعلي",
+      "to": "/radiology/demo/index.html?lang=ar"
     },
     "blocks": [
       {
