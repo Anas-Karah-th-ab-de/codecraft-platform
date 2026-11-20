@@ -25,6 +25,7 @@ export function Home() {
   return (
     <div className="hx">
       <Hero />
+      <Phone />
       <section className="hx-craft">
         <div className="hx-wrap hx-craft-grid">
           <img src="/brand/mark-circuit.png" alt="" width="300" height="270" loading="lazy" />
@@ -37,10 +38,9 @@ export function Home() {
           </div>
         </div>
       </section>
-      <Till />
       <Ai />
-      <UltarDemo />
       <Services />
+      <Till />
       <section className="hx-stack">
         <div className="hx-wrap">
           <p className="hx-eyebrow">{T.stack.eyebrow}</p>
@@ -79,11 +79,65 @@ function Hero() {
           <p className="hx-hero-sub">{T.sub}</p>
           <div className="hx-actions">
             <Link to="/kontakt" className="hx-btn">{T.ctaStart}</Link>
-            <a href="#kasse" className="hx-link">{T.ctaTill.replace(/\s*[↓↑]\s*$/, "")}</a>
+            <a href="#handy" className="hx-link">{T.ctaTill.replace(/\s*[↓↑]\s*$/, "")}</a>
           </div>
           <p className="hx-made">{T.made}</p>
         </div>
         <Board items={T.board} label={T.boardAria} />
+      </div>
+    </section>
+  );
+}
+
+// ── KM One + Ultar OS (Schwerpunkt) ─────────────────────────────────────────
+
+function Phone() {
+  const { locale } = useI18n();
+  const T = HOME[locale].phone;
+  return (
+    <section className="hx-phone" id="handy">
+      <div className="hx-wrap">
+        <div className="hx-phone-head">
+          <div>
+            <p className="hx-eyebrow">{T.eyebrow}</p>
+            <h2>{T.h2}</h2>
+            <p className="hx-intro">{T.text}</p>
+            <div className="hx-actions">
+              <a className="hx-btn" href={DEMO_URL(locale)} target="_blank" rel="noopener">{T.demo}</a>
+              <Link className="hx-link" to="/kontakt">{T.pilot}</Link>
+            </div>
+          </div>
+          <picture className="hx-phone-design">
+            <source srcSet="/products/km-one/km-one-hero.webp" type="image/webp" />
+            <img src="/products/km-one/km-one-hero.jpg" alt={T.alt} width="1600" height="1000" />
+          </picture>
+        </div>
+        <ul className="hx-phone-pillars">
+          {T.pillars.map(([h, d]) => (<li key={h}><b>{h}</b><span>{d}</span></li>))}
+        </ul>
+        <div className="hx-phone-shots">
+          {T.shots.map(([src, cap]) => (
+            <figure key={src}>
+              <img src={src} alt={cap} width="1000" height="1250" loading="lazy" />
+              <figcaption>{cap}</figcaption>
+            </figure>
+          ))}
+        </div>
+        <div className="hx-phone-os">
+          <div>
+            <h3>{T.osH}</h3>
+            <p>{T.osText}</p>
+            <div className="hx-actions">
+              <a className="hx-btn" href={DEMO_URL(locale)} target="_blank" rel="noopener">{T.demo}</a>
+              <Link className="hx-link" to="/kontakt">{T.pilot}</Link>
+              <Link className="hx-link" to="/ultar-os">{T.more}</Link>
+            </div>
+          </div>
+          <a className="hx-uos-shot" href={DEMO_URL(locale)} target="_blank" rel="noopener" aria-label={T.demo}>
+            <img src={DEMO_POSTER(locale)} alt="" width="710" height="941" loading="lazy" />
+          </a>
+        </div>
+        <p className="hx-phone-note">{T.note}</p>
       </div>
     </section>
   );

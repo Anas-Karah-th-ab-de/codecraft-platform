@@ -1479,3 +1479,31 @@ body:has(.callview) .toast { bottom: auto; top: 72px; }
 .hx-uos-shot img { display: block; width: 100%; height: auto; }
 .hx-uos-note { margin: var(--s-3) 0 0; font-size: .85rem; color: var(--on-ink-2); }
 @media (max-width: 900px) { .hx-uos-grid { grid-template-columns: 1fr; gap: var(--s-6); } .hx-uos-shot { max-width: 420px; margin-inline: auto; } }
+
+/* KM One + Ultar OS – Schwerpunkt der Startseite */
+.hx-phone { background: #0B0C0F; color: var(--on-ink); padding: var(--s-9) 0; }
+.hx-phone h2 { color: #fff; max-width: 18ch; }
+.hx-phone .hx-intro { color: var(--on-ink-2); max-width: 60ch; }
+.hx-phone .hx-link { color: #fff; }
+.hx-phone-head { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 7fr); gap: var(--s-8); align-items: center; }
+.hx-phone-design img { display: block; width: 100%; height: auto; border-radius: 24px; }
+.hx-phone-pillars { list-style: none; padding: 0; margin: var(--s-6) 0 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-4); }
+.hx-phone-pillars li { background: #15171C; border: 1px solid #262931; border-radius: 18px; padding: var(--s-5); display: flex; flex-direction: column; gap: 6px; }
+.hx-phone-pillars b { color: #D8C870; font-size: 1.1rem; }
+.hx-phone-pillars span { color: var(--on-ink-2); line-height: 1.5; font-size: .95rem; }
+.hx-phone-shots { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); margin-top: var(--s-6); }
+.hx-phone-shots figure { margin: 0; }
+.hx-phone-shots img { display: block; width: 100%; height: auto; border-radius: 20px; }
+.hx-phone-shots figcaption { margin-top: var(--s-2); color: var(--on-ink-2); font-size: .9rem; line-height: 1.45; }
+.hx-phone-os { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 4fr); gap: var(--s-8); align-items: center; margin-top: var(--s-8); padding-top: var(--s-8); border-top: 1px solid #262931; }
+.hx-phone-os h3 { color: #fff; font-size: 1.6rem; margin: 0 0 var(--s-3); }
+.hx-phone-os p { color: var(--on-ink-2); line-height: 1.6; margin: 0 0 var(--s-4); }
+.hx-phone-note { margin: var(--s-6) 0 0; font-size: .85rem; color: var(--on-ink-2); }
+@media (max-width: 900px) {
+  .hx-phone-head { grid-template-columns: 1fr; gap: var(--s-6); }
+  .hx-phone-pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hx-phone-shots { grid-template-columns: 1fr; max-width: 460px; margin-inline: auto; }
+  .hx-phone-os { grid-template-columns: 1fr; gap: var(--s-6); }
+  .hx-phone-os .hx-uos-shot { max-width: 380px; margin-inline: auto; }
+}
+@media (max-width: 520px) { .hx-phone-pillars { grid-template-columns: 1fr; } }
