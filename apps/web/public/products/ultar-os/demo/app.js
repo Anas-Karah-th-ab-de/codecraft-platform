@@ -538,13 +538,38 @@ const KB = {
   },
   show(el) {
     if (S.desktop || !el) return; this.t = el; if (!this.lay) this.lay = S.lang === 'ar' ? 'ar' : S.lang === 'en' ? 'en' : 'de';
-    this.render();
+    this.render(); this.fit();
   },
-  hide() { this.t = null; const h = $('#kbHost'); if (h) h.innerHTML = ''; },
+  hide() { this.t = null; const h = $('#kbHost'); if (h) h.innerHTML = ''; this.fit(); },
+  // Seite über der Tastatur einpassen: Ansicht endet an der Tastaturoberkante, fokussiertes Feld wird sichtbar gerollt
+  fit() {
+    const pv = $('#pv'), kb = $('#kbEl'), nav = $('#navbar'); if (!pv) return;
+    const sc = scaleOf();
+    const pad = kb ? Math.max(0, kb.getBoundingClientRect().height / sc - (nav ? nav.getBoundingClientRect().height / sc : 0)) : 0;
+    pv.style.marginBottom = pad ? pad + 'px' : '';
+    const scr = $('#screen'); if (scr) { scr.classList.toggle('kbo', !!kb); scr.style.setProperty('--kbh', kb ? kb.getBoundingClientRect().height / sc + 'px' : '0px'); }
+    if (typeof HLP !== 'undefined') HLP.place();
+    const el = this.t; if (!el || !kb) return;
+    requestAnimationFrame(() => {
+      const box = el.closest('.sheet, .scroll'); if (!box) return;
+      const r = el.getBoundingClientRect(), b = box.getBoundingClientRect(), m = 16 * sc;
+      // Feld und etwas darunter (z. B. „Speichern") zeigen, aber das Feld selbst nie nach oben herausschieben
+      const extra = Math.min(76 * sc, Math.max(0, b.height - r.height - 2 * m));
+      if (r.bottom + extra + m > b.bottom) box.scrollTop += Math.min(r.bottom + extra + m - b.bottom, r.top - b.top - m);
+      else if (r.top - m < b.top) box.scrollTop -= b.top - (r.top - m);
+    });
+  },
   render() {
     const h = $('#kbHost'); if (!h) return; const L2 = this.layouts[this.lay];
     const key = (k) => { if (k === '⇧') return `<button class="fn" data-k="shift" style="flex:1.4">${ic('up', 18, 2)}</button>`; if (k === '⌫') return `<button class="fn" data-k="bs" style="flex:1.4">${ic('back', 18, 2)}</button>`; const c = this.shift ? k.toUpperCase() : k; return `<button data-k="${esc(c)}">${esc(c)}</button>`; };
     const clips = S.clips.slice(0, 6);
+    // Telefonnummern: Ziffernblock wie auf dem Gerät (1 2 3 ⌫ · 4 5 6 + · 7 8 9 * · # 0 ␣ ✓)
+    if (this.t && this.t.dataset.kb === 'tel') {
+      const k = (c) => c === '⌫' ? `<button class="fn" data-k="bs">${ic('back', 18, 2)}</button>` : c === '✓' ? `<button class="ent" data-k="enter">${ic('check', 18, 2.4)}</button>` : c === '␣' ? `<button class="fn" data-k=" ">␣</button>` : `<button data-k="${c}" style="font-size:20px">${c}</button>`;
+      h.innerHTML = `<div class="kb tel" id="kbEl" dir="ltr"><div class="clip"><button class="act" data-k="paste">${ic('paste', 15)} ${T('Einfügen', 'Paste', 'لصق')}</button><span style="flex:1"></span><button class="act" data-k="hide" aria-label="Hide">${ic('down', 16, 2)}</button></div>${['123⌫', '456+', '789*', '#0␣✓'].map((r) => `<div class="kr">${[...r].map(k).join('')}</div>`).join('')}</div>`;
+      $('#kbEl').addEventListener('pointerdown', (e) => { e.preventDefault(); const b = e.target.closest('[data-k]'); if (b) this.press(b.dataset.k); });
+      return;
+    }
     h.innerHTML = `<div class="kb" id="kbEl" dir="${this.lay === 'ar' ? 'rtl' : 'ltr'}">
       <div class="clip"><button class="act" data-k="copy">${ic('copy', 15)} ${T('Kopieren', 'Copy', 'نسخ')}</button><button class="act" data-k="cut">${ic('cut', 15)}</button><button class="act" data-k="paste">${ic('paste', 15)} ${T('Einfügen', 'Paste', 'لصق')}</button>${clips.map((c, i) => `<button data-k="clip${i}">${esc(c)}</button>`).join('')}<span style="flex:1"></span><button class="act" data-k="hide" aria-label="Hide">${ic('down', 16, 2)}</button></div>
       <div class="kr num">${'1234567890'.split('').map((k) => `<button data-k="${k}">${k}</button>`).join('')}</div>
@@ -579,7 +604,7 @@ const HLP = {
   visible() {
     if (S.desktop || !S.helper || S.locked || screenOff) return false;
     const [n] = parse(cur(SF.p)); if (n === 'camera' || n === 'helper') return false;
-    if ($('#recHost') && $('#recHost').innerHTML) return false; return true;
+    if ($('#recHost') && $('#recHost').innerHTML) return false; if (typeof KB !== 'undefined' && KB.t && $('#kbEl')) return false; return true;
   },
   place() {
     const h = this.host(); if (!h) return;
@@ -1342,7 +1367,7 @@ SC.contact = {
 };
 A.conMsg = (id) => { const c = S.contacts.find((x) => x.id === id); let ch = S.sms.find((x) => x.n === c.n); if (!ch) { ch = { id: uid(), n: c.n, m: [{ me: 0, x: '👋', t: Date.now() }] }; S.sms.unshift(ch); } openApp('messages'); go(SF.p, `chat:sms:${ch.id}`); };
 A.conDel = (id, el, sf) => confirmBox(T('Kontakt löschen?', 'Delete contact?', 'حذف جهة الاتصال؟'), '', T('Löschen', 'Delete', 'حذف'), () => { S.contacts = S.contacts.filter((x) => x.id !== id); back(sf); }, true);
-A.conNew = () => { const d = sheet(`<h2>${T('Neuer Kontakt', 'New contact', 'جهة اتصال جديدة')}</h2><div style="margin-bottom:10px">${inp(`id="cn" placeholder="${T('Name', 'Name', 'الاسم')}"`)}</div><div style="margin-bottom:14px">${inp(`id="cp" placeholder="+963 …"`)}</div><button class="btn wide" data-a="conSave">${T('Speichern', 'Save', 'حفظ')}</button>`); setTimeout(() => $('#cn', d).focus(), 250); };
+A.conNew = () => { const d = sheet(`<h2>${T('Neuer Kontakt', 'New contact', 'جهة اتصال جديدة')}</h2><div style="margin-bottom:10px">${inp(`id="cn" placeholder="${T('Name', 'Name', 'الاسم')}"`)}</div><div style="margin-bottom:14px">${inp(`id="cp" data-kb="tel" dir="ltr" placeholder="+963 …"`)}</div><button class="btn wide" data-a="conSave">${T('Speichern', 'Save', 'حفظ')}</button>`); setTimeout(() => $('#cn', d).focus(), 250); };
 A.conSave = (v, el) => { const n = $('#cn').value.trim(); if (!n) return; S.contacts.push({ id: uid(), n, p: $('#cp').value || '—', c: ['#2B6CB0', '#9B2C6C', '#2F855A', '#B7791F'][S.contacts.length % 4] }); A.closeSheet(v, el); R(SF.p); };
 
 // ================= Werkzeuge =================
