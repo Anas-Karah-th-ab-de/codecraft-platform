@@ -439,14 +439,19 @@ export function Contact() {
   }, [data, pre, tier]);
   // Produkte mit eigener Seite, die (noch) nicht im Katalog der Datenbank stehen: Die Anfrage
   // geht ohne Katalog-Nummer hinaus, der Produktname steht dann vorn im Betreff.
-  const extra = [{ key: "radiologie", name: TEASER[locale].radiologie[0] }].filter(
+  const pages = [
+    { key: "radiologie", name: TEASER[locale].radiologie[0] },
+    { key: "ultar-os", name: TEASER[locale]["ultar-os"][0] },
+  ];
+  const extra = pages.filter(
     (x) => !data?.products.some((p) => p.name === x.name),
   );
   useEffect(() => {
     const x = extra.find((e) => e.key === pre);
     if (x && !f.subject) setF((o) => ({ ...o, subject: x.name }));
     // Steht das Produkt inzwischen im Katalog, wird der Katalogeintrag vorgewählt.
-    const known = pre === "radiologie" ? data?.products.find((p) => p.name === TEASER[locale].radiologie[0]) : undefined;
+    const page = pages.find((x) => x.key === pre);
+    const known = page ? data?.products.find((p) => p.name === page.name) : undefined;
     if (known) setF((o) => ({ ...o, product_id: known.id, subject: o.subject || known.name }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pre, data]);
