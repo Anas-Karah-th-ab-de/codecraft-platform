@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../../api";
 import { useI18n } from "../../i18n";
+import { UltarDemo } from "./Home";
 import { type Block, type ProductKey, PRODUCTS, PRODUCT_PATH, TEASER, UI } from "./productText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
@@ -51,6 +52,7 @@ export function ProductPage({ k }: { k: ProductKey }) {
           </aside>
         </div>
       </section>
+      {k === "ultar-os" && <UltarDemo more={false} />}
       {P.blocks.map((b, i) => <BlockView key={i} b={b} alt={i % 2 === 1} />)}
       <section className="pp-close">
         <div className="hx-wrap pp-close-grid">

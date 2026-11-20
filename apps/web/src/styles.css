@@ -1467,3 +1467,15 @@ body:has(.callview) .toast { bottom: auto; top: 72px; }
 
 /* Kunde ohne Adresse */
 .badge.warn { background: #fef3c7; color: #92400e; }
+
+/* Startseite + Produktseite: interaktive Ultar-OS-Demo */
+.hx-uos { background: var(--ink); color: var(--on-ink); padding: var(--s-9) 0; }
+.hx-uos h2 { color: #fff; }
+.hx-uos .hx-intro, .hx-uos .hx-uses li { color: var(--on-ink-2); }
+.hx-uos-grid { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--s-8); align-items: center; }
+.hx-uos-shot { display: block; transition: transform .25s ease; }
+.hx-uos .hx-link { color: #fff; }
+.hx-uos-shot:hover { transform: translateY(-4px); }
+.hx-uos-shot img { display: block; width: 100%; height: auto; }
+.hx-uos-note { margin: var(--s-3) 0 0; font-size: .85rem; color: var(--on-ink-2); }
+@media (max-width: 900px) { .hx-uos-grid { grid-template-columns: 1fr; gap: var(--s-6); } .hx-uos-shot { max-width: 420px; margin-inline: auto; } }

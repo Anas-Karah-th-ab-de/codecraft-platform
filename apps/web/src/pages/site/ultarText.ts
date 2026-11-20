@@ -29,7 +29,7 @@ const de: ProductPage = {
     ["Sprachen", "Arabisch (rechts nach links), Englisch, Deutsch"],
   ],
   primary: { label: "Interesse melden", to: CONTACT },
-  secondary: { label: "Stand der Entwicklung", to: "#stand" },
+  secondary: { label: "Demo ausprobieren", to: "#ultar-demo" },
   blocks: [
     {
       kind: "features", h: "Was Ultar OS anders macht", items: [
@@ -155,7 +155,7 @@ const en: ProductPage = {
     ["Languages", "Arabic (right to left), English, German"],
   ],
   primary: { label: "Register interest", to: CONTACT },
-  secondary: { label: "Development status", to: "#stand" },
+  secondary: { label: "Try the demo", to: "#ultar-demo" },
   blocks: [
     {
       kind: "features", h: "What makes Ultar OS different", items: [
@@ -281,7 +281,7 @@ const ar: ProductPage = {
     ["اللغات", "العربية (من اليمين لليسار)، الإنجليزية، الألمانية"],
   ],
   primary: { label: "سجّل اهتمامك", to: CONTACT },
-  secondary: { label: "مرحلة التطوير", to: "#stand" },
+  secondary: { label: "جرّب العرض", to: "#ultar-demo" },
   blocks: [
     {
       kind: "features", h: "ما الذي يميّز Ultar OS", items: [

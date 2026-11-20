@@ -4,6 +4,7 @@ import { useApi } from "../../api";
 import { useI18n } from "../../i18n";
 import { CONTACT, HOME, STACK } from "./homeText";
 import { Board } from "./Board";
+import { DEMO_POSTER, DEMO_URL, ULTAR_DEMO } from "./ultarDemoText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type ProductDetail = { slug: string; name: string; prices: Price[] };
@@ -38,6 +39,7 @@ export function Home() {
       </section>
       <Till />
       <Ai />
+      <UltarDemo />
       <Services />
       <section className="hx-stack">
         <div className="hx-wrap">
@@ -253,6 +255,32 @@ function Ai() {
           ))}
           <Link className="hx-btn block" to="/kontakt?produkt=ki-server">{T.cta}</Link>
         </div>
+      </div>
+    </section>
+  );
+}
+
+/** Ultar OS – interaktive Demo (eigene Seite, öffnet in neuem Tab) */
+export function UltarDemo({ more = true }: { more?: boolean }) {
+  const { locale } = useI18n();
+  const T = ULTAR_DEMO[locale];
+  return (
+    <section className="hx-uos" id="ultar-demo">
+      <div className="hx-wrap hx-uos-grid">
+        <div>
+          <p className="hx-eyebrow">{T.eyebrow}</p>
+          <h2>{T.h2}</h2>
+          <p className="hx-intro">{T.text}</p>
+          <ul className="hx-uses">{T.points.map((u) => <li key={u}>{u}</li>)}</ul>
+          <div className="hx-actions">
+            <a className="hx-btn" href={DEMO_URL(locale)} target="_blank" rel="noopener">{T.start}</a>
+            {more && <Link className="hx-link" to="/ultar-os">{T.more}</Link>}
+          </div>
+          <p className="hx-uos-note">{T.note}</p>
+        </div>
+        <a className="hx-uos-shot" href={DEMO_URL(locale)} target="_blank" rel="noopener" aria-label={T.start}>
+          <img src={DEMO_POSTER(locale)} alt={T.alt} width="710" height="941" loading="lazy" />
+        </a>
       </div>
     </section>
   );
