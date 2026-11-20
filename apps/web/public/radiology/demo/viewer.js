@@ -334,12 +334,13 @@ async function go(step) {
   state.line = null;
   pic.classList.toggle("ew", current().id === "volume");
   loading.hidden = false;
-  render();
   const mine = run;
+  // The picture in view first; the others of this step load behind it.
+  await render();
+  loading.hidden = true;
+  if (mine !== run) return;
   await Promise.all(needed(current().id).map(([set, name]) => picture(set, name)));
   if (mine !== run) return;
-  loading.hidden = true;
-  render(false);
   // The first time a step opens, it shows by itself what can be done here.
   if (!state.done.has(current().id)) demonstrate(true);
 }
