@@ -9,7 +9,7 @@ const de = {
   h1b: "Crafted.",
   sub: "Software und Hardware nach Maß für Ihr Unternehmen. Von der Idee bis zum Support, alles aus einer Hand.",
   ctaStart: "Projekt starten",
-  ctaTill: "Unser Handy ansehen ↓",
+  ctaTill: "Ultar OS & KM One ansehen ↓",
   made: "Made in Syria mit deutscher Qualität / Al-Debet, Idlib",
   nav: { phone: "Handy", till: "Kasse", ai: "KI-Server", health: "E-Health", services: "Leistungen", story: "Geschichte", products: "Produkte", careers: "Karriere", contact: "Kontakt" },
   board: [
@@ -162,7 +162,7 @@ const en: T = {
   eyebrow: "code-craft · since 2014",
   sub: "Custom software and hardware for your business. From concept to support, everything from one source.",
   ctaStart: "Start a project",
-  ctaTill: "See our phone ↓",
+  ctaTill: "See Ultar OS & KM One ↓",
   made: "Made in Syria with German quality / Al-Debet, Idlib",
   nav: { phone: "Phone", till: "The till", ai: "AI server", health: "E-Health", services: "Services", story: "Story", products: "Products", careers: "Careers", contact: "Contact" },
   board: [
@@ -315,7 +315,7 @@ const ar: T = {
   eyebrow: "code-craft · منذ 2014",
   sub: "برمجيات وأجهزة مصممة لشركتك. من الفكرة إلى الدعم، كل شيء من مصدر واحد.",
   ctaStart: "ابدأ مشروعاً",
-  ctaTill: "شاهد هاتفنا ↓",
+  ctaTill: "شاهد نظام Ultar OS وهاتف KM One ↓",
   made: "صُنع في سوريا بجودة ألمانية / الدبيط، إدلب",
   nav: { phone: "الهاتف", till: "الكاشير", ai: "خادم الذكاء الاصطناعي", health: "الصحة الرقمية", services: "الخدمات", story: "قصتنا", products: "المنتجات", careers: "الوظائف", contact: "تواصل" },
   board: [
