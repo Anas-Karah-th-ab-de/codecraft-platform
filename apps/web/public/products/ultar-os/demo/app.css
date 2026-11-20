@@ -142,6 +142,13 @@ textarea.inp{height:auto;padding:12px 14px;resize:none;line-height:1.5}
 .app:active .ic{transform:scale(.9)}
 .app span{font-size:11.5px;color:var(--tx);opacity:.88;max-width:78px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .app .badge{position:absolute;top:-4px;inset-inline-end:-4px}
+.hpages{flex:1;min-height:0;display:flex;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.hpages::-webkit-scrollbar{display:none}
+.hpage{flex:0 0 100%;scroll-snap-align:start;padding:0 18px;overflow:hidden}
+.hdots{display:flex;justify-content:center;gap:2px;height:22px;align-items:center;flex:none}
+.hdots button{width:22px;height:22px;border:0;background:transparent;padding:0;display:flex;align-items:center;justify-content:center}
+.hdots button::after{content:"";width:6px;height:6px;border-radius:3px;background:var(--mt);opacity:.45;transition:all .2s}
+.hdots button.on::after{width:18px;background:var(--ac);opacity:1}
 .dock{margin:0 12px 6px;height:80px;border-radius:30px;background:var(--glass);border:1px solid var(--ln);display:grid;grid-template-columns:repeat(4,1fr);align-items:center;justify-items:center;flex:none;backdrop-filter:blur(10px)}
 .dock .app .ic{width:56px;height:56px}
 

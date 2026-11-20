@@ -588,7 +588,7 @@ const HLP = {
       h.innerHTML = `<div class="hlp" id="hlp" role="button" aria-label="${T('KM-Helfer öffnen', 'Open KM helper', 'افتح مساعد KM')}" tabindex="0">${figure(this.state, 60)}</div>`;
       this.el = $('#hlp'); this.bind();
     }
-    if (!this.moved) { const [n] = parse(cur(SF.p)); this.x = (S.lang === 'ar' ? 10 : 318) + (this.ox || 0); this.y = (n === 'home' ? 646 : 702) + (this.oy || 0); }
+    if (!this.moved) { const [n] = parse(cur(SF.p)); this.x = (S.lang === 'ar' ? 10 : 318) + (this.ox || 0); this.y = n === 'home' ? 116 + Math.min(0, this.oy || 0) / 4 : 702 + (this.oy || 0); }
     this.el.style.left = this.x + 'px'; this.el.style.top = this.y + 'px';
   },
   bind() {
@@ -606,7 +606,7 @@ const HLP = {
     if (!this.el) return; this.set(state, Math.min(ms, 2400));
     $$('.bub', this.el).forEach((b) => b.remove());
     const b = document.createElement('div'); b.className = 'bub'; b.textContent = text;
-    if (this.x < 180) { b.style.insetInlineEnd = 'auto'; b.style.left = '-4px'; b.style.right = 'auto'; } else { b.style.right = '-6px'; b.style.left = 'auto'; }
+    if (this.x < 180) { b.style.insetInlineEnd = 'auto'; b.style.left = '-4px'; b.style.right = 'auto'; } else { b.style.right = '-6px'; b.style.left = 'auto'; } if (this.y < 300) { b.style.bottom = 'auto'; b.style.top = '72px'; }
     this.el.appendChild(b); clearTimeout(this._bt); this._bt = setTimeout(() => b.remove(), ms);
   },
   onUnlock() {
@@ -722,26 +722,45 @@ function hcmd(raw) {
 function setLang(l) { S.lang = l; KB.lay = null; HLP.moved = false; RA(); renderLock(); SH.render(); updBar(); if (S.desktop) DESK.render(); }
 
 // ================= Startbildschirm =================
+const HOME_P1 = 12, HOME_PN = 20;
+let homePage = 0;
+function homePages() { const ids = homeApps(); const pages = [ids.slice(0, HOME_P1)]; for (let i = HOME_P1; i < ids.length; i += HOME_PN) pages.push(ids.slice(i, i + HOME_PN)); return pages; }
+const appBtn = (id) => `<button class="app" data-a="open" data-v="${id}" data-lp="appLong"><span class="ic">${appIcon(id)}${badge(id) ? `<span class="badge">${badge(id)}</span>` : ''}</span><span>${appName(id)}</span></button>`;
 SC.home = {
   cls: () => 'home',
   b(sf) {
     const ev = S.events.filter((e) => e.d >= 0).sort((a, b) => a.d - b.d)[0];
-    return `<div class="scroll" style="padding:0 18px">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:22px">
-        <div><div class="h-clock num dots" data-clock>${fmtTime()}</div><div class="muted" style="font-size:14.5px;margin-top:6px">${fmtDate(new Date(), { weekday: 'short', day: 'numeric', month: 'short' })} · ${hijri()}</div></div>
+    const pages = homePages();
+    const head = `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-top:18px">
+        <div><div class="h-clock num dots" data-clock>${fmtTime()}</div><div class="muted" style="font-size:14px;margin-top:6px">${fmtDate(new Date(), { weekday: 'short', day: 'numeric', month: 'short' })} · ${hijri()}</div></div>
         <img src="${LOGO}" alt="KM Code Craft" style="height:38px;width:auto;margin-top:6px">
       </div>
-      <div class="grid2" style="margin-top:18px">
+      <div class="grid2" style="margin-top:16px">
         <div class="w-card" data-a="open" data-v="monitor"><div class="muted" style="font-size:12px;margin-bottom:9px">${T('Gerät', 'Device', 'الجهاز')}</div><div id="wmeters" style="display:flex;flex-direction:column;gap:7px">${meters()}</div></div>
         <div class="w-card" data-a="open" data-v="calendar" style="display:flex;flex-direction:column;justify-content:space-between"><div class="muted" style="font-size:12px">${T('Als Nächstes', 'Up next', 'التالي')}</div>${ev ? `<div><div style="font-size:17px;font-weight:650;line-height:1.25">${esc(L(ev.t))}</div><div class="muted" style="font-size:13px;margin-top:3px">${ev.d === 0 ? T('Heute', 'Today', 'اليوم') : ev.d === 1 ? T('Morgen', 'Tomorrow', 'غداً') : `+${ev.d} ${T('Tage', 'days', 'أيام')}`} · <span class="ltr">${ev.h}</span></div></div>` : `<div class="muted">—</div>`}</div>
       </div>
-      <div class="search" style="margin-top:14px" data-a="go" data-v="search">${ic('search', 18)}<span class="muted" style="flex:1;font-size:14.5px">${T('Apps, Dateien, Einstellungen suchen', 'Search apps, files, settings', 'ابحث في التطبيقات والملفات والإعدادات')}</span><button class="ib" style="background:color-mix(in srgb,var(--ac) 18%,transparent);color:var(--ac);width:38px;height:38px" data-a="hlpOpen" aria-label="Mic">${ic('mic', 18)}</button></div>
-      <div class="apps" style="margin-top:22px">${homeApps().map((id) => `<button class="app" data-a="open" data-v="${id}" data-lp="appLong">${'<span class="ic">' + appIcon(id) + (badge(id) ? `<span class="badge">${badge(id)}</span>` : '') + '</span>'}<span>${appName(id)}</span></button>`).join('')}</div>
-      <div style="height:20px"></div></div>
+      <div class="search" style="margin-top:14px" data-a="go" data-v="search">${ic('search', 18)}<span class="muted" style="flex:1;font-size:14.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${T('Apps, Dateien, Einstellungen suchen', 'Search apps, files, settings', 'ابحث في التطبيقات والملفات والإعدادات')}</span><button class="ib" style="background:color-mix(in srgb,var(--ac) 18%,transparent);color:var(--ac);width:38px;height:38px" data-a="hlpOpen" aria-label="Mic">${ic('mic', 18)}</button></div>`;
+    return `<div class="hpages" id="hpages">${pages.map((p, i) => `<section class="hpage" aria-label="${T('Seite', 'Page', 'صفحة')} ${i + 1}">${i === 0 ? head : '<div style="height:18px"></div>'}<div class="apps" style="margin-top:${i === 0 ? 20 : 6}px">${p.map(appBtn).join('')}</div></section>`).join('')}</div>
+      <div class="hdots" id="hdots">${pages.map((_, i) => `<button data-a="homePg" data-v="${i}" class="${i === homePage ? 'on' : ''}" aria-label="${T('Seite', 'Page', 'صفحة')} ${i + 1}"></button>`).join('')}</div>
       <div class="dock">${DOCK.map((id) => `<button class="app" data-a="open" data-v="${id}" aria-label="${appName(id)}"><span class="ic" style="${id === 'phone' ? 'background:#173A24;border-color:transparent' : ''}">${appIcon(id)}${badge(id) ? `<span class="badge">${badge(id)}</span>` : ''}</span></button>`).join('')}</div>`;
   },
-  m(el) { const t = () => { const w = $('#wmeters', el); if (w) w.innerHTML = meters(); }; TICKS.push(t); return () => { TICKS = TICKS.filter((x) => x !== t); }; },
+  m(el) {
+    const t = () => { const w = $('#wmeters', el); if (w) w.innerHTML = meters(); }; TICKS.push(t);
+    const hp = $('#hpages', el); const W = () => hp.clientWidth;
+    const sync = () => { const p = Math.round(Math.abs(hp.scrollLeft) / W()); if (p !== homePage) { homePage = p; $$('#hdots button', el).forEach((b, i) => b.classList.toggle('on', i === p)); } };
+    hp.scrollLeft = (S.lang === 'ar' ? -1 : 1) * homePage * W();
+    hp.addEventListener('scroll', sync, { passive: true });
+    // Maus-/Touch-Wischen auch am Desktop (Rad + Ziehen)
+    let x0 = null, s0 = 0, moved = false;
+    hp.addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch') return; x0 = e.clientX; s0 = hp.scrollLeft; moved = false; });
+    hp.addEventListener('pointermove', (e) => { if (x0 == null) return; const dx = (e.clientX - x0) / scaleOf(); if (Math.abs(dx) > 8) { moved = true; hp.style.scrollSnapType = 'none'; hp.scrollLeft = s0 - dx; } });
+    const end = (e) => { if (x0 == null) return; const dx = (e.clientX - x0) / scaleOf(); x0 = null; hp.style.scrollSnapType = ''; if (moved) { const fwd = S.lang === 'ar' ? dx > 40 : dx < -40, bwd = S.lang === 'ar' ? dx < -40 : dx > 40; const n = clamp(homePage + (fwd ? 1 : bwd ? -1 : 0), 0, homePages().length - 1); goPage(hp, n); const stop = (ev) => { ev.stopPropagation(); ev.preventDefault(); }; hp.addEventListener('click', stop, { capture: true, once: true }); } };
+    hp.addEventListener('pointerup', end); hp.addEventListener('pointerleave', end);
+    return () => { TICKS = TICKS.filter((x) => x !== t); };
+  },
 };
+function goPage(hp, n) { homePage = n; hp.scrollTo({ left: (S.lang === 'ar' ? -1 : 1) * n * hp.clientWidth, behavior: 'smooth' }); $$('#hdots button').forEach((b, i) => b.classList.toggle('on', i === n)); }
+A.homePg = (v) => { const hp = $('#hpages'); if (hp) goPage(hp, +v); };
 const cpu = () => (S.saver ? 4 : 8) + Math.round(Math.random() * 9);
 function meters() { const r = [[T('CPU', 'CPU', 'المعالج'), cpu()], ['RAM', 31 + Math.round(Math.random() * 3)], [T('Akku', 'Battery', 'البطارية'), Math.round(S.battery)]]; return r.map(([n, v], i) => `<div style="display:flex;align-items:center;gap:8px;font-size:12px"><span style="width:52px;opacity:.8">${n}</span><div class="bar" style="flex:1;height:6px"><i style="width:${v}%;${i === 2 ? 'background:var(--ok)' : ''}"></i></div><span class="num" style="width:30px;text-align:end">${v}%</span></div>`).join(''); }
 function badge(id) { if (id === 'telegram') return S.tg.filter((c) => c.unread !== 0).length ? 1 : 0; if (id === 'messages') return 1; if (id === 'phone') return S.calls.filter((c) => c.k === 'miss').length; return 0; }
