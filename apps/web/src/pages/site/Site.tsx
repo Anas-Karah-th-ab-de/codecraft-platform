@@ -61,7 +61,7 @@ export function SiteLayout() {
           <Link to="/" className="logo" aria-label="KM Code Craft"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <nav id="hauptmenue" className={`nav ${menu ? "open" : ""}`} aria-label={t("nav.products")}>
             <NavLink to="/produkte">{t("nav.products")}</NavLink>
-            <Link to="/#handy">{H.nav.phone}</Link>
+            <NavLink to="/km-one">{H.nav.phone}</NavLink>
             <Link to="/#leistungen">{H.nav.services}</Link>
             <NavLink to="/kasse">{H.nav.till}</NavLink>
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
@@ -91,7 +91,7 @@ export function SiteLayout() {
           <div>
             <b>{H.foot.offer}</b>
             <Link to="/produkte">{t("products.all")}</Link>
-            <Link to="/#handy">{H.nav.phone}</Link>
+            <NavLink to="/km-one">{H.nav.phone}</NavLink>
             <NavLink to="/kasse">{H.nav.till}</NavLink>
             <NavLink to="/ki-server">{H.nav.ai}</NavLink>
             <Link to="/karten">{TEASER[locale].karten[0]}</Link>

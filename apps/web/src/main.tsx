@@ -97,6 +97,7 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="e-health" element={<ProductPage k="radiologie" />} />
                 <Route path="radiologie" element={<ProductPage k="radiologie" />} />
                 <Route path="ultar-os" element={<ProductPage k="ultar-os" />} />
+                <Route path="km-one" element={<ProductPage k="km-one" />} />
                 <Route path="karriere" element={<Careers />} />
                 <Route path="karriere/:slug" element={<JobDetail />} />
                 <Route path="kontakt" element={<Contact />} />

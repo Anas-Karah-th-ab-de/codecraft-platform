@@ -4,8 +4,9 @@
 import type { Locale } from "../../i18n";
 import { RADIOLOGIE, RADIOLOGIE_TEASER } from "./radiologieText";
 import { ULTAR, ULTAR_TEASER } from "./ultarText";
+import { KMONE, KMONE_TEASER } from "./kmOneText";
 
-export type ProductKey = "kasse" | "ki-server" | "karten" | "radiologie" | "ultar-os";
+export type ProductKey = "km-one" | "ultar-os" | "kasse" | "ki-server" | "karten" | "radiologie";
 
 export type Block =
   | { kind: "features"; id?: string; h: string; lead?: string; items: [string, string][] }
@@ -14,7 +15,10 @@ export type Block =
   | { kind: "catalog"; id?: string; h: string; lead: string; slug: string; month: string; custom: string }
   | { kind: "table"; id?: string; h: string; lead?: string; head: [string, string]; rows: [string, string][] }
   | { kind: "steps"; id?: string; h: string; lead?: string; items: string[] }
-  | { kind: "gallery"; id?: string; h: string; lead?: string; items: [string, string][] };
+  | { kind: "gallery"; id?: string; h: string; lead?: string; items: [string, string][] }
+  | { kind: "faq"; id?: string; h: string; lead?: string; items: [string, string][] }
+  | { kind: "anatomy"; id?: string; h: string; lead?: string; img: string; alt: string; items: [string, string][] }
+  | { kind: "matrix"; id?: string; h: string; lead?: string; items: [string, string, string][] };
 
 export type ProductPage = {
   title: string;
@@ -42,6 +46,7 @@ export const TEASER: Record<Locale, Record<ProductKey, [string, string]>> = {
     karten: ["Maps Syria", "Karten und Navigation für Syrien, betrieben in Syrien."],
     radiologie: RADIOLOGIE_TEASER.de,
     "ultar-os": ULTAR_TEASER.de,
+    "km-one": KMONE_TEASER.de,
   },
   en: {
     kasse: ["POS Code Craft v3", "POS, stock and customer app – works without internet."],
@@ -49,6 +54,7 @@ export const TEASER: Record<Locale, Record<ProductKey, [string, string]>> = {
     karten: ["Maps Syria", "Maps and navigation for Syria, run in Syria."],
     radiologie: RADIOLOGIE_TEASER.en,
     "ultar-os": ULTAR_TEASER.en,
+    "km-one": KMONE_TEASER.en,
   },
   ar: {
     kasse: ["POS Code Craft v3", "كاشير ومستودع وتطبيق للزبائن – يعمل بدون إنترنت."],
@@ -56,6 +62,7 @@ export const TEASER: Record<Locale, Record<ProductKey, [string, string]>> = {
     karten: ["خرائط سوريا", "خرائط وملاحة لسوريا، تُدار من داخل سوريا."],
     radiologie: RADIOLOGIE_TEASER.ar,
     "ultar-os": ULTAR_TEASER.ar,
+    "km-one": KMONE_TEASER.ar,
   },
 };
 
@@ -539,6 +546,7 @@ export const PRODUCTS: Record<ProductKey, Record<Locale, ProductPage>> = {
   karten: { de: mapsDe, en: mapsEn, ar: mapsAr },
   radiologie: RADIOLOGIE,
   "ultar-os": ULTAR,
+  "km-one": KMONE,
 };
 
-export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/e-health", "ultar-os": "/ultar-os" };
+export const PRODUCT_PATH: Record<ProductKey, string> = { kasse: "/kasse", "ki-server": "/ki-server", karten: "/karten", radiologie: "/e-health", "ultar-os": "/ultar-os", "km-one": "/km-one" };

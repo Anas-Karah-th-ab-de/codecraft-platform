@@ -104,7 +104,7 @@ function Phone() {
             <p className="hx-intro">{T.text}</p>
             <div className="hx-actions">
               <a className="hx-btn" href={DEMO_URL(locale)} target="_blank" rel="noopener">{T.demo}</a>
-              <Link className="hx-link" to="/kontakt">{T.pilot}</Link>
+              <Link className="hx-link" to="/km-one">{T.info}</Link>
             </div>
           </div>
           <picture className="hx-phone-design">

@@ -1,4 +1,4 @@
-// Produktseiten: /kasse, /ki-server, /karten, /e-health, /ultar-os – Inhalte in productText.ts (DE/EN/AR)
+// Produktseiten: /km-one, /ultar-os, /kasse, /ki-server, /karten, /e-health – Inhalte in productText.ts (DE/EN/AR)
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "../../api";
@@ -113,6 +113,26 @@ function BlockView({ b, alt }: { b: Block; alt: boolean }) {
             <figure key={src}><a href={src} target="_blank" rel="noopener noreferrer"><img src={src} alt={cap} loading="lazy" width={1280} height={800} /></a><figcaption>{cap}</figcaption></figure>
           ))}</div>
         )}
+        {b.kind === "faq" && (
+          <div className="pp-faq">{b.items.map(([q, a]) => (
+            <details key={q}><summary>{q}</summary><p>{a}</p></details>
+          ))}</div>
+        )}
+        {b.kind === "anatomy" && (
+          <div className="pp-anat">
+            <img src={b.img} alt={b.alt} loading="lazy" width={1000} height={1250} />
+            <ol>{b.items.map(([t, d], i) => <li key={t}><span dir="ltr">{i + 1}</span><div><b>{t}</b><p>{d}</p></div></li>)}</ol>
+          </div>
+        )}
+        {b.kind === "matrix" && (
+          <div className="pp-matrix">{b.items.map(([st, t, d]) => (
+            <div key={st} className={`mx-${st}`}>
+              <div className="dots" aria-hidden="true">{dotPattern(st).map((on, i) => <i key={i} className={on ? "on" : ""} />)}</div>
+              <b>{t}</b>
+              <p>{d}</p>
+            </div>
+          ))}</div>
+        )}
         {b.kind === "steps" && (
           <ol className="steps pp-steps">{b.items.map((s, i) => <li key={s}><span dir="ltr">{i + 1}</span>{s}</li>)}</ol>
         )}
@@ -137,4 +157,17 @@ function Catalog({ slug, month, custom, locale }: { slug: string; month: string;
       ))}
     </div>
   );
+}
+
+/** 15 × 7 Punkte der Rückseiten-Anzeige des KM One (wie im Design-Entwurf) */
+function dotPattern(name: string): boolean[] {
+  const g: number[][] = Array.from({ length: 7 }, () => Array(15).fill(0));
+  const put = (rows: string[], x0: number, y0: number) => rows.forEach((row, y) => [...row].forEach((ch, x) => { if (ch === "#" && g[y0 + y] && x0 + x < 15) g[y0 + y][x0 + x] = 1; }));
+  const S = ["###", "#..", "###", "..#", "###"], O = ["###", "#.#", "#.#", "#.#", "###"];
+  if (name === "sos") { put(S, 2, 1); put(O, 6, 1); put(S, 10, 1); }
+  else if (name === "msg") put(["###########", "##.......##", "#.#.....#.#", "#..#...#..#", "#...#.#...#", "#....#....#", "###########"], 2, 0);
+  else if (name === "sat") { put(S, 2, 1); put([".#.", "#.#", "###", "#.#", "#.#"], 6, 1); put(["###", ".#.", ".#.", ".#.", ".#."], 10, 1); }
+  else if (name === "charge") { put(["############.", "#..........##", "#..........##", "#..........##", "############."], 1, 1); for (let y = 2; y <= 4; y++) for (let x = 3; x <= 9; x++) g[y][x] = 1; }
+  else [2, 3, 4, 5, 7].forEach((h, i) => { for (let y = 7 - h; y < 7; y++) { g[y][1 + i * 3] = 1; g[y][2 + i * 3] = 1; } });
+  return g.flat().map((v) => v === 1);
 }
