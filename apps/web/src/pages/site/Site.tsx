@@ -493,6 +493,7 @@ export function Contact() {
   const pages = [
     { key: "radiologie", name: TEASER[locale].radiologie[0] },
     { key: "ultar-os", name: TEASER[locale]["ultar-os"][0] },
+    { key: "km-one", name: TEASER[locale]["km-one"][0] },
   ];
   const extra = pages.filter(
     (x) => !data?.products.some((p) => p.name === x.name),
