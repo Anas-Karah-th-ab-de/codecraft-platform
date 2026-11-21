@@ -26,6 +26,7 @@ const de: ProductPage = {
     ["Schutz", "IP68, Gummi-Eckpuffer, verschraubt"],
     ["Funk", "5G, LTE-450, LoRa, Wi-Fi HaLow, Satelliten-SOS (geplant)"],
     ["Updates", "mindestens 5 Jahre, eigener Update-Server"],
+    ["Browser", "Ultar Web – eigener Browser mit Werbe- und Trackingschutz"],
     ["Preis", "ca. 350 USD je Gerät, Service-Abo ca. 48 USD pro Jahr (Richtwerte)"],
     ["Für", "Firmen, Behörden und NGOs – zuerst in Syrien"],
   ],
@@ -70,7 +71,14 @@ const de: ProductPage = {
       ],
     },
     {
-      kind: "features", id: "tasten", h: "Tasten und Anschlüsse", lead: "Alles mit Handschuh bedienbar. Keine Taste liegt dort, wo man sie aus Versehen drückt.", items: [
+      kind: "gallery", id: "kanten", h: "Seiten, Tasten und Anschlüsse", items: [
+        [`${IMG}/km-one-keys.jpg`, "Seite mit Lautstärke, Ein/Aus mit Fingerabdruck und goldener KM-Taste"],
+        [`${IMG}/km-one-bottom.jpg`, "Unten: wasserdichtes USB-C, Lautsprecher, Mikrofon und Ladekontakte für die Halterung"],
+        [`${IMG}/km-one-top.jpg`, "Oben: ausziehbare Stabantenne und Antennenbuchse mit Gummikappe"],
+      ],
+    },
+    {
+      kind: "features", id: "tasten", h: "Was Tasten und Anschlüsse können", lead: "Alles mit Handschuh bedienbar. Keine Taste liegt dort, wo man sie aus Versehen drückt.", items: [
         ["SOS-Taste", "Orange, geriffelt, versenkt hinter einem Steg. 3 Sekunden halten: Notruf über Netz, LoRa oder Satellit."],
         ["KM-Taste", "Frei belegbar: KM-Helfer, Funkgerät (Push-to-Talk) oder Taschenlampe."],
         ["Ein/Aus mit Fingerabdruck", "Entsperren ohne Kamera, auch bei Sonne und Staub. Daneben die Lautstärke-Wippe."],
@@ -93,6 +101,7 @@ const de: ProductPage = {
         ["Ultar Plus", "Zusätzlich eine abgeschottete Android-Laufzeit, die nur auf Abruf startet. Originale Android-Apps laufen darin."],
         ["Keine geklonten Apps", "Wir bauen keine fremden Apps nach. Wir nutzen offizielle Schnittstellen, Web-Apps und eigene Apps."],
         ["Eigene Infrastruktur", "Store, Update-Server und VPN betreiben wir selbst – auf Wunsch auch beim Kunden."],
+        ["Ultar Web – unser eigener Browser", "Oberfläche, Tabs und Sicherheit in Rust, darunter die bewährte WebKit-Engine. Werbe- und Trackingschutz mit rund 117.000 Regeln ist eingebaut, jede Web-App hat ihr eigenes, getrenntes Profil, private Tabs hinterlassen keine Spuren."],
       ],
     },
     {
@@ -130,7 +139,8 @@ const de: ProductPage = {
       kind: "faq", id: "fragen", h: "Häufige Fragen", items: [
         ["Kann ich das KM One schon kaufen?", "Noch nicht. Das Gerät ist in Entwicklung. Wir suchen Pilotkunden – Firmen, Behörden und NGOs –, mit denen wir die erste Serie fertigen. Die Bilder auf dieser Seite sind Visualisierungen des geplanten Designs."],
         ["Was kostet das KM One?", "Geplant sind rund 350 USD pro Gerät und ein Service-Abo von rund 48 USD pro Jahr für Updates, Store, VPN und Wartung. Bei größeren Mengen erstellen wir ein eigenes Angebot."],
-        ["Laufen WhatsApp, Telegram und andere Apps?", "In Ultar Plus ja: Originale Android-Apps laufen in einer abgeschotteten Laufzeit, die nur startet, wenn Sie sie brauchen. In Ultar Pur nutzen Sie Web-Apps, offizielle Schnittstellen und unsere eigenen Apps."],
+        ["Laufen WhatsApp, Telegram und andere Apps?", "In Ultar Plus ja: Originale Android-Apps laufen in einer abgeschotteten Laufzeit, die nur startet, wenn Sie sie brauchen. In Ultar Pur nutzen Sie Web-Apps in unserem Browser Ultar Web, offizielle Schnittstellen und unsere eigenen Apps."],
+        ["Hat das KM One einen eigenen Browser?", "Ja: Ultar Web. Oberfläche und Sicherheit sind in Rust geschrieben, darunter arbeitet die WebKit-Engine. Werbe- und Trackingschutz ist eingebaut, Drittanbieter-Cookies sind gesperrt, und Kamera, Mikrofon oder Standort gibt es für Websites nur nach Ihrer Zustimmung. Jede Web-App läuft in einem eigenen, getrennten Profil."],
         ["Warum nicht einfach Android?", "Android braucht über 1 GB Arbeitsspeicher und viele Dienste im Hintergrund, Updates hängen vom Hersteller ab. Ultar OS braucht rund 65 MB, wir kontrollieren jede Zeile und liefern die Updates selbst."],
         ["Wie funktioniert SOS ohne Mobilfunk?", "Die SOS-Taste 3 Sekunden halten. Das Handy nimmt dann den besten verfügbaren Weg: Mobilfunk, LoRa über Gateways oder andere Geräte, oder Satellit. Die Punktanzeige auf der Rückseite zeigt, dass der Notruf läuft."],
         ["Bringt die Stabantenne wirklich mehr Empfang?", "Nach unseren Berechnungen bringen Low-Band-Antenne, Stabantenne und höhere Sendeleistung zusammen +10 bis 15 dB, das ist etwa 3- bis 5-fache Reichweite. Das prüfen wir in Feldtests, bevor wir es zusagen."],
@@ -157,6 +167,7 @@ const en: ProductPage = {
     ["Protection", "IP68, rubber corner bumpers, screwed together"],
     ["Radio", "5G, LTE-450, LoRa, Wi-Fi HaLow, satellite SOS (planned)"],
     ["Updates", "at least 5 years, our own update server"],
+    ["Browser", "Ultar Web – our own browser with ad and tracking protection"],
     ["Price", "about USD 350 per device, service plan about USD 48 per year (guide values)"],
     ["For", "Companies, authorities and NGOs – starting in Syria"],
   ],
@@ -201,7 +212,14 @@ const en: ProductPage = {
       ],
     },
     {
-      kind: "features", id: "tasten", h: "Keys and ports", lead: "Everything works with gloves. No key sits where you'd press it by accident.", items: [
+      kind: "gallery", id: "kanten", h: "Sides, keys and ports", items: [
+        [`${IMG}/km-one-keys.jpg`, "Side with volume, power with fingerprint and gold KM key"],
+        [`${IMG}/km-one-bottom.jpg`, "Bottom: waterproof USB-C, speaker, microphone and mount contacts"],
+        [`${IMG}/km-one-top.jpg`, "Top: pull-out antenna and antenna socket with rubber cap"],
+      ],
+    },
+    {
+      kind: "features", id: "tasten", h: "What the keys and ports do", lead: "Everything works with gloves. No key sits where you'd press it by accident.", items: [
         ["SOS key", "Orange, ribbed, recessed behind a ridge. Hold for 3 seconds: emergency call over cellular, LoRa or satellite."],
         ["KM key", "Programmable: KM helper, push-to-talk radio or torch."],
         ["Power with fingerprint", "Unlock without the camera, even in sun and dust. Volume rocker next to it."],
@@ -224,6 +242,7 @@ const en: ProductPage = {
         ["Ultar Plus", "Adds a sandboxed Android runtime that only starts on demand. Original Android apps run inside it."],
         ["No cloned apps", "We don't copy other companies' apps. We use official interfaces, web apps and our own apps."],
         ["Own infrastructure", "We run the store, update server and VPN ourselves – on your premises if you prefer."],
+        ["Ultar Web – our own browser", "Interface, tabs and security in Rust, with the proven WebKit engine underneath. Ad and tracking protection with about 117,000 rules is built in, every web app gets its own separate profile, private tabs leave no trace."],
       ],
     },
     {
@@ -261,7 +280,8 @@ const en: ProductPage = {
       kind: "faq", id: "fragen", h: "Frequently asked questions", items: [
         ["Can I buy the KM One yet?", "Not yet. The device is in development. We are looking for pilot customers – companies, authorities and NGOs – to build the first series with. The images on this page are renderings of the planned design."],
         ["What does the KM One cost?", "We plan about USD 350 per device and a service plan of about USD 48 per year for updates, store, VPN and maintenance. For larger quantities we make an individual offer."],
-        ["Do WhatsApp, Telegram and other apps work?", "In Ultar Plus, yes: original Android apps run in a sandboxed runtime that only starts when you need it. In Ultar Pure you use web apps, official interfaces and our own apps."],
+        ["Do WhatsApp, Telegram and other apps work?", "In Ultar Plus, yes: original Android apps run in a sandboxed runtime that only starts when you need it. In Ultar Pure you use web apps in our browser Ultar Web, official interfaces and our own apps."],
+        ["Does the KM One have its own browser?", "Yes: Ultar Web. Interface and security are written in Rust, with the WebKit engine underneath. Ad and tracking protection is built in, third-party cookies are blocked, and websites only get camera, microphone or location after you agree. Every web app runs in its own separate profile."],
         ["Why not just Android?", "Android needs over 1 GB of RAM and many background services, and updates depend on the manufacturer. Ultar OS needs about 65 MB, we control every line and deliver updates ourselves."],
         ["How does SOS work without cellular?", "Hold the SOS key for 3 seconds. The phone takes the best path available: cellular, LoRa via gateways or other devices, or satellite. The dot display on the back shows the call is running."],
         ["Does the pull-out antenna really improve reception?", "By our calculations the low-band antenna, pull-out antenna and higher power together add +10 to 15 dB, roughly 3 to 5 times the range. We will confirm this in field tests before we promise it."],
@@ -288,6 +308,7 @@ const ar: ProductPage = {
     ["الحماية", "IP68، زوايا مطاطية، مثبّت بالبراغي"],
     ["الاتصال", "5G، LTE-450، LoRa، Wi-Fi HaLow، استغاثة عبر الأقمار الصناعية (مخطط)"],
     ["التحديثات", "5 سنوات على الأقل، خادم تحديثات خاص بنا"],
+    ["المتصفح", "Ultar Web – متصفحنا الخاص مع حماية من الإعلانات والتتبع"],
     ["السعر", "نحو 350 دولاراً للجهاز، واشتراك خدمة نحو 48 دولاراً سنوياً (قيم تقديرية)"],
     ["لمن", "الشركات والجهات الحكومية والمنظمات – في سوريا أولاً"],
   ],
@@ -332,7 +353,14 @@ const ar: ProductPage = {
       ],
     },
     {
-      kind: "features", id: "tasten", h: "الأزرار والمنافذ", lead: "كل شيء يعمل مع القفازات. لا يوجد زر في مكان تضغطه فيه خطأً.", items: [
+      kind: "gallery", id: "kanten", h: "الجوانب والأزرار والمنافذ", items: [
+        [`${IMG}/km-one-keys.jpg`, "الجانب مع زر الصوت وزر التشغيل ببصمة الإصبع وزر KM الذهبي"],
+        [`${IMG}/km-one-bottom.jpg`, "الأسفل: USB-C مقاوم للماء، مكبّر صوت، ميكروفون ونقاط تلامس للحامل"],
+        [`${IMG}/km-one-top.jpg`, "الأعلى: هوائي قابل للسحب ومنفذ هوائي بغطاء مطاطي"],
+      ],
+    },
+    {
+      kind: "features", id: "tasten", h: "ماذا تفعل الأزرار والمنافذ", lead: "كل شيء يعمل مع القفازات. لا يوجد زر في مكان تضغطه فيه خطأً.", items: [
         ["زر الاستغاثة", "برتقالي، مضلّع، غائر خلف حافة. اضغطه 3 ثوانٍ: نداء طوارئ عبر الشبكة أو LoRa أو القمر الصناعي."],
         ["زر KM", "قابل للتخصيص: مساعد KM، جهاز لاسلكي (اضغط لتتحدث) أو مصباح."],
         ["زر التشغيل ببصمة الإصبع", "فتح القفل دون كاميرا، حتى في الشمس والغبار. وبجانبه زر الصوت."],
@@ -355,6 +383,7 @@ const ar: ProductPage = {
         ["Ultar Plus", "يضيف بيئة أندرويد معزولة تعمل عند الطلب فقط. تعمل فيها تطبيقات أندرويد الأصلية."],
         ["لا نسخ لتطبيقات الآخرين", "لا نقلّد تطبيقات الشركات الأخرى، بل نستخدم الواجهات الرسمية وتطبيقات الويب وتطبيقاتنا الخاصة."],
         ["بنية تحتية خاصة", "نشغّل المتجر وخادم التحديثات وVPN بأنفسنا – ويمكن تشغيلها لديكم إن رغبتم."],
+        ["Ultar Web – متصفحنا الخاص", "الواجهة والتبويبات والأمان بلغة Rust، وتحتها محرك WebKit المجرَّب. حماية من الإعلانات والتتبع بنحو 117 ألف قاعدة مدمجة، ولكل تطبيق ويب ملف منفصل خاص به، والتبويبات الخاصة لا تترك أثراً."],
       ],
     },
     {
@@ -392,7 +421,8 @@ const ar: ProductPage = {
       kind: "faq", id: "fragen", h: "أسئلة شائعة", items: [
         ["هل يمكنني شراء KM One الآن؟", "ليس بعد. الجهاز قيد التطوير. نبحث عن عملاء تجريبيين – شركات وجهات حكومية ومنظمات – لنصنع معهم الدفعة الأولى. الصور في هذه الصفحة توضيحية للتصميم المخطط."],
         ["كم سعر KM One؟", "نخطط لنحو 350 دولاراً للجهاز واشتراك خدمة بنحو 48 دولاراً سنوياً يشمل التحديثات والمتجر وVPN والصيانة. للكميات الكبيرة نقدّم عرضاً خاصاً."],
-        ["هل يعمل واتساب وتيليجرام وغيرها؟", "في Ultar Plus نعم: تعمل تطبيقات أندرويد الأصلية في بيئة معزولة لا تعمل إلا عند الحاجة. وفي Ultar Pur تستخدم تطبيقات الويب والواجهات الرسمية وتطبيقاتنا."],
+        ["هل يعمل واتساب وتيليجرام وغيرها؟", "في Ultar Plus نعم: تعمل تطبيقات أندرويد الأصلية في بيئة معزولة لا تعمل إلا عند الحاجة. وفي Ultar Pur تستخدم تطبيقات الويب في متصفحنا Ultar Web والواجهات الرسمية وتطبيقاتنا."],
+        ["هل لدى KM One متصفح خاص؟", "نعم: Ultar Web. الواجهة والأمان مكتوبان بلغة Rust، ويعمل تحتهما محرك WebKit. الحماية من الإعلانات والتتبع مدمجة، وملفات تعريف الارتباط من الأطراف الثالثة محظورة، ولا تحصل المواقع على الكاميرا أو الميكروفون أو الموقع إلا بموافقتك. ويعمل كل تطبيق ويب في ملف منفصل خاص به."],
         ["لماذا لا نستخدم أندرويد ببساطة؟", "يحتاج أندرويد أكثر من 1 غيغابايت من الذاكرة وخدمات كثيرة في الخلفية، والتحديثات بيد المصنّع. يحتاج Ultar OS نحو 65 ميغابايت، ونتحكم بكل سطر ونوفّر التحديثات بأنفسنا."],
         ["كيف تعمل الاستغاثة دون شبكة خلوية؟", "اضغط زر الاستغاثة 3 ثوانٍ. يختار الهاتف أفضل طريق متاح: الشبكة الخلوية، أو LoRa عبر البوابات أو أجهزة أخرى، أو الأقمار الصناعية. وتُظهر شاشة النقاط في الخلف أن النداء جارٍ."],
         ["هل يحسّن الهوائي القابل للسحب الاستقبال فعلاً؟", "بحسب حساباتنا يضيف هوائي الترددات المنخفضة والهوائي القابل للسحب والقدرة الأعلى معاً 10 إلى 15 ديسيبل، أي مدى أكبر بثلاث إلى خمس مرات تقريباً. سنتحقق من ذلك في اختبارات ميدانية قبل أن نعد به."],

@@ -36,7 +36,7 @@ const de = {
     pillars: [
       ["Robust", "IP68, Gummi-Eckpuffer, Schrauben statt Kleber. Akku tauschbar, 5+ Jahre Updates."],
       ["Netz überall", "Ausziehbare Stabantenne, LoRa für SOS und Nachrichten, Satelliten-SOS, LTE-450."],
-      ["Privat", "Ultar OS: nur signierte Apps, Verschlüsselung, eigene Secure-Boot-Schlüssel und eigener VPN."],
+      ["Privat", "Ultar OS: nur signierte Apps, Verschlüsselung, eigener VPN und unser eigener Browser Ultar Web mit Werbe- und Trackingschutz."],
       ["Lokale KI auf Arabisch", "Der KM-Helfer läuft offline auf dem Gerät. Ihre Daten bleiben bei Ihnen."],
     ],
     shots: [
@@ -190,7 +190,7 @@ const en: T = {
     pillars: [
       ["Rugged", "IP68, rubber corner bumpers, screws instead of glue. Replaceable battery, 5+ years of updates."],
       ["Coverage everywhere", "Pull-out antenna, LoRa for SOS and messages, satellite SOS, LTE-450."],
-      ["Private", "Ultar OS: signed apps only, encryption, our own secure-boot keys and VPN."],
+      ["Private", "Ultar OS: signed apps only, encryption, our own VPN and our own browser Ultar Web with ad and tracking protection."],
       ["On-device AI in Arabic", "The KM helper runs offline on the phone. Your data stays with you."],
     ],
     shots: [
@@ -344,7 +344,7 @@ const ar: T = {
     pillars: [
       ["متين", "IP68، زوايا مطاطية، براغٍ بدل اللاصق. بطارية قابلة للتبديل وتحديثات لأكثر من 5 سنوات."],
       ["شبكة في كل مكان", "هوائي قابل للسحب، LoRa للاستغاثة والرسائل، استغاثة عبر الأقمار الصناعية، LTE-450."],
-      ["خصوصية", "Ultar OS: تطبيقات موقّعة فقط، تشفير، مفاتيح إقلاع آمن خاصة بنا وشبكة VPN خاصة."],
+      ["خصوصية", "Ultar OS: تطبيقات موقّعة فقط، تشفير، VPN خاص ومتصفحنا Ultar Web مع حماية من الإعلانات والتتبع."],
       ["ذكاء اصطناعي محلي بالعربية", "مساعد KM يعمل دون إنترنت على الجهاز. بياناتك تبقى لديك."],
     ],
     shots: [
