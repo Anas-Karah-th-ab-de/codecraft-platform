@@ -1534,3 +1534,181 @@ body:has(.callview) .toast { bottom: auto; top: 72px; }
   .hx-phone-os .hx-uos-shot { max-width: 380px; margin-inline: auto; }
 }
 @media (max-width: 520px) { .hx-phone-pillars { grid-template-columns: 1fr; } }
+
+/* ══ Webseite 2026-11: Einschalten der Platine, eigene Produkte, Handy-Ansicht ══════════ */
+
+/* Kopfzeile: Lesefortschritt als goldene Leiterbahn, nach dem Scrollen schmaler */
+.site-header { --hh: 68px; transition: box-shadow var(--t-slow); }
+.site-header .container { height: var(--hh); transition: height var(--t-slow); }
+.site-header.scrolled { --hh: 58px; box-shadow: 0 10px 30px -22px rgba(22,25,29,.45); }
+.site-header::after { content: ""; position: absolute; inset-inline: 0; bottom: -1px; height: 2px; background: var(--gold);
+  transform: scaleX(var(--sp, 0)); transform-origin: left center; pointer-events: none; }
+[dir="rtl"] .site-header::after { transform-origin: right center; }
+.site-header.scrolled .logo img { height: 34px; }
+.logo img { transition: height var(--t-slow); }
+.nav a.active::after { bottom: calc((var(--hh) - 38px) / -2); }
+.nav a.active::before { bottom: calc((var(--hh) - 38px) / -2 - 3px); }
+.nav-wa { display: none; }
+
+/* Hero: Überschrift und Platine gehen gemeinsam an */
+.hx-hero h1 span { animation: hx-rise .8s cubic-bezier(.2,.7,.15,1) both; }
+.hx-hero h1 span + span { animation-delay: .12s; }
+.hx-hero-sub, .hx-hero .hx-actions, .hx-made { animation: hx-fade .6s ease-out both; animation-delay: .35s; }
+@keyframes hx-rise { from { opacity: 0; transform: translateY(.35em); clip-path: inset(0 0 100% 0); } to { opacity: 1; transform: none; clip-path: inset(0 0 -10% 0); } }
+@keyframes hx-fade { from { opacity: 0; } to { opacity: 1; } }
+.b-spark { fill: var(--red); opacity: 0; offset-distance: 0%; offset-rotate: 0deg; filter: drop-shadow(0 0 5px rgba(226,35,26,.9)); }
+.board.draw .b-spark { animation: b-spark 1s cubic-bezier(.55,0,.3,1) forwards; animation-delay: calc(var(--d) + 1.15s); }
+.board .b-spark.lit { animation: b-spark 1.1s cubic-bezier(.55,0,.3,1) infinite; animation-delay: 0s; }
+@keyframes b-spark { 0% { opacity: 0; offset-distance: 0%; } 12% { opacity: 1; } 82% { opacity: 1; offset-distance: 100%; } 100% { opacity: 0; offset-distance: 100%; } }
+.b-chip-glow { fill: none; stroke: var(--red); stroke-width: 2; opacity: 0; }
+.board.draw .b-chip-glow { animation: b-chip 1.6s ease-out forwards; animation-delay: 2.35s; }
+@keyframes b-chip { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: .3; } }
+.board.draw .b-km { animation: b-km .45s steps(3, end) both; animation-delay: 2.2s; }
+@keyframes b-km { 0% { fill: #3a2422; } 40% { fill: var(--red); } 60% { fill: #5a2a27; } 100% { fill: var(--red); } }
+
+/* Eigene Produkte: Bento auf dem Desktop, Wischleiste auf dem Handy */
+.hx-show { background: var(--paper); padding: var(--s-9) 0; border-bottom: 1px solid var(--line); }
+.sc-head { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: var(--s-7); align-items: end; margin-bottom: var(--s-7); }
+.sc-head h2 { margin: 0; }
+.sc-head .hx-intro { margin: 0; }
+.sc-grid { list-style: none; padding: 0; margin: 0 0 var(--s-6); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-3); }
+.sc-tile.big { grid-column: span 2; }
+.sc-tile > a { position: relative; height: 100%; display: grid; grid-template-rows: auto auto 1fr auto; gap: 6px; padding: var(--s-5); border-radius: 14px;
+  background: var(--white); border: 1px solid var(--line); color: var(--text); overflow: hidden;
+  transition: border-color var(--t), transform var(--t-slow), box-shadow var(--t-slow); }
+.sc-tile > a:hover, .sc-tile > a:focus-visible { text-decoration: none; border-color: var(--gold-line); transform: translateY(-3px); box-shadow: var(--sh-2); }
+.sc-state { justify-self: start; display: inline-flex; align-items: center; gap: 7px; font: 500 .78rem var(--f-text); color: var(--text-2);
+  padding: 3px 10px; border-radius: var(--r-pill); background: var(--paper-2); }
+.sc-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--gold); }
+.sc-tile b { font: 600 1.3rem/1.2 var(--f-display); letter-spacing: -.02em; margin-top: 6px; }
+[dir="rtl"] .sc-tile b { letter-spacing: 0; }
+.sc-line { color: var(--text-2); font-size: .95rem; line-height: 1.45; }
+.sc-art { display: block; margin: var(--s-4) calc(var(--s-5) * -1) calc(var(--s-5) * -1); height: 150px; background: var(--paper);
+  border-top: 1px solid var(--line); overflow: hidden; }
+.sc-art img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; transition: transform .5s cubic-bezier(.2,.7,.2,1); }
+.sc-tile > a:hover .sc-art img { transform: scale(1.03); }
+.sc-motif { display: block; width: 100%; height: 100%; fill: none; stroke: var(--line-2); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+  background-image: radial-gradient(var(--line) 1px, transparent 1.3px); background-size: 12px 12px; }
+.sc-motif .hi { stroke: var(--gold); }
+.sc-motif .led { fill: var(--gold); stroke: none; }
+.sc-tile > a:hover .sc-motif .led { fill: var(--red); }
+/* Große Kacheln: dunkel, Bild nimmt die untere Hälfte */
+.sc-tile.big > a { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
+.sc-tile.big b { color: #fff; font-size: clamp(1.5rem, 2.4vw, 2rem); }
+.sc-tile.big .sc-line { color: var(--on-ink-2); max-width: 32em; }
+.sc-tile.big .sc-state { background: rgba(255,255,255,.08); color: var(--on-ink); }
+.sc-tile.big .sc-state::before { background: var(--gold-hi); box-shadow: 0 0 0 3px rgba(217,181,108,.2); }
+.sc-tile.big .sc-art { height: 280px; background: #0b0c0f; border-top-color: var(--ink-line); }
+.k-km-one .sc-art img { object-position: center 30%; }
+.k-radiologie .sc-art img { object-position: top left; }
+
+/* Produkte & Preise */
+.price.ask, .pgrid .price.ask { font: 600 1rem/1.3 var(--f-text); letter-spacing: 0; color: var(--text); }
+.sc-grid, .hx-phone-shots { scroll-padding-inline: var(--pad); }
+.pimg.shot { background: var(--ink); }
+.pimg.shot img { object-position: top center; }
+.pimg.ph.k-service::before { top: auto; bottom: 30%; border-top: 0; border-bottom: 1.5px solid var(--gold-hi); height: 30%; }
+.pimg.ph.k-service::after { top: auto; bottom: calc(30% - 5px); }
+.pimg.ph.k-rental::before { border-style: dashed; }
+.pcard:focus-visible { outline: none; box-shadow: var(--ring); }
+
+/* Kontakt: Wege links, Formular rechts */
+.contact-page { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--s-8); align-items: start; }
+.contact-aside { position: sticky; top: 100px; }
+.channels { list-style: none; padding: 0; margin: var(--s-6) 0 0; border-top: 1px solid var(--line); }
+.channels li > a, .channels li > div { display: flex; flex-direction: column; gap: 2px; padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--text); }
+.channels li > a:hover { text-decoration: none; }
+.channels li > a:hover bdi { color: var(--gold-text); }
+.channels b { font-size: .82rem; font-weight: 500; color: var(--text-3); }
+.channels bdi, .channels span { font-weight: 600; font-size: 1.02rem; }
+.channels li > div span { font-weight: 400; color: var(--text-2); font-size: .95rem; }
+
+/* WhatsApp-Knopf auf dem Handy, erst nach dem Hero */
+.fab-wa { display: none; }
+
+@media (max-width: 980px) {
+  .sc-head { grid-template-columns: 1fr; gap: var(--s-4); }
+  .contact-page { grid-template-columns: 1fr; gap: var(--s-6); }
+  .contact-aside { position: static; }
+}
+@media (max-width: 900px) {
+  /* Menü als Vollfläche mit gestaffeltem Einblenden */
+  body.menu-open { overflow: hidden; }
+  .nav { display: flex; position: absolute; top: 100%; inset-inline: 0; height: calc(100dvh - var(--hh)); overflow-y: auto;
+    background: var(--ink); border: 0; box-shadow: none; padding: var(--s-4) var(--pad) var(--s-7);
+    visibility: hidden; opacity: 0; transform: translateY(-8px); transition: opacity .22s ease, transform .22s ease, visibility 0s .22s; }
+  .nav.open { visibility: visible; opacity: 1; transform: none; transition: opacity .22s ease, transform .22s ease; }
+  .nav a { color: var(--on-ink); border-bottom: 1px solid var(--ink-line); font: 600 1.35rem/1.25 var(--f-display); letter-spacing: -.01em; padding: 16px 2px; }
+  [dir="rtl"] .nav a { letter-spacing: 0; }
+  .nav a:hover { background: none; color: var(--gold-hi); }
+  .nav a.active { color: var(--gold-hi); }
+  .nav.open a { animation: nav-in .35s cubic-bezier(.2,.7,.2,1) both; }
+  .nav.open a:nth-child(2) { animation-delay: .03s; } .nav.open a:nth-child(3) { animation-delay: .06s; }
+  .nav.open a:nth-child(4) { animation-delay: .09s; } .nav.open a:nth-child(5) { animation-delay: .12s; }
+  .nav.open a:nth-child(6) { animation-delay: .15s; } .nav.open a:nth-child(7) { animation-delay: .18s; }
+  .nav.open a:nth-child(8) { animation-delay: .21s; } .nav.open a:nth-child(n+9) { animation-delay: .24s; }
+  @keyframes nav-in { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+  .nav .portal-link { background: var(--gold-hi); color: var(--ink); font: 600 1rem var(--f-text); min-height: 50px; margin-top: var(--s-5); }
+  .nav .portal-link i { background: var(--ink); box-shadow: none; }
+  .nav-wa { display: flex; justify-content: center; gap: 8px; margin-top: var(--s-2); min-height: 50px; align-items: center; border: 1px solid var(--ink-line) !important;
+    border-radius: var(--r-2); font: 600 1rem var(--f-text) !important; }
+  .burger { width: 44px; height: 44px; display: grid; place-content: center; }
+  .burger span { margin: 3px 0; }
+  .burger[aria-expanded="true"] span:nth-child(1) { transform: translateY(5px) rotate(45deg); }
+  .burger[aria-expanded="true"] span:nth-child(3) { transform: translateY(-5px) rotate(-45deg); }
+
+  .fab-wa { display: inline-flex; position: fixed; z-index: 25; bottom: max(16px, env(safe-area-inset-bottom)); inset-inline-end: 16px; align-items: center; gap: 8px;
+    min-height: 48px; padding: 0 18px 0 14px; border-radius: var(--r-pill); background: var(--gold-hi); color: var(--ink); font: 600 .95rem var(--f-text);
+    box-shadow: 0 12px 28px -10px rgba(0,0,0,.55); transform: translateY(140%); transition: transform .3s cubic-bezier(.2,.7,.2,1); }
+  .fab-wa svg { width: 20px; height: 20px; fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+  .site-footer { padding-bottom: 88px; }
+  .fab-wa:hover { text-decoration: none; }
+  body.past-hero .fab-wa { transform: none; }
+  body.menu-open .fab-wa { transform: translateY(140%); }
+
+  /* KM One: Bilder als Wischleiste statt drei volle Bildschirme untereinander */
+  .hx-phone-shots { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: min(72%, 320px); max-width: none; overflow-x: auto;
+    scroll-snap-type: x mandatory; margin-inline: calc(var(--pad) * -1); padding: 0 var(--pad) var(--s-2); scrollbar-width: none; }
+  .hx-phone-shots::-webkit-scrollbar { display: none; }
+  .hx-phone-shots figure { scroll-snap-align: start; }
+  .sc-tile.big .sc-art { height: 220px; }
+}
+@media (max-width: 640px) {
+  .hx-show, .hx-phone { padding: var(--s-8) 0; }
+  .hx-craft { padding: var(--s-7) 0; }
+  .hx-craft-grid img { display: none; }
+  .hx .hx-phone-pillars { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s-2); }
+  .hx-phone-pillars li { padding: var(--s-4); border-radius: 14px; }
+  .hx-phone-pillars b { font-size: 1rem; }
+  .hx-phone-pillars span { font-size: .85rem; }
+  /* Produkte: Wischleiste */
+  .sc-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 80%; overflow-x: auto; scroll-snap-type: x mandatory;
+    margin-inline: calc(var(--pad) * -1); padding: 4px var(--pad) var(--s-3); scrollbar-width: none; }
+  .sc-grid::-webkit-scrollbar { display: none; }
+  .sc-tile, .sc-tile.big { grid-column: auto; scroll-snap-align: start; }
+  .sc-tile.big .sc-art, .sc-art { height: 170px; }
+  .sc-tile b, .sc-tile.big b { font-size: 1.3rem; }
+  /* Kassen-Pakete nebeneinander wischen */
+  .pos-tiers { display: grid; grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 78%; overflow-x: auto; scroll-snap-type: x mandatory; }
+  .tier { scroll-snap-align: start; }
+  .hx-mission { margin-top: var(--s-7); }
+  /* Produktliste als kompakte Zeilen */
+  .pgrid { grid-template-columns: 1fr; gap: var(--s-2); }
+  .pgrid .pcard { display: grid; grid-template-columns: 104px minmax(0, 1fr); }
+  .pgrid .pimg { aspect-ratio: auto; height: 100%; min-height: 120px; }
+  .pgrid .pimg.ph { padding: 8px; }
+  .pgrid .ph-kind { font-size: .6rem; word-break: break-all; }
+  .pgrid .pcard-body { padding: var(--s-3) var(--s-4); gap: 3px; }
+  .pgrid .pcard-body h3 { font-size: 1rem; }
+  .pgrid .pcard-body .clamp { -webkit-line-clamp: 2; font-size: .88rem; }
+  .pgrid .price { font-size: 1.05rem; }
+  .filters .tabs { overflow-x: auto; max-width: 100%; }
+  /* Fußzeile kompakter */
+  .footer-grid { grid-template-columns: 1fr 1fr; gap: var(--s-5) var(--s-4); }
+  .footer-grid > div { gap: 8px; }
+  .footer-base { flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b-spark { display: none; }
+  .hx-hero h1 span { clip-path: none; }
+}

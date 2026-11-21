@@ -40,6 +40,7 @@ export function Board({ items, label }: { items: BoardItem[]; label: string }) {
         {pins(7, 177).map((y) => <rect key={`l${y}`} x="212" y={y} width="13" height="6" rx="1" className="b-pin" />)}
         {pins(7, 177).map((y) => <rect key={`r${y}`} x="375" y={y} width="13" height="6" rx="1" className="b-pin" />)}
         <rect x="225" y="165" width="150" height="150" rx="12" className="b-chip" />
+        <rect x="225" y="165" width="150" height="150" rx="12" className="b-chip-glow" />
         <circle cx="243" cy="183" r="4" className="b-pin1" />
         <text x="300" y="252" textAnchor="middle" className="b-km">KM</text>
         <text x="300" y="282" textAnchor="middle" className="b-sub">CODE CRAFT</text>
@@ -50,6 +51,8 @@ export function Board({ items, label }: { items: BoardItem[]; label: string }) {
             <path d={p.path} pathLength={1} className={`b-trace ${lit === i ? "lit" : ""}`} />
             <circle cx={p.x} cy={p.y} r="12" className={`b-pad ${lit === i ? "lit" : ""}`} />
             <circle cx={p.x} cy={p.y} r="4" className="b-pad-core" />
+            {/* Einschalten: ein Stromimpuls läuft einmal vom Chip zum Bereich */}
+            <circle r="5" className={`b-spark ${lit === i ? "lit" : ""}`} style={{ offsetPath: `path("${p.path}")` }} />
           </g>
         ))}
       </svg>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { Link, NavLink, Outlet, useLocation, useParams, useSearchParams } from "react-router-dom";
 import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
@@ -6,6 +6,7 @@ import { Field, LangSwitch, useSubmit } from "../../ui";
 import { TEASER } from "./productText";
 import { CONTACT, HOME } from "./homeText";
 import { BrokenTrace } from "./Board";
+import { CATALOG_IMG } from "./showcaseText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type Img = { id: string; card: string; full: string; width: number; height: number };
@@ -44,19 +45,50 @@ function ScrollToTop() {
   return null;
 }
 
+/** Kopfzeile: Lesefortschritt als Leiterbahn (--sp 0…1) und schmalere Leiste nach dem Scrollen */
+function useHeaderScroll(ref: RefObject<HTMLElement | null>, key: string) {
+  useEffect(() => {
+    let raf = 0;
+    const run = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      el.style.setProperty("--sp", String(max > 0 ? Math.min(1, window.scrollY / max) : 0));
+      el.classList.toggle("scrolled", window.scrollY > 24);
+      document.body.classList.toggle("past-hero", window.scrollY > window.innerHeight * 0.8);
+    };
+    const on = () => { if (!raf) raf = requestAnimationFrame(run); };
+    run();
+    window.addEventListener("scroll", on, { passive: true });
+    window.addEventListener("resize", on);
+    return () => { window.removeEventListener("scroll", on); window.removeEventListener("resize", on); cancelAnimationFrame(raf); };
+  }, [ref, key]);
+}
+
 export function SiteLayout() {
   const { t, locale } = useI18n();
   const H = HOME[locale];
   const [menu, setMenu] = useState(false);
   const { pathname, hash } = useLocation();
+  const head = useRef<HTMLElement>(null);
+  useHeaderScroll(head, pathname);
   useEffect(() => setMenu(false), [pathname, hash]);
+  // Offenes Menü auf dem Handy: Seite dahinter steht still, Escape schließt
+  useEffect(() => {
+    document.body.classList.toggle("menu-open", menu);
+    if (!menu) return;
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("keydown", esc); document.body.classList.remove("menu-open"); };
+  }, [menu]);
   useEffect(() => prefetch(catalogPath(locale)), [locale]); // Katalog früh laden → Produktseite sofort da
   const skip = locale === "ar" ? "انتقل إلى المحتوى" : locale === "en" ? "Skip to content" : "Zum Inhalt";
   return (
     <div className="site">
       <ScrollToTop />
       <a href="#inhalt" className="skip">{skip}</a>
-      <header className="site-header">
+      <header className="site-header" ref={head}>
         <div className="container">
           <Link to="/" className="logo" aria-label="KM Code Craft"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" /></Link>
           <nav id="hauptmenue" className={`nav ${menu ? "open" : ""}`} aria-label={t("nav.products")}>
@@ -69,6 +101,7 @@ export function SiteLayout() {
             <NavLink to="/karriere" onMouseEnter={() => prefetch(`/api/v1/public/jobs?locale=${locale}`)}>{t("nav.careers")}</NavLink>
             <NavLink to="/kontakt">{t("nav.contact")}</NavLink>
             <Link to="/portal" className="portal-link"><i aria-hidden="true" />{t("nav.portal")}</Link>
+            <a className="nav-wa" href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp <bdi dir="ltr">{CONTACT.whatsapp}</bdi></a>
           </nav>
           <div className="head-actions">
             <LangSwitch />
@@ -82,6 +115,12 @@ export function SiteLayout() {
       <main id="inhalt" className="fade" key={pathname}>
         <Outlet />
       </main>
+      {pathname !== "/kontakt" && (
+        <a className="fab-wa" href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${CONTACT.whatsapp}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z" /></svg>
+          <span>{locale === "ar" ? "راسلنا" : locale === "en" ? "Message us" : "Schreiben Sie uns"}</span>
+        </a>
+      )}
       <footer className="site-footer">
         <div className="container footer-grid">
           <div className="footer-brand">
@@ -149,9 +188,17 @@ export function NotFound() {
 function ProductImage({ p, img, size = "card", eager }: { p: Product; img?: Img; size?: "card" | "full"; eager?: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const i = img ?? p.images[0];
+  const shot = CATALOG_IMG[p.slug];
+  if (!i && shot) {
+    return (
+      <div className={`pimg shot ${loaded ? "loaded" : ""}`}>
+        <img src={shot} alt={p.name} loading={eager ? "eager" : "lazy"} decoding="async" onLoad={() => setLoaded(true)} />
+      </div>
+    );
+  }
   if (!i) {
     return (
-      <div className="pimg ph" aria-hidden>
+      <div className={`pimg ph k-${p.kind}`} aria-hidden>
         <span className="ph-kind">{p.sku}</span>
       </div>
     );
@@ -173,9 +220,9 @@ function ProductImage({ p, img, size = "card", eager }: { p: Product; img?: Img;
 
 function PriceTag({ p }: { p: Price }) {
   const { t, locale } = useI18n();
-  if (p.amount_cents == null) return <span className="price">{t("billing.on_request")}</span>;
+  if (p.amount_cents == null) return <span className="price ask">{t("billing.on_request")}</span>;
   return (
-    <span className="price">
+    <span className={`price ${p.amount_cents === 0 ? "ask" : ""}`}>
       {p.amount_cents === 0 ? (locale === "ar" ? "مجاناً" : locale === "en" ? "Free" : "Kostenlos") : money(p.amount_cents, locale, p.currency)}{" "}
       {p.amount_cents > 0 && <small>{t(`billing.${p.billing}` as Key)}</small>}
     </span>
@@ -247,7 +294,9 @@ export function Products() {
   };
   useTitle(t("products.title"));
   const kinds = useMemo(() => [...new Set(data?.products.map((p) => p.kind) ?? [])], [data]);
-  const list = (data?.products ?? []).filter(
+  // Eigene Software zuerst, dann Miete, dann Dienstleistungen
+  const order: Record<string, number> = { software: 0, rental: 1, service: 2 };
+  const list = [...(data?.products ?? [])].sort((a, b) => (order[a.kind] ?? 9) - (order[b.kind] ?? 9)).filter(
     (p) =>
       (!kind || p.kind === kind) &&
       (!dept || p.department === dept) &&
@@ -274,7 +323,7 @@ export function Products() {
       {error ? <div className="alert">{error}</div> : !data ? <SkeletonGrid /> : list.length === 0 ? (
         <div className="empty">🔍 {t("p.empty")}</div>
       ) : (
-        <div className="grid">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div>
+        <div className="grid pgrid">{list.map((p) => <ProductCard key={p.id} p={p} />)}</div>
       )}
     </section>
   );
@@ -465,10 +514,18 @@ export function Contact() {
     return api("/api/v1/public/contact", { body: { ...f, subject, product_id: x ? null : f.product_id || null, locale } });
   };
   return (
-    <section className="section container" style={{ maxWidth: 760 }}>
-      <h1>{t("contact.title")}</h1>
-      <p className="muted">{t("contact.sub")}</p>
-      <div className="card">
+    <section className="section container contact-page">
+      <div className="contact-aside">
+        <h1>{t("contact.title")}</h1>
+        <p className="muted">{t("contact.sub")}</p>
+        <ul className="channels">
+          <li><a href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer"><b>WhatsApp</b><bdi dir="ltr">{CONTACT.whatsapp}</bdi></a></li>
+          <li><a href={`mailto:${CONTACT.email}`}><b>E-Mail</b><bdi dir="ltr">{CONTACT.email}</bdi></a></li>
+          <li><div><b>{HOME[locale].contact.hours}</b><span>{HOME[locale].contact.hoursV}</span></div></li>
+          <li><div><b>{HOME[locale].contact.address}</b><span style={{ whiteSpace: "pre-line" }}>{CONTACT.address}</span></div></li>
+        </ul>
+      </div>
+      <div className="card contact-form">
         {s.done ? <div className="alert ok">✓ {t("form.sent")}</div> : (
           <form onSubmit={s.run(submit)}>
             <input type="text" value={f.website} onChange={(e) => setF({ ...f, website: e.target.value })} className="hp" tabIndex={-1} autoComplete="off" aria-hidden />

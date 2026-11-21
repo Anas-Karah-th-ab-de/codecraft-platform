@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n";
 import { CONTACT, HOME, STACK } from "./homeText";
 import { Board } from "./Board";
 import { DEMO_POSTER, DEMO_URL, ULTAR_DEMO } from "./ultarDemoText";
+import { SHOWCASE, showImg } from "./showcaseText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type ProductDetail = { slug: string; name: string; prices: Price[] };
@@ -25,6 +26,7 @@ export function Home() {
   return (
     <div className="hx">
       <Hero />
+      <Showcase />
       <Phone />
       <section className="hx-craft">
         <div className="hx-wrap hx-craft-grid">
@@ -84,6 +86,60 @@ function Hero() {
           <p className="hx-made">{T.made}</p>
         </div>
         <Board items={T.board} label={T.boardAria} />
+      </div>
+    </section>
+  );
+}
+
+// ── Eigene Produkte auf einen Blick ─────────────────────────────────────────
+
+/** Kleine Leiterbahn-Motive für Produkte ohne Foto */
+function Motif({ k }: { k: string }) {
+  if (k === "kasse") return (
+    <svg viewBox="0 0 160 120" aria-hidden="true" className="sc-motif">
+      <rect x="40" y="14" width="80" height="62" rx="6" /><path d="M52 30 H108 M52 44 H92 M52 58 H100" />
+      <path d="M60 76 V98 H100 V76" /><path d="M66 98 l6 6 l6 -6 l6 6 l6 -6 l6 6" className="hi" />
+    </svg>
+  );
+  if (k === "ki-server") return (
+    <svg viewBox="0 0 160 120" aria-hidden="true" className="sc-motif">
+      {[16, 44, 72].map((y) => (<g key={y}><rect x="36" y={y} width="88" height="22" rx="4" /><circle cx="50" cy={y + 11} r="3" className="led" /><path d={`M64 ${y + 11} H112`} /></g>))}
+    </svg>
+  );
+  return (
+    <svg viewBox="0 0 160 120" aria-hidden="true" className="sc-motif">
+      <path d="M20 96 C50 96 46 54 78 54 S112 24 140 24" className="hi" />
+      <circle cx="20" cy="96" r="6" /><circle cx="78" cy="54" r="5" /><circle cx="140" cy="24" r="7" className="led" />
+    </svg>
+  );
+}
+
+function Showcase() {
+  const { locale } = useI18n();
+  const T = SHOWCASE[locale];
+  return (
+    <section className="hx-show" id="produkte">
+      <div className="hx-wrap">
+        <div className="sc-head">
+          <h2>{T.h2}</h2>
+          <p className="hx-intro">{T.text}</p>
+        </div>
+        <ul className="sc-grid">
+          {T.items.map((s) => {
+            const img = showImg(s, locale);
+            return (
+              <li key={s.key} className={`sc-tile ${s.big ? "big" : ""} k-${s.key}`}>
+                <Link to={s.to}>
+                  <span className="sc-state">{s.state}</span>
+                  <b>{s.name}</b>
+                  <span className="sc-line">{s.line}</span>
+                  <span className="sc-art">{img ? <img src={img} alt="" loading="lazy" decoding="async" /> : <Motif k={s.key} />}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+        <Link className="hx-link" to="/produkte">{T.all}</Link>
       </div>
     </section>
   );
