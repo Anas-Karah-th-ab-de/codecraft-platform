@@ -8,6 +8,7 @@ pub mod mail;
 pub mod pdf;
 pub mod push;
 pub mod routes;
+pub mod seo;
 pub mod stun;
 pub mod turn;
 
@@ -55,6 +56,8 @@ pub fn app_with_frontend(state: AppState, static_dir: PathBuf) -> Router {
         .fallback_service(
             ServeDir::new(&static_dir).append_index_html_on_directories(true).fallback(ServeFile::new(index)),
         )
+        // Titel, Beschreibung und Vorschaubild je Seite (für WhatsApp, Suchmaschinen …)
+        .layer(axum::middleware::from_fn(seo::inject))
         .layer(SetResponseHeaderLayer::if_not_present(header::CACHE_CONTROL, |r: &axum::response::Response| {
             let html = r
                 .headers()
