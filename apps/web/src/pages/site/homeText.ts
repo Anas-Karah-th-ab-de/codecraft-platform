@@ -473,7 +473,7 @@ export const STACK = ["Rust", "Axum", "React", "TypeScript", "PostgreSQL", "Taur
 export const CONTACT = {
   whatsapp: "+49 176 4119 4140",
   whatsappUrl: "https://wa.me/4917641194140",
-  email: "ak@code-craft.tech",
+  email: "info@code-craft.tech",
   matrix: "#support:matrix.code-craft.tech",
   address: "code-craft · Mohamad Anas Kara Mohamad\nAl-Thalathin Street, near the Governor's Palace\nIdlib, Syria",
   /** Büro: Koordinaten für Kartenlinks */

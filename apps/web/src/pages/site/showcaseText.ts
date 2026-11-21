@@ -91,3 +91,10 @@ export const PLACE: Record<Locale, { h2: string; text: string; google: string; o
     officeCap: "مكاتب العمل وطاولة الإلكترونيات وركن الاستقبال",
   },
 };
+
+/** Fußzeile der Webseite */
+export const FOOT: Record<Locale, { cta: string; products: string; visit: string; portal: string; form: string; owner: string }> = {
+  de: { cta: "Ein Projekt im Kopf? Sprechen wir darüber.", products: "Produkte", visit: "Besuch in Idlib", portal: "Kundenportal", form: "Kontaktformular", owner: "Mohamad Anas Kara Mohamad" },
+  en: { cta: "Got a project in mind? Let's talk.", products: "Products", visit: "Visit us in Idlib", portal: "Customer portal", form: "Contact form", owner: "Mohamad Anas Kara Mohamad" },
+  ar: { cta: "لديك مشروع في ذهنك؟ لنتحدث عنه.", products: "المنتجات", visit: "زيارتنا في إدلب", portal: "بوابة العملاء", form: "نموذج التواصل", owner: "محمد أنس قرة محمد" },
+};

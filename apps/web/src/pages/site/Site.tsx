@@ -6,7 +6,7 @@ import { Field, LangSwitch, useSubmit } from "../../ui";
 import { TEASER } from "./productText";
 import { ADDRESS, CONTACT, HOME, ourMapUrl } from "./homeText";
 import { BrokenTrace } from "./Board";
-import { CATALOG_IMG } from "./showcaseText";
+import { CATALOG_IMG, FOOT, SHOWCASE } from "./showcaseText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type Img = { id: string; card: string; full: string; width: number; height: number };
@@ -72,6 +72,7 @@ export function SiteLayout() {
   const [menu, setMenu] = useState(false);
   const { pathname, hash } = useLocation();
   const head = useRef<HTMLElement>(null);
+  const F = FOOT[locale];
   useHeaderScroll(head, pathname);
   useEffect(() => setMenu(false), [pathname, hash]);
   // Offenes Menü auf dem Handy: Seite dahinter steht still, Escape schließt
@@ -122,39 +123,45 @@ export function SiteLayout() {
         </a>
       )}
       <footer className="site-footer">
+        {/* Oben: der direkte Weg zu uns */}
+        <div className="container foot-cta">
+          <p className="foot-cta-h">{F.cta}</p>
+          <div className="foot-cta-btns">
+            <a className="foot-btn gold" href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp <bdi dir="ltr">{CONTACT.whatsapp}</bdi></a>
+            <a className="foot-btn" href={`mailto:${CONTACT.email}`}><bdi dir="ltr">{CONTACT.email}</bdi></a>
+          </div>
+        </div>
         <div className="container footer-grid">
           <div className="footer-brand">
             <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" loading="lazy" /></Link>
             <p>{H.foot.about}</p>
             <a className="foot-addr" href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">{ADDRESS[locale].split("\n").slice(1).join("\n")}</a>
+            <p className="foot-hours">{H.contact.hoursV}</p>
           </div>
-          <div>
-            <b>{H.foot.offer}</b>
-            <Link to="/produkte">{t("products.all")}</Link>
-            <NavLink to="/km-one">{H.nav.phone}</NavLink>
-            <NavLink to="/kasse">{H.nav.till}</NavLink>
-            <NavLink to="/ki-server">{H.nav.ai}</NavLink>
-            <Link to="/karten">{TEASER[locale].karten[0]}</Link>
-            <Link to="/e-health">{TEASER[locale].radiologie[0]}</Link>
-            <Link to="/ultar-os">{TEASER[locale]["ultar-os"][0]}</Link>
-            <Link to="/#leistungen">{H.nav.services}</Link>
-          </div>
-          <div>
+          <nav aria-label={F.products}>
+            <b>{F.products}</b>
+            {SHOWCASE[locale].items.map((s) => <Link key={s.key} to={s.to}>{s.name}</Link>)}
+            <Link to="/produkte" className="foot-all">{SHOWCASE[locale].all}</Link>
+          </nav>
+          <nav aria-label={H.foot.company}>
             <b>{H.foot.company}</b>
+            <Link to="/#leistungen">{H.nav.services}</Link>
             <Link to="/#geschichte">{H.nav.story}</Link>
+            <Link to="/#besuch">{F.visit}</Link>
             <Link to="/karriere">{t("nav.careers")}</Link>
-            <Link to="/portal">{H.foot.portal}</Link>
-          </div>
-          <div>
+            <Link to="/portal">{F.portal}</Link>
+          </nav>
+          <nav aria-label={H.foot.reach}>
             <b>{H.foot.reach}</b>
-            <a href={`mailto:${CONTACT.email}`} dir="ltr">{CONTACT.email}</a>
-            <a href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer">WhatsApp</a>
+            <Link to="/kontakt">{F.form}</Link>
+            <Link to="/kontakt?betreff=beratung">{H.contact.meetingV}</Link>
+            <a href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">Google Maps</a>
+            <a href={ourMapUrl(locale)} target="_blank" rel="noopener">Maps Syria</a>
             <a href="https://linkedin.com/company/code-craft-tech" target="_blank" rel="noopener noreferrer">LinkedIn</a>
-            <Link to="/kontakt">{t("nav.contact")}</Link>
-          </div>
+          </nav>
         </div>
         <div className="container footer-base">
-          <span>© {new Date().getFullYear()} KM Code Craft, Mohamad Anas Kara Mohamad. {t("footer.rights")}</span>
+          <span>© {new Date().getFullYear()} <bdi>KM Code Craft</bdi> · {F.owner}. {t("footer.rights")}</span>
           <span>{t("footer.made")}</span>
         </div>
       </footer>
