@@ -167,6 +167,16 @@ export function NotFound() {
   const { locale } = useI18n();
   const T = HOME[locale].nf;
   useTitle("404");
+  // Eine Datei (z. B. Demo-Seite) wurde über die Anwendung statt vom Server geöffnet → einmal echt laden
+  useEffect(() => {
+    const { pathname, href } = window.location;
+    if (!/\.[a-z0-9]{2,5}$/i.test(pathname)) return;
+    try {
+      if (sessionStorage.getItem("nf-reload") === href) return;
+      sessionStorage.setItem("nf-reload", href);
+    } catch { return; }
+    window.location.replace(href);
+  }, []);
   return (
     <section className="notfound">
       <div>

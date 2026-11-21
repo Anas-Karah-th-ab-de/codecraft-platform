@@ -15,9 +15,13 @@ const money = (cents: number, currency: string, locale: string) =>
   }).format(cents / 100);
 
 /** Interne Ziele als Link, externe als neuer Tab */
+const STATIC = (to: string) =>
+  to.startsWith("#") || /^\/(downloads|radiology|products)\//.test(to) || /\.[a-z0-9]{2,5}(?:[?#]|$)/i.test(to);
+
 function Go({ to, className, children }: { to: string; className: string; children: React.ReactNode }) {
-  // Dateien (PDF) sind keine Seiten der Anwendung: normaler Link statt Router
-  if (to.startsWith("/downloads/") || to.startsWith("/radiology/") || to.startsWith("#")) return <a className={className} href={to}>{children}</a>;
+  // Dateien (PDF, Demo-Seiten wie /products/ultar-os/demo/index.html) sind keine Seiten der Anwendung:
+  // normaler Link statt Router, sonst zeigt die Anwendung erst „Seite nicht gefunden“
+  if (STATIC(to)) return <a className={className} href={to}>{children}</a>;
   return to.startsWith("http")
     ? <a className={className} href={to} target="_blank" rel="noopener noreferrer">{children}</a>
     : <Link className={className} to={to}>{children}</Link>;
