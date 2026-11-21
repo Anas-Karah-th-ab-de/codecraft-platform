@@ -57,3 +57,37 @@ export const CATALOG_IMG: Record<string, string> = {
   "ultar-os": ULTAR,
   "km-code-craft-radiology": "/products/radiologie/de-viewer.png",
 };
+
+/** Startseite: unser Büro in Idlib (echte Fotos, Adresse, Kartenlinks) */
+export const PLACE: Record<Locale, { h2: string; text: string; google: string; ours: string; oursNote: string; shopAlt: string; officeAlt: string; officeCap: string }> = {
+  de: {
+    h2: "Kommen Sie vorbei.",
+    text: "Unser Büro und unsere Werkstatt in Idlib: Hier entstehen Software, Platinen und Server, hier beraten wir Sie persönlich.",
+    google: "In Google Maps öffnen",
+    ours: "In Maps Syria öffnen",
+    oursNote: "unsere eigene Karte",
+    shopAlt: "Ladenschild von KM Code Craft: Technology Crafted – Softwareentwicklung, Geräte und Netzwerke, Server und Hosting",
+    officeAlt: "Das Büro von KM Code Craft in Idlib: Arbeitsplätze, Werkbank mit Elektronik und Besucherecke",
+    officeCap: "Arbeitsplätze, Elektronik-Werkbank und Besucherecke",
+  },
+  en: {
+    h2: "Come and see us.",
+    text: "Our office and workshop in Idlib: this is where software, circuit boards and servers are made, and where we advise you in person.",
+    google: "Open in Google Maps",
+    ours: "Open in Maps Syria",
+    oursNote: "our own map",
+    shopAlt: "KM Code Craft shop sign: Technology Crafted – software development, devices and networks, servers and hosting",
+    officeAlt: "The KM Code Craft office in Idlib: desks, an electronics workbench and a seating corner",
+    officeCap: "Desks, electronics workbench and seating corner",
+  },
+  ar: {
+    h2: "تفضّل بزيارتنا.",
+    text: "مكتبنا وورشتنا في إدلب: هنا نطوّر البرمجيات واللوحات الإلكترونية والخوادم، وهنا نستقبلك ونقدّم لك الاستشارة شخصياً.",
+    google: "افتح في خرائط Google",
+    ours: "افتح في Maps Syria",
+    oursNote: "خريطتنا الخاصة",
+    shopAlt: "لافتة KM Code Craft: تطوير البرمجيات، الأجهزة والشبكات، الخوادم والاستضافة",
+    officeAlt: "مكتب KM Code Craft في إدلب: مكاتب العمل وطاولة الإلكترونيات وركن الاستقبال",
+    officeCap: "مكاتب العمل وطاولة الإلكترونيات وركن الاستقبال",
+  },
+};

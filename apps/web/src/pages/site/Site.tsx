@@ -4,7 +4,7 @@ import { api, prefetch, useApi } from "../../api";
 import { money, useI18n, type Key, type Locale } from "../../i18n";
 import { Field, LangSwitch, useSubmit } from "../../ui";
 import { TEASER } from "./productText";
-import { CONTACT, HOME } from "./homeText";
+import { ADDRESS, CONTACT, HOME, ourMapUrl } from "./homeText";
 import { BrokenTrace } from "./Board";
 import { CATALOG_IMG } from "./showcaseText";
 
@@ -126,6 +126,7 @@ export function SiteLayout() {
           <div className="footer-brand">
             <Link to="/" className="logo"><img src="/brand/logo.png" alt="KM Code Craft" width="95" height="40" loading="lazy" /></Link>
             <p>{H.foot.about}</p>
+            <a className="foot-addr" href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">{ADDRESS[locale].split("\n").slice(1).join("\n")}</a>
           </div>
           <div>
             <b>{H.foot.offer}</b>
@@ -523,7 +524,11 @@ export function Contact() {
           <li><a href={CONTACT.whatsappUrl} target="_blank" rel="noopener noreferrer"><b>WhatsApp</b><bdi dir="ltr">{CONTACT.whatsapp}</bdi></a></li>
           <li><a href={`mailto:${CONTACT.email}`}><b>E-Mail</b><bdi dir="ltr">{CONTACT.email}</bdi></a></li>
           <li><div><b>{HOME[locale].contact.hours}</b><span>{HOME[locale].contact.hoursV}</span></div></li>
-          <li><div><b>{HOME[locale].contact.address}</b><span style={{ whiteSpace: "pre-line" }}>{CONTACT.address}</span></div></li>
+          <li><a href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer"><b>{HOME[locale].contact.address}</b><span className="addr">{ADDRESS[locale]}</span></a></li>
+          <li className="map-links">
+            <a href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">Google Maps</a>
+            <a href={ourMapUrl(locale)} target="_blank" rel="noopener">Maps Syria</a>
+          </li>
         </ul>
       </div>
       <div className="card contact-form">

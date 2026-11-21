@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useApi } from "../../api";
 import { useI18n } from "../../i18n";
-import { CONTACT, HOME, STACK } from "./homeText";
+import { ADDRESS, CONTACT, HOME, STACK, ourMapUrl } from "./homeText";
 import { Board } from "./Board";
 import { DEMO_POSTER, DEMO_URL, ULTAR_DEMO } from "./ultarDemoText";
-import { SHOWCASE, showImg } from "./showcaseText";
+import { PLACE, SHOWCASE, showImg } from "./showcaseText";
 
 type Price = { id: string; code: string; name: string; billing: string; amount_cents: number | null; currency: string; features: string[] };
 type ProductDetail = { slug: string; name: string; prices: Price[] };
@@ -50,6 +50,7 @@ export function Home() {
         </div>
       </section>
       <Story />
+      <Place />
       <section className="hx-work">
         <div className="hx-wrap">
           <h2 className="hx-h2-small" style={{ marginTop: 0 }}>{T.work.eyebrow}</h2>
@@ -447,10 +448,46 @@ function Story() {
   );
 }
 
-/** Geschäftszeiten Mo–Fr 9–18 Uhr Berlin */
+/** Unser Büro in Idlib: echte Fotos, Adresse, Wege dorthin */
+function Place() {
+  const { locale } = useI18n();
+  const T = PLACE[locale];
+  const C = HOME[locale].contact;
+  return (
+    <section className="hx-place" id="besuch">
+      <div className="hx-wrap">
+        <div className="pl-photos">
+          <figure className="pl-office">
+            <img src="/brand/office-wide.webp" alt={T.officeAlt} width="893" height="750" loading="lazy" decoding="async" />
+            <figcaption>{T.officeCap}</figcaption>
+          </figure>
+          <figure className="pl-shop">
+            <img src="/brand/storefront.webp" alt={T.shopAlt} width="1200" height="753" loading="lazy" decoding="async" />
+          </figure>
+        </div>
+        <div className="pl-body">
+          <div>
+            <h2>{T.h2}</h2>
+            <p className="hx-intro">{T.text}</p>
+          </div>
+          <div className="pl-where">
+            <address>{ADDRESS[locale]}</address>
+            <p className="pl-hours"><b>{C.hours}</b> {C.hoursV}</p>
+            <div className="hx-actions">
+              <a className="hx-btn" href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">{T.google}</a>
+              <a className="hx-link" href={ourMapUrl(locale)} target="_blank" rel="noopener">{T.ours}<small> · {T.oursNote}</small></a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Geschäftszeiten Mo–Fr 9–18 Uhr, Zeit in Damaskus */
 function useOpenNow() {
   return useMemo(() => {
-    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Berlin", weekday: "short", hour: "2-digit", hour12: false })
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Damascus", weekday: "short", hour: "2-digit", hour12: false })
       .formatToParts(new Date());
     const wd = parts.find((p) => p.type === "weekday")?.value ?? "";
     const h = Number(parts.find((p) => p.type === "hour")?.value ?? 0);
@@ -477,7 +514,7 @@ function Contact() {
           <div><dt>{T.hours}</dt><dd>{T.hoursV}<br /><b>{open ? T.open : T.closed}</b></dd></div>
           <div><dt>Matrix</dt><dd dir="ltr">{CONTACT.matrix}</dd></div>
           <div><dt>{T.meeting}</dt><dd><Link to="/kontakt?betreff=beratung">{T.meetingV}</Link></dd></div>
-          <div><dt>{T.address}</dt><dd style={{ whiteSpace: "pre-line" }}>{CONTACT.address}</dd></div>
+          <div><dt>{T.address}</dt><dd style={{ whiteSpace: "pre-line" }}><a href={CONTACT.googleMaps} target="_blank" rel="noopener noreferrer">{ADDRESS[locale]}</a></dd></div>
         </dl>
       </div>
     </section>

@@ -21,7 +21,7 @@ impl Company {
         Company {
             name: v("COMPANY_NAME", "KM Code Craft"),
             owner: v("COMPANY_OWNER", "Mohamad Anas Kara Mohamad"),
-            address: v("COMPANY_ADDRESS", "Al-Debet, Idlib, Syrien"),
+            address: v("COMPANY_ADDRESS", "Al-Thalathin-Straße, nahe dem Gouverneurspalast, Idlib, Syrien"),
             email: v("COMPANY_EMAIL", "ak@code-craft.tech"),
             web: v("COMPANY_WEB", "code-craft.tech"),
             bank: v("COMPANY_BANK", ""),

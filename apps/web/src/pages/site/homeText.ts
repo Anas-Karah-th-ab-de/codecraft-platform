@@ -10,7 +10,7 @@ const de = {
   sub: "Software und Hardware nach Maß für Ihr Unternehmen. Von der Idee bis zum Support, alles aus einer Hand.",
   ctaStart: "Projekt starten",
   ctaTill: "Ultar OS & KM One ansehen ↓",
-  made: "Made in Syria mit deutscher Qualität / Al-Debet, Idlib",
+  made: "Made in Syria mit deutscher Qualität / Idlib",
   nav: { phone: "Handy", till: "Kasse", ai: "KI-Server", health: "E-Health", services: "Leistungen", story: "Geschichte", products: "Produkte", careers: "Karriere", contact: "Kontakt" },
   board: [
     { t: "Software", d: "Web, Mobile, Desktop, APIs", to: "/#leistungen" },
@@ -149,7 +149,7 @@ const de = {
     h2: "Sprechen Sie mit uns.",
     text: "Sie haben ein Projekt im Kopf oder brauchen Unterstützung? Wir hören zu, bevor wir bauen.",
     hours: "Zeiten",
-    hoursV: "Mo bis Fr, 09:00 bis 18:00 MEZ",
+    hoursV: "Mo bis Fr, 09:00 bis 18:00 Uhr (Zeit in Damaskus)",
     open: "gerade geöffnet",
     closed: "gerade geschlossen, schreiben Sie jederzeit",
     meeting: "Termin",
@@ -164,7 +164,7 @@ const en: T = {
   sub: "Custom software and hardware for your business. From concept to support, everything from one source.",
   ctaStart: "Start a project",
   ctaTill: "See Ultar OS & KM One ↓",
-  made: "Made in Syria with German quality / Al-Debet, Idlib",
+  made: "Made in Syria with German quality / Idlib",
   nav: { phone: "Phone", till: "The till", ai: "AI server", health: "E-Health", services: "Services", story: "Story", products: "Products", careers: "Careers", contact: "Contact" },
   board: [
     { t: "Software", d: "Web, mobile, desktop, APIs", to: "/#leistungen" },
@@ -303,7 +303,7 @@ const en: T = {
     h2: "Talk to us.",
     text: "Have a project in mind or need support? We listen before we build.",
     hours: "Hours",
-    hoursV: "Mon to Fri, 09:00 to 18:00 CET",
+    hoursV: "Mon to Fri, 09:00 to 18:00 (Damascus time)",
     open: "open now",
     closed: "closed now, write any time",
     meeting: "Meeting",
@@ -318,7 +318,7 @@ const ar: T = {
   sub: "برمجيات وأجهزة مصممة لشركتك. من الفكرة إلى الدعم، كل شيء من مصدر واحد.",
   ctaStart: "ابدأ مشروعاً",
   ctaTill: "شاهد نظام Ultar OS وهاتف KM One ↓",
-  made: "صُنع في سوريا بجودة ألمانية / الدبيط، إدلب",
+  made: "صُنع في سوريا بجودة ألمانية / إدلب",
   nav: { phone: "الهاتف", till: "الكاشير", ai: "خادم الذكاء الاصطناعي", health: "الصحة الرقمية", services: "الخدمات", story: "قصتنا", products: "المنتجات", careers: "الوظائف", contact: "تواصل" },
   board: [
     { t: "البرمجيات", d: "ويب، جوال، سطح المكتب، واجهات API", to: "/#leistungen" },
@@ -457,7 +457,7 @@ const ar: T = {
     h2: "تحدّث معنا.",
     text: "لديك مشروع في ذهنك أو تحتاج دعماً؟ نستمع قبل أن نبني.",
     hours: "الأوقات",
-    hoursV: "الإثنين إلى الجمعة، 09:00 حتى 18:00 بتوقيت وسط أوروبا",
+    hoursV: "الإثنين إلى الجمعة، 09:00 حتى 18:00 بتوقيت دمشق",
     open: "مفتوح الآن",
     closed: "مغلق الآن، راسلنا في أي وقت",
     meeting: "موعد",
@@ -475,5 +475,20 @@ export const CONTACT = {
   whatsappUrl: "https://wa.me/4917641194140",
   email: "ak@code-craft.tech",
   matrix: "#support:matrix.code-craft.tech",
-  address: "code-craft · Mohamad Anas Kara Mohamad\nAl-Debet, Idlib, Syria",
+  address: "code-craft · Mohamad Anas Kara Mohamad\nAl-Thalathin Street, near the Governor's Palace\nIdlib, Syria",
+  /** Büro: Koordinaten für Kartenlinks */
+  lat: 35.918451,
+  lon: 36.626105,
+  googleMaps: "https://goo.gl/maps/TYsWBVuiDUR1RFF36",
 };
+
+/** Adresse des Büros in der Sprache der Seite */
+export const ADDRESS: Record<Locale, string> = {
+  de: "code-craft · Mohamad Anas Kara Mohamad\nAl-Thalathin-Straße, nahe dem Gouverneurspalast\nIdlib, Syrien",
+  en: "code-craft · Mohamad Anas Kara Mohamad\nAl-Thalathin Street, near the Governor's Palace\nIdlib, Syria",
+  ar: "KM Code Craft · محمد أنس قرة محمد\nشارع الثلاثين، قرب قصر المحافظ\nإدلب، سوريا",
+};
+
+/** Unsere eigene Karte (Maps Syria) mit dem Büro als Ziel */
+export const ourMapUrl = (l: Locale) =>
+  `https://maps.code-craft.tech/?lat=${CONTACT.lat}&lon=${CONTACT.lon}&name=${encodeURIComponent(l === "ar" ? "KM Code Craft – شارع الثلاثين" : "KM Code Craft")}`;
